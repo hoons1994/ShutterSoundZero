@@ -40,6 +40,12 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
 
     override fun getDeviceName(): String = DEVICE_NAME
 
+    @Volatile
+    var lastDiscoveredPairingPort: Int? = null
+
+    @Volatile
+    var lastDiscoveredConnectPort: Int? = null
+
     /**
      * mDNS를 활용하여 활성화된 무선 디버깅 포트를 탐색
      */
@@ -50,6 +56,11 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
         val mdns = AdbMdns(context, serviceType) { address, port ->
             if (address != null) {
                 Log.i(TAG, "mDNS Discovered: $address:$port for $serviceType")
+                if (serviceType == AdbMdns.SERVICE_TYPE_TLS_PAIRING) {
+                    lastDiscoveredPairingPort = port
+                } else if (serviceType == AdbMdns.SERVICE_TYPE_TLS_CONNECT) {
+                    lastDiscoveredConnectPort = port
+                }
                 onDiscovered(address, port)
             }
         }

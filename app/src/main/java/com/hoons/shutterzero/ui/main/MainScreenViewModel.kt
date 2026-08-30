@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.hoons.shutterzero.core.CscMuteManager
 import com.hoons.shutterzero.core.adb.StandaloneAdbManager
 import com.hoons.shutterzero.data.PreferencesRepository
+import com.hoons.shutterzero.ui.notification.PairingNotificationHelper
 import io.github.muntashirakon.adb.android.AdbMdns
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -95,6 +96,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             stopMdnsDiscovery()
             pairingMdns = adbManager.startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_PAIRING) { _, port ->
                 _uiState.update { it.copy(detectedPairingPort = port) }
+                try {
+                    PairingNotificationHelper.showPairingNotification(getApplication(), port)
+                } catch (_: Exception) {}
             }
             connectMdns = adbManager.startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_CONNECT) { _, port ->
                 _uiState.update { it.copy(detectedConnectPort = port) }
@@ -102,6 +106,22 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         } catch (e: Exception) {
             // mDNS might not be supported on some network configurations
         }
+    }
+
+    fun startNotificationPairing(context: Context) {
+        startMdnsDiscovery()
+        PairingNotificationHelper.showPairingNotification(context, _uiState.value.detectedPairingPort)
+        openDeveloperOptions(context)
+        _uiState.update {
+            it.copy(
+                infoMessage = "상단바에 페어링 알림이 등록되었습니다! [페어링 코드로 기기 페어링] 화면을 띄운 뒤 상단바를 내려 6자리 코드를 입력해 주세요."
+            )
+        }
+    }
+
+    fun cancelNotificationPairing(context: Context) {
+        stopMdnsDiscovery()
+        PairingNotificationHelper.cancelNotification(context)
     }
 
     fun stopMdnsDiscovery() {
