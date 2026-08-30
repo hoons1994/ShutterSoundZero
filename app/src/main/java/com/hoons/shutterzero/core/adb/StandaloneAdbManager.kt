@@ -46,6 +46,8 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
     @Volatile
     var lastDiscoveredConnectPort: Int? = null
 
+    private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+
     /**
      * mDNS를 활용하여 활성화된 무선 디버깅 포트를 탐색
      */
@@ -53,6 +55,7 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
         serviceType: String,
         onDiscovered: (InetAddress, Int) -> Unit
     ): AdbMdns {
+        acquireMulticastLock()
         val mdns = AdbMdns(context, serviceType) { address, port ->
             if (address != null) {
                 Log.i(TAG, "mDNS Discovered: $address:$port for $serviceType")
@@ -66,6 +69,31 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
         }
         mdns.start()
         return mdns
+    }
+
+    private fun acquireMulticastLock() {
+        try {
+            if (multicastLock == null || !multicastLock!!.isHeld) {
+                val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+                multicastLock = wifi?.createMulticastLock("ShutterZeroMdns")?.apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+                Log.d(TAG, "Acquired WifiManager MulticastLock for mDNS discovery")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to acquire MulticastLock: ${e.message}")
+        }
+    }
+
+    fun releaseMulticastLock() {
+        try {
+            multicastLock?.let {
+                if (it.isHeld) it.release()
+            }
+            multicastLock = null
+            Log.d(TAG, "Released WifiManager MulticastLock")
+        } catch (_: Exception) {}
     }
 
     /**

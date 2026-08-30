@@ -1,11 +1,14 @@
 package com.hoons.shutterzero.ui.notification
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.RemoteInput
@@ -21,6 +24,25 @@ object PairingNotificationHelper {
     const val ACTION_SUBMIT_PAIRING_CODE = "com.hoons.shutterzero.ACTION_SUBMIT_PAIRING_CODE"
     const val ACTION_CANCEL_PAIRING = "com.hoons.shutterzero.ACTION_CANCEL_PAIRING"
 
+    fun areNotificationsEnabled(context: Context): Boolean {
+        return NotificationManagerCompat.from(context).areNotificationsEnabled()
+    }
+
+    fun openNotificationSettings(context: Context) {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", context.packageName, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+        context.startActivity(intent)
+    }
+
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -30,6 +52,9 @@ object PairingNotificationHelper {
             ).apply {
                 description = "무선 디버깅 6자리 페어링 코드를 알림창에서 직접 입력받습니다."
                 setShowBadge(true)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 200, 100, 200)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
@@ -88,16 +113,23 @@ object PairingNotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
 
-        val portText = if (pairingPort != null) " (감지된 포트: $pairingPort)" else ""
+        val title = if (pairingPort != null) "✨ 무선 디버깅 서비스 감지됨 (포트: $pairingPort)" else "무선 디버깅 페어링 대기 중"
+        val summaryText = if (pairingPort != null) "상단바 [코드 입력하기]를 누르고 6자리 코드를 입력하세요" else "개발자 옵션의 [페어링 코드로 기기 페어링]을 누르고 코드를 확인하세요"
+        val bigText = if (pairingPort != null) {
+            "무선 페어링 서비스가 감지되었습니다 (포트: $pairingPort)!\n화면에 뜬 6자리 페어링 코드를 아래 [코드 입력하기]에 입력해 주세요."
+        } else {
+            "Wi-Fi 연결 후 개발자 옵션의 [무선 디버깅] ➔ [페어링 코드로 기기 페어링] 화면을 띄운 상태에서 상단바를 내려 아래 [코드 입력하기]를 터치해 주세요."
+        }
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("무선 디버깅 페어링 대기 중")
-            .setContentText("개발자 옵션의 6자리 코드를 아래 [코드 입력하기]에 입력하세요$portText")
-            .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText("개발자 옵션의 [페어링 코드로 기기 페어링] 화면을 띄운 상태에서 상단바를 내려 아래 [코드 입력하기]를 터치하고 6자리 숫자를 입력해 주세요.$portText")
-            )
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentTitle(title)
+            .setContentText(summaryText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(false)
             .setContentIntent(contentPendingIntent)

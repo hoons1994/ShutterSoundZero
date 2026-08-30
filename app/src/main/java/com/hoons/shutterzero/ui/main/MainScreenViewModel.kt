@@ -128,6 +128,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         try {
             pairingMdns?.stop()
             connectMdns?.stop()
+            adbManager.releaseMulticastLock()
         } catch (_: Exception) {}
         pairingMdns = null
         connectMdns = null
