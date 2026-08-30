@@ -15,10 +15,10 @@ val localProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.hoons.shuttersoundzero"
+    namespace = "com.charmingcolor.shuttersoundzero"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.hoons.shuttersoundzero"
+        applicationId = "com.charmingcolor.shuttersoundzero"
         minSdk = 24
         targetSdk = 36
         versionCode = 100
@@ -123,3 +123,4 @@ dependencies {
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 }
+
