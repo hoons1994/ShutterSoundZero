@@ -60,7 +60,7 @@ fun WirelessPairingDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "스마트폰 단독 페어링",
+                        text = "무선 페어링 코드 입력",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
@@ -75,7 +75,7 @@ fun WirelessPairingDialog(
                 }
 
                 Text(
-                    text = "PC나 Shizuku 앱 없이, 스마트폰 자체 무선 디버깅으로 1초 만에 셔터음을 무음화합니다.",
+                    text = "PC 연결 없이 개발자 옵션의 6자리 페어링 코드로 셔터음을 무음화합니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
