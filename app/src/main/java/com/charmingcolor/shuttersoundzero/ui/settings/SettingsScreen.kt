@@ -1,5 +1,6 @@
 package com.charmingcolor.shuttersoundzero.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -15,6 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,6 +29,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -56,6 +60,7 @@ fun SettingsScreen(
     val prefs = remember { PreferencesRepository.getInstance(context) }
     var isAutoRestore by remember { mutableStateOf(prefs.isAutoRestoreOnBootEnabled) }
     var isFirmwareCheck by remember { mutableStateOf(prefs.isFirmwareUpdateCheckEnabled) }
+    var showLicenseDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -130,9 +135,74 @@ fun SettingsScreen(
                     title = "버전",
                     subtitle = "1.0.0"
                 )
+                RowDivider()
+                InfoRow(
+                    title = "개발자",
+                    subtitle = "charmingcolor"
+                )
+                RowDivider()
+                ClickableRow(
+                    title = "오픈소스 라이선스",
+                    subtitle = "GNU General Public License v3.0 (GPL-3.0)",
+                    onClick = { showLicenseDialog = true }
+                )
             }
 
             Spacer(modifier = Modifier.height(32.dp))
+        }
+
+        if (showLicenseDialog) {
+            AlertDialog(
+                onDismissRequest = { showLicenseDialog = false },
+                title = {
+                    Text(
+                        text = "오픈소스 라이선스",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Shutter Sound Zero (셔터음 제로)\nCopyright (C) 2026 charmingcolor",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "본 프로그램은 자유 소프트웨어입니다. 자유 소프트웨어 재단이 공표한 GNU General Public License 버전 3 (GPL-3.0)의 조건에 따라 재배포하거나 수정할 수 있습니다.\n\n이 프로그램은 유용하게 사용되기를 바라는 목적으로 배포되지만, 특정한 목적에 대한 적합성이나 상업성에 대한 묵시적 보증을 포함하여 어떠한 형태의 보증도 제공되지 않습니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 18.sp
+                        )
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            thickness = 0.5.dp
+                        )
+                        Text(
+                            text = "사용된 오픈소스 라이브러리:",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "• Android Jetpack / Compose (Apache 2.0)\n• libadb-android (GPL-3.0 / Apache 2.0)\n• Bouncy Castle (Bouncy Castle Licence)\n• Conscrypt (Apache 2.0)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 18.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showLicenseDialog = false }) {
+                        Text("확인")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         }
     }
 }
@@ -227,6 +297,41 @@ private fun InfoRow(title: String, subtitle: String) {
             text = subtitle,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun ClickableRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = CardPaddingH, vertical = CardPaddingV),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = "자세히 보기",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         )
     }
 }
