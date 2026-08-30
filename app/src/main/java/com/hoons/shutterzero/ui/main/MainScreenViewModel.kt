@@ -215,7 +215,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
             _uiState.update {
                 it.copy(
-                    errorMessage = "보안 설정 변경 권한이 필요합니다. 아래 [스마트폰 단독 자체 페어링] 또는 PC ADB 가이드를 이용해 주세요."
+                    errorMessage = "보안 설정 변경 권한이 필요합니다. 아래 [권한 설정]을 진행해 주세요."
                 )
             }
             return

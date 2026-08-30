@@ -29,7 +29,7 @@ class CameraMuteTileService : TileService() {
         if (!CscMuteManager.hasWritePermission(context)) {
             Toast.makeText(
                 context,
-                "권한이 필요합니다. 앱을 실행하여 ADB 권한 설정을 완료해주세요.",
+                "권한이 필요합니다. 앱을 실행하여 권한 설정을 완료해 주세요.",
                 Toast.LENGTH_LONG
             ).show()
             updateTileState()
