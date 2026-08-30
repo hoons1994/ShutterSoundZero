@@ -12,3 +12,6 @@ captures/
 .kotlin/
 cloudflared.exe
 .server_info.json
+*.jks
+*.keystore
+release.jks
