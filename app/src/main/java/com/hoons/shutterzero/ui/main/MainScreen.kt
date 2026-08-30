@@ -136,26 +136,12 @@ fun MainScreen(
                     subtitle = "진동·무음 모드 시 촬영음 완전 차단",
                     checked = uiState.isCscMuted,
                     onCheckedChange = { enable ->
-                        if (!hasEffectivePermission) showAdbGuideDialog = true
-                        else viewModel.toggleCscMute(enable)
+                        if (!hasEffectivePermission) {
+                            viewModel.startNotificationPairing(context)
+                        } else {
+                            viewModel.toggleCscMute(enable)
+                        }
                     }
-                )
-                RowDivider()
-                StatusRow(
-                    title = if (hasEffectivePermission) "시스템 권한 연동됨" else "1회 권한 설정 필요",
-                    valueText = if (hasEffectivePermission) "완료" else "설정 안내",
-                    valueColor = if (hasEffectivePermission) StatusGreen else BrandBlueLight,
-                    onClick = { showAdbGuideDialog = true }
-                )
-                RowDivider()
-                ActionRow(
-                    title = "상단바 알림으로 무선 페어링 (추천)",
-                    onClick = { viewModel.startNotificationPairing(context) }
-                )
-                RowDivider()
-                ActionRow(
-                    title = "PC 연결 ADB 설정 가이드",
-                    onClick = { showAdbGuideDialog = true }
                 )
                 RowDivider()
                 ActionRow(
@@ -172,13 +158,13 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("스마트폰 단독 설정 (추천)")
+            GroupLabel("권한 설정")
             SettingsCard {
-                WirelessPairingSection(
-                    isMuted = uiState.isCscMuted,
+                PermissionSetupSection(
                     hasPermission = hasEffectivePermission,
                     onStartNotificationPairing = { viewModel.startNotificationPairing(context) },
                     onStartManualPairing = { showWirelessPairingDialog = true },
+                    onOpenAdbGuide = { showAdbGuideDialog = true },
                     onOpenDeveloperOptions = { viewModel.openDeveloperOptions(context) }
                 )
             }
@@ -452,79 +438,107 @@ private fun InfoRow(title: String, subtitle: String) {
     }
 }
 
-// ── 스마트폰 단독 무선 페어링 섹션 ──────────────────────
+// ── 권한 설정 통합 섹션 ──────────────────────
 
 @Composable
-private fun WirelessPairingSection(
-    isMuted: Boolean,
+private fun PermissionSetupSection(
     hasPermission: Boolean,
     onStartNotificationPairing: () -> Unit,
     onStartManualPairing: () -> Unit,
+    onOpenAdbGuide: () -> Unit,
     onOpenDeveloperOptions: () -> Unit
 ) {
     StatusRow(
-        title = "자체 무선 페어링 (외부 앱 불필요)",
-        valueText = if (hasPermission) "연동 완료" else "설정 필요",
+        title = "시스템 보안 설정 권한",
+        valueText = if (hasPermission) "연동 완료" else "1회 설정 필요",
         valueColor = if (hasPermission) StatusGreen else BrandBlueLight,
-        onClick = onStartNotificationPairing
+        onClick = if (!hasPermission) onStartNotificationPairing else null
     )
 
     RowDivider()
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = CardPaddingH, vertical = CardPaddingV),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Text(
-            text = "상단바 알림으로 1초 만에 무음화",
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "1. 아래 [상단바 알림 페어링 시작]을 누르면 개발자 옵션이 열립니다.\n" +
-                   "2. [무선 디버깅] ➔ [페어링 코드로 기기 페어링]을 터치합니다.\n" +
-                   "3. 화면을 닫지 않고 상단바를 아래로 내려 알림창에 6자리 코드를 입력하면 즉시 무음화됩니다!",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = 20.sp
-        )
-    }
-
-    RowDivider()
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = CardPaddingH, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Button(
-            onClick = onStartNotificationPairing,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
+    if (!hasPermission) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = CardPaddingH, vertical = CardPaddingV),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = if (hasPermission) "⚡ 상단바 알림 페어링 다시 실행" else "✨ 상단바 알림으로 무선 페어링 시작 (추천)",
-                fontWeight = FontWeight.Bold,
-                color = Color.White
+                text = "원터치 무선 연동 (추천)",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "PC 연결 없이 개발자 옵션의 [페어링 코드로 기기 페어링] 화면에서 상단바를 내려 6자리 숫자만 입력하면 즉시 권한이 부여됩니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 19.sp
             )
         }
-        OutlinedButton(
-            onClick = onStartManualPairing,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
+
+        RowDivider()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = CardPaddingH, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("직접 코드 입력 팝업 열기")
+            Button(
+                onClick = onStartNotificationPairing,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
+            ) {
+                Text(
+                    text = "✨ 상단바 알림으로 권한 연동 시작",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onOpenAdbGuide,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("PC 연결 가이드", fontSize = 13.sp)
+                }
+                OutlinedButton(
+                    onClick = onStartManualPairing,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("직접 코드 입력", fontSize = 13.sp)
+                }
+            }
         }
-        OutlinedButton(
-            onClick = onOpenDeveloperOptions,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = CardPaddingH, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("⚙️ 개발자 옵션 (무선 디버깅) 바로가기")
+            Text(
+                text = "보안 설정 권한이 정상 연동되었습니다. PC 연결 없이 언제든 자유롭게 셔터음을 제어할 수 있습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onStartNotificationPairing) {
+                    Text("권한 재설정", style = MaterialTheme.typography.labelMedium)
+                }
+                TextButton(onClick = onOpenDeveloperOptions) {
+                    Text("개발자 옵션", style = MaterialTheme.typography.labelMedium)
+                }
+            }
         }
     }
 }
