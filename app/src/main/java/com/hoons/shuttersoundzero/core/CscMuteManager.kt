@@ -179,4 +179,30 @@ object CscMuteManager {
             openWirelessDebuggingOrDevOptions(context)
         }
     }
+
+    /**
+     * Wi-Fi 네트워크 연결 여부 확인
+     */
+    fun isWifiConnected(context: Context): Boolean {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
+            val network = cm.activeNetwork ?: return false
+            val capabilities = cm.getNetworkCapabilities(network) ?: return false
+            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    /**
+     * Wi-Fi 설정 화면 열기
+     */
+    fun openWifiSettings(context: Context) {
+        try {
+            val intent = android.content.Intent(Settings.ACTION_WIFI_SETTINGS).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {}
+    }
 }

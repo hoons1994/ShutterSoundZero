@@ -1,4 +1,4 @@
-﻿package com.hoons.shuttersoundzero.ui.main
+package com.hoons.shuttersoundzero.ui.main
 
 import android.app.Application
 import android.content.Context
@@ -33,7 +33,8 @@ data class MainUiState(
     val wirelessPairingError: String? = null,
 
     val infoMessage: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val showSwitchFailureHelp: Boolean = false
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -227,18 +228,22 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     )
                 }
             } else {
-                // 실패 시 스위치 원복 및 안내
+                // 실패 시 스위치 원복 및 무선 디버깅 친절 안내 다이얼로그 플래그 활성화
                 prefs.shouldMuteOnBoot = !enableMute
                 refreshState()
-                val errorMsg = adbResult.exceptionOrNull()?.message ?: "연결 실패"
                 _uiState.update {
                     it.copy(
-                        errorMessage = "설정 변경 실패: $errorMsg (무선 디버깅이 켜져 있는지 확인해 주세요)",
+                        showSwitchFailureHelp = true,
+                        errorMessage = null,
                         infoMessage = null
                     )
                 }
             }
         }
+    }
+
+    fun dismissSwitchFailureHelp() {
+        _uiState.update { it.copy(showSwitchFailureHelp = false) }
     }
 
     fun setAutoRestoreOnBoot(enabled: Boolean) {
