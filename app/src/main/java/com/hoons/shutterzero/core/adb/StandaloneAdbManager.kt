@@ -30,6 +30,15 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
         }
     }
 
+    init {
+        try {
+            java.security.Security.insertProviderAt(org.conscrypt.Conscrypt.newProvider(), 1)
+            Log.i(TAG, "Conscrypt security provider registered at position 1")
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to register Conscrypt provider: ${e.message}")
+        }
+    }
+
     private val keyPairAndCert by lazy {
         AdbKeyHelper.getOrCreateKeyPairAndCertificate(context)
     }
