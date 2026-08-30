@@ -111,8 +111,9 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
      * 6자리 페어링 코드로 로컬 기기와 페어링 수행
      */
     suspend fun pairLocal(port: Int, pairingCode: String): Result<Unit> = withContext(Dispatchers.IO) {
+        acquireMulticastLock()
         try {
-            val host = AndroidUtils.getHostIpAddress(context)
+            val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
             Log.i(TAG, "Attempting pairing with $host:$port using code $pairingCode")
             val success = pair(host, port, pairingCode)
             if (success) {
@@ -124,6 +125,8 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
         } catch (e: Exception) {
             Log.e(TAG, "Pairing error: ${e.message}", e)
             Result.failure(e)
+        } finally {
+            releaseMulticastLock()
         }
     }
 
@@ -131,9 +134,9 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
      * 무선 디버깅 포트로 연결하여 권한 부여 및 셔터음 무음화 명령어 실행
      */
     suspend fun applyCameraMuteViaAdb(connectPort: Int? = null): Result<Unit> = withContext(Dispatchers.IO) {
+        acquireMulticastLock()
         try {
-            acquireMulticastLock()
-            val host = AndroidUtils.getHostIpAddress(context)
+            val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
             val prefs = PreferencesRepository.getInstance(context)
             Log.i(TAG, "Connecting to ADB daemon at $host...")
 
@@ -203,6 +206,8 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
             Log.e(TAG, "Failed to grant permission via ADB: ${e.message}", e)
             try { disconnect() } catch (_: Exception) {}
             Result.failure(e)
+        } finally {
+            releaseMulticastLock()
         }
     }
 
@@ -210,10 +215,10 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
      * 무선 디버깅 셸을 통해 CSC 셔터음 키(0 또는 1)를 직접 변경
      */
     suspend fun setCameraMute(enableMute: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        acquireMulticastLock()
         try {
-            acquireMulticastLock()
             val targetVal = if (enableMute) "0" else "1"
-            val host = AndroidUtils.getHostIpAddress(context)
+            val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
             val prefs = PreferencesRepository.getInstance(context)
 
             // 1. 이미 연결되어 있는 세션이 있다면 즉시 재사용
@@ -277,6 +282,8 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
             Log.e(TAG, "Failed to set camera mute via ADB: ${e.message}", e)
             try { disconnect() } catch (_: Exception) {}
             Result.failure(e)
+        } finally {
+            releaseMulticastLock()
         }
     }
 
@@ -299,8 +306,13 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
         try {
             openStream("shell:$cmd\n").use { stream ->
                 val buffer = ByteArray(1024)
+                val startTime = System.currentTimeMillis()
                 try {
-                    while (stream.read(buffer, 0, buffer.size) > 0) {}
+                    while (System.currentTimeMillis() - startTime < 3000) {
+                        if (stream.isClosed) break
+                        val readBytes = stream.read(buffer, 0, buffer.size)
+                        if (readBytes <= 0) break
+                    }
                 } catch (_: Exception) {}
             }
         } catch (e: Exception) {
