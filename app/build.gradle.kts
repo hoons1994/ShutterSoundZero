@@ -5,10 +5,10 @@ plugins {
 }
 
 android {
-    namespace = "com.hoons.shutterzero"
+    namespace = "com.hoons.shuttersoundzero"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.hoons.shutterzero"
+        applicationId = "com.hoons.shuttersoundzero"
         minSdk = 24
         targetSdk = 36
         versionCode = 100
