@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.0.0-orange.svg)](ShutterSoundZero.apk)
+[![Version](https://img.shields.io/badge/Version-1.0.0-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터음 제로 안내 인포그래픽" width="720" />
@@ -23,7 +23,7 @@
 
 ## 📱 다운로드
 
-* **최신 완제품 APK 다운로드**: [`ShutterSoundZero.apk`](ShutterSoundZero.apk)
+* **최신 릴리즈 APK 다운로드**: [GitHub Releases 최신 버전 받기](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 * 지원 기종: 삼성 갤럭시폰 (Android 11 이상)
 
 ---
