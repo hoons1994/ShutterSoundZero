@@ -18,6 +18,7 @@ data class MainUiState(
     val isCscMuted: Boolean = false,
     val hasCscPermission: Boolean = false,
     val isAutoRestoreOnBoot: Boolean = true,
+    val isFirmwareUpdateCheckEnabled: Boolean = true,
     val adbGrantCommand: String = "",
     val adbDirectSetCommand: String = "",
     val adbCheckCommand: String = "",
@@ -59,6 +60,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     init {
+        // 최초 실행 시 현재 펌웨어 핑거프린트 저장
+        if (prefs.lastFirmwareFingerprint == null) {
+            prefs.lastFirmwareFingerprint = android.os.Build.FINGERPRINT
+        }
         try {
             Shizuku.addRequestPermissionResultListener(permissionListener)
             Shizuku.addBinderReceivedListenerSticky(binderListener)
@@ -86,6 +91,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             isCscMuted = CscMuteManager.isCscShutterSoundMuted(app),
             hasCscPermission = CscMuteManager.hasWritePermission(app),
             isAutoRestoreOnBoot = prefs.isAutoRestoreOnBootEnabled,
+            isFirmwareUpdateCheckEnabled = prefs.isFirmwareUpdateCheckEnabled,
             adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
             adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
             adbCheckCommand = CscMuteManager.getAdbCheckCommand(),
@@ -101,6 +107,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val cscMuted = CscMuteManager.isCscShutterSoundMuted(app)
         val perm = CscMuteManager.hasWritePermission(app)
         val autoRestore = prefs.isAutoRestoreOnBootEnabled
+        val firmwareCheck = prefs.isFirmwareUpdateCheckEnabled
         val shizukuInstalled = ShizukuManager.isShizukuInstalled(app)
         val shizukuRunning = ShizukuManager.isShizukuRunning()
         val shizukuPerm = ShizukuManager.hasPermission()
@@ -110,6 +117,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 isCscMuted = cscMuted,
                 hasCscPermission = perm,
                 isAutoRestoreOnBoot = autoRestore,
+                isFirmwareUpdateCheckEnabled = firmwareCheck,
                 adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
                 adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
                 adbCheckCommand = CscMuteManager.getAdbCheckCommand(),
@@ -222,6 +230,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun setAutoRestoreOnBoot(enabled: Boolean) {
         prefs.isAutoRestoreOnBootEnabled = enabled
         _uiState.update { it.copy(isAutoRestoreOnBoot = enabled) }
+    }
+
+    fun setFirmwareUpdateCheck(enabled: Boolean) {
+        prefs.isFirmwareUpdateCheckEnabled = enabled
+        _uiState.update { it.copy(isFirmwareUpdateCheckEnabled = enabled) }
     }
 
     fun dismissMessages() {
