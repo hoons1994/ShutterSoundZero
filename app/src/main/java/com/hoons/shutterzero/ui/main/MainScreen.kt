@@ -137,7 +137,11 @@ fun MainScreen(
                     checked = uiState.isCscMuted,
                     onCheckedChange = { enable ->
                         if (!hasEffectivePermission) {
-                            viewModel.startNotificationPairing(context)
+                            Toast.makeText(
+                                context,
+                                "권한이 부여되지 않았습니다. 아래 [권한 설정]을 먼저 진행해 주세요.",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         } else {
                             viewModel.toggleCscMute(enable)
                         }
