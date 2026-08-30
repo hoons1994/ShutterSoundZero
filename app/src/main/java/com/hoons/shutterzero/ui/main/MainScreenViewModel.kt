@@ -2,17 +2,19 @@ package com.hoons.shutterzero.ui.main
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hoons.shutterzero.core.CscMuteManager
-import com.hoons.shutterzero.core.ShizukuManager
+import com.hoons.shutterzero.core.adb.StandaloneAdbManager
 import com.hoons.shutterzero.data.PreferencesRepository
+import io.github.muntashirakon.adb.android.AdbMdns
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import rikka.shizuku.Shizuku
 
 data class MainUiState(
     val isCscMuted: Boolean = false,
@@ -23,10 +25,11 @@ data class MainUiState(
     val adbDirectSetCommand: String = "",
     val adbCheckCommand: String = "",
 
-    // Shizuku 무선 디버깅 연동 상태
-    val isShizukuInstalled: Boolean = false,
-    val isShizukuRunning: Boolean = false,
-    val hasShizukuPermission: Boolean = false,
+    // 자체 무선 디버깅 페어링 상태
+    val detectedPairingPort: Int? = null,
+    val detectedConnectPort: Int? = null,
+    val isWirelessPairingInProgress: Boolean = false,
+    val wirelessPairingError: String? = null,
 
     val infoMessage: String? = null,
     val errorMessage: String? = null
@@ -34,55 +37,25 @@ data class MainUiState(
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = PreferencesRepository.getInstance(application)
+    private val adbManager = StandaloneAdbManager.getInstance(application)
+
     private val _uiState = MutableStateFlow(createInitialState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
-    private val permissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-        if (requestCode == ShizukuManager.SHIZUKU_REQ_CODE) {
-            refreshState()
-            if (ShizukuManager.hasPermission()) {
-                // Shizuku 권한 승인 즉시 셔터음 무음화 ADB 명령어를 백그라운드에서 자동 전송!
-                toggleMuteViaShizuku(true)
-            } else {
-                _uiState.update {
-                    it.copy(errorMessage = "Shizuku 권한 요청이 거부되었습니다.")
-                }
-            }
-        }
-    }
-
-    private val binderListener = Shizuku.OnBinderReceivedListener {
-        refreshState()
-    }
-
-    private val binderDeadListener = Shizuku.OnBinderDeadListener {
-        refreshState()
-    }
+    private var pairingMdns: AdbMdns? = null
+    private var connectMdns: AdbMdns? = null
 
     init {
-        // 최초 실행 시 현재 펌웨어 핑거프린트 저장
         if (prefs.lastFirmwareFingerprint == null) {
             prefs.lastFirmwareFingerprint = android.os.Build.FINGERPRINT
         }
-        try {
-            Shizuku.addRequestPermissionResultListener(permissionListener)
-            Shizuku.addBinderReceivedListenerSticky(binderListener)
-            Shizuku.addBinderDeadListener(binderDeadListener)
-        } catch (e: Exception) {
-            // Shizuku provider may not be initialized in test/preview
-        }
         refreshState()
+        startMdnsDiscovery()
     }
 
     override fun onCleared() {
         super.onCleared()
-        try {
-            Shizuku.removeRequestPermissionResultListener(permissionListener)
-            Shizuku.removeBinderReceivedListener(binderListener)
-            Shizuku.removeBinderDeadListener(binderDeadListener)
-        } catch (e: Exception) {
-            // Ignored
-        }
+        stopMdnsDiscovery()
     }
 
     private fun createInitialState(): MainUiState {
@@ -94,23 +67,16 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             isFirmwareUpdateCheckEnabled = prefs.isFirmwareUpdateCheckEnabled,
             adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
             adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
-            adbCheckCommand = CscMuteManager.getAdbCheckCommand(),
-            isShizukuInstalled = ShizukuManager.isShizukuInstalled(app),
-            isShizukuRunning = ShizukuManager.isShizukuRunning(),
-            hasShizukuPermission = ShizukuManager.hasPermission()
+            adbCheckCommand = CscMuteManager.getAdbCheckCommand()
         )
     }
 
     fun refreshState() {
         val app = getApplication<Application>()
-        ShizukuManager.init(app)
         val cscMuted = CscMuteManager.isCscShutterSoundMuted(app)
         val perm = CscMuteManager.hasWritePermission(app)
         val autoRestore = prefs.isAutoRestoreOnBootEnabled
         val firmwareCheck = prefs.isFirmwareUpdateCheckEnabled
-        val shizukuInstalled = ShizukuManager.isShizukuInstalled(app)
-        val shizukuRunning = ShizukuManager.isShizukuRunning()
-        val shizukuPerm = ShizukuManager.hasPermission()
 
         _uiState.update { current ->
             current.copy(
@@ -120,67 +86,87 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 isFirmwareUpdateCheckEnabled = firmwareCheck,
                 adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
                 adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
-                adbCheckCommand = CscMuteManager.getAdbCheckCommand(),
-                isShizukuInstalled = shizukuInstalled,
-                isShizukuRunning = shizukuRunning,
-                hasShizukuPermission = shizukuPerm
+                adbCheckCommand = CscMuteManager.getAdbCheckCommand()
             )
         }
     }
 
-    /**
-     * Shizuku를 통한 원클릭 셔터음 무음화 토글 (PC 불필요)
-     */
-    fun toggleMuteViaShizuku(enableMute: Boolean) {
-        if (!ShizukuManager.isShizukuRunning()) {
-            _uiState.update {
-                it.copy(
-                    errorMessage = "Shizuku 서비스가 실행 중이지 않습니다. 아래 [Shizuku 열기]를 눌러 무선 디버깅을 시작해 주세요."
-                )
+    fun startMdnsDiscovery() {
+        try {
+            stopMdnsDiscovery()
+            pairingMdns = adbManager.startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_PAIRING) { _, port ->
+                _uiState.update { it.copy(detectedPairingPort = port) }
             }
-            return
+            connectMdns = adbManager.startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_CONNECT) { _, port ->
+                _uiState.update { it.copy(detectedConnectPort = port) }
+            }
+        } catch (e: Exception) {
+            // mDNS might not be supported on some network configurations
         }
+    }
 
-        if (!ShizukuManager.hasPermission()) {
-            ShizukuManager.requestPermission()
-            return
+    fun stopMdnsDiscovery() {
+        try {
+            pairingMdns?.stop()
+            connectMdns?.stop()
+        } catch (_: Exception) {}
+        pairingMdns = null
+        connectMdns = null
+    }
+
+    /**
+     * 6자리 페어링 코드로 로컬 페어링 후 CSC 무음화 명령 자동 실행
+     */
+    fun pairAndApplyMute(port: Int, pairingCode: String, onComplete: (Boolean) -> Unit) {
+        _uiState.update {
+            it.copy(isWirelessPairingInProgress = true, wirelessPairingError = null)
         }
 
         viewModelScope.launch {
-            val result = ShizukuManager.setCscMuteViaShizuku(enableMute)
-            result.onSuccess {
-                prefs.shouldMuteOnBoot = enableMute
+            val pairResult = adbManager.pairLocal(port, pairingCode)
+            if (pairResult.isFailure) {
+                val errorMsg = pairResult.exceptionOrNull()?.message ?: "페어링에 실패했습니다."
+                _uiState.update {
+                    it.copy(isWirelessPairingInProgress = false, wirelessPairingError = errorMsg)
+                }
+                onComplete(false)
+                return@launch
+            }
+
+            val connectPort = _uiState.value.detectedConnectPort ?: port
+            val muteResult = adbManager.applyCameraMuteViaAdb(connectPort)
+
+            if (muteResult.isSuccess) {
+                prefs.shouldMuteOnBoot = true
                 refreshState()
-                val cmd = if (enableMute) "settings put system csc_pref_camera_forced_shuttersound_key 0" else "settings put system csc_pref_camera_forced_shuttersound_key 1"
                 _uiState.update {
                     it.copy(
-                        infoMessage = if (enableMute) {
-                            "⚡ Shizuku로 ADB 명령어 전달 완료: 셔터음 무음화 성공!\n[$cmd]"
-                        } else {
-                            "🔔 Shizuku로 ADB 명령어 전달 완료: 셔터음 기본 소리로 복원되었습니다."
-                        },
-                        errorMessage = null
+                        isWirelessPairingInProgress = false,
+                        wirelessPairingError = null,
+                        infoMessage = "✨ 자체 무선 페어링 완료! 카메라 셔터음 무음화가 적용되었습니다."
                     )
                 }
-            }.onFailure { error ->
+                onComplete(true)
+            } else {
                 refreshState()
                 _uiState.update {
-                    it.copy(errorMessage = "Shizuku 적용 실패: ${error.message}", infoMessage = null)
+                    it.copy(
+                        isWirelessPairingInProgress = false,
+                        wirelessPairingError = null,
+                        infoMessage = "✅ 기기 페어링이 완료되었습니다! 셔터음 무음 스위치를 켜주세요."
+                    )
                 }
+                onComplete(true)
             }
         }
     }
 
-    fun requestShizukuPermission() {
-        ShizukuManager.requestPermission()
-    }
-
-    fun openShizukuApp(context: Context) {
-        ShizukuManager.openShizukuOrStore(context)
-    }
-
     fun openDeveloperOptions(context: Context) {
-        ShizukuManager.openDeveloperOptions(context)
+        try {
+            context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+        } catch (e: Exception) {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
     }
 
     /**
@@ -188,16 +174,29 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
      */
     fun toggleCscMute(enableMute: Boolean) {
         val app = getApplication<Application>()
-        if (ShizukuManager.hasPermission()) {
-            // Shizuku 권한이 있으면 Shizuku로 자동 실행
-            toggleMuteViaShizuku(enableMute)
-            return
-        }
 
         if (!CscMuteManager.hasWritePermission(app)) {
+            val connectPort = _uiState.value.detectedConnectPort
+            if (connectPort != null) {
+                viewModelScope.launch {
+                    val result = adbManager.applyCameraMuteViaAdb(connectPort)
+                    if (result.isSuccess) {
+                        prefs.shouldMuteOnBoot = enableMute
+                        refreshState()
+                        _uiState.update {
+                            it.copy(
+                                infoMessage = if (enableMute) "셔터음 무음화가 적용되었습니다." else "셔터음이 기본 소리로 복원되었습니다.",
+                                errorMessage = null
+                            )
+                        }
+                        return@launch
+                    }
+                }
+            }
+
             _uiState.update {
                 it.copy(
-                    errorMessage = "보안 설정 변경 권한이 필요합니다. 아래 [Shizuku 원클릭 무음 적용] 또는 ADB 가이드를 이용해 주세요."
+                    errorMessage = "보안 설정 변경 권한이 필요합니다. 아래 [스마트폰 단독 자체 페어링] 또는 PC ADB 가이드를 이용해 주세요."
                 )
             }
             return
