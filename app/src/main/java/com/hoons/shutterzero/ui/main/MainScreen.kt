@@ -66,6 +66,7 @@ import androidx.navigation3.runtime.NavKey
 import com.hoons.shutterzero.theme.BrandBlueLight
 import com.hoons.shutterzero.theme.StatusAmber
 import com.hoons.shutterzero.theme.StatusGreen
+import com.hoons.shutterzero.ui.dialog.WirelessPairingDialog
 
 private val CardRadius = 20.dp
 private val CardPaddingH = 20.dp
@@ -84,6 +85,7 @@ fun MainScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var showAdbGuideDialog by remember { mutableStateOf(false) }
+    var showWirelessPairingDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -104,7 +106,7 @@ fun MainScreen(
         }
     }
 
-    val hasEffectivePermission = uiState.hasCscPermission || uiState.hasShizukuPermission
+    val hasEffectivePermission = uiState.hasCscPermission
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -147,6 +149,11 @@ fun MainScreen(
                 )
                 RowDivider()
                 ActionRow(
+                    title = "스마트폰 단독 자체 페어링 (추천)",
+                    onClick = { showWirelessPairingDialog = true }
+                )
+                RowDivider()
+                ActionRow(
                     title = "PC 연결 ADB 설정 가이드",
                     onClick = { showAdbGuideDialog = true }
                 )
@@ -165,16 +172,12 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("스마트폰 단독 설정")
+            GroupLabel("스마트폰 단독 설정 (추천)")
             SettingsCard {
-                ShizukuSection(
-                    isInstalled = uiState.isShizukuInstalled,
-                    isRunning = uiState.isShizukuRunning,
-                    hasPermission = uiState.hasShizukuPermission,
+                WirelessPairingSection(
                     isMuted = uiState.isCscMuted,
-                    onApplyShizukuMute = { viewModel.toggleMuteViaShizuku(!uiState.isCscMuted) },
-                    onRequestPermission = { viewModel.requestShizukuPermission() },
-                    onOpenShizuku = { viewModel.openShizukuApp(context) },
+                    hasPermission = hasEffectivePermission,
+                    onStartPairing = { showWirelessPairingDialog = true },
                     onOpenDeveloperOptions = { viewModel.openDeveloperOptions(context) }
                 )
             }
@@ -205,6 +208,22 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (showWirelessPairingDialog) {
+        WirelessPairingDialog(
+            detectedPairingPort = uiState.detectedPairingPort,
+            isPairing = uiState.isWirelessPairingInProgress,
+            errorMessage = uiState.wirelessPairingError,
+            onDismiss = { showWirelessPairingDialog = false },
+            onPair = { port, code ->
+                viewModel.pairAndApplyMute(port, code) { success ->
+                    if (success) {
+                        showWirelessPairingDialog = false
+                    }
+                }
+            }
+        )
     }
 
     if (showAdbGuideDialog) {
@@ -426,75 +445,40 @@ private fun InfoRow(title: String, subtitle: String) {
     }
 }
 
-// ── Shizuku 섹션 ──────────────────────────────
+// ── 스마트폰 단독 무선 페어링 섹션 ──────────────────────
 
 @Composable
-private fun ShizukuSection(
-    isInstalled: Boolean,
-    isRunning: Boolean,
-    hasPermission: Boolean,
+private fun WirelessPairingSection(
     isMuted: Boolean,
-    onApplyShizukuMute: () -> Unit,
-    onRequestPermission: () -> Unit,
-    onOpenShizuku: () -> Unit,
+    hasPermission: Boolean,
+    onStartPairing: () -> Unit,
     onOpenDeveloperOptions: () -> Unit
 ) {
     StatusRow(
-        title = "무선 디버깅 (Shizuku)",
-        valueText = when {
-            hasPermission -> "연동 완료"
-            isRunning     -> "권한 필요"
-            isInstalled   -> "앱 미실행"
-            else          -> "미설치"
-        },
-        valueColor = when {
-            hasPermission -> StatusGreen
-            isRunning     -> StatusAmber
-            else          -> MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        onClick = null
+        title = "자체 무선 페어링 (외부 앱 불필요)",
+        valueText = if (hasPermission) "연동 완료" else "설정 필요",
+        valueColor = if (hasPermission) StatusGreen else BrandBlueLight,
+        onClick = onStartPairing
     )
 
-    if (!hasPermission) {
-        RowDivider()
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = CardPaddingH, vertical = CardPaddingV),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = "스마트폰 단독 무선 연동 단계",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "PC 케이블 연결 없이 스마트폰 자체 무선 디버깅을 통해 1초 만에 권한을 연동하는 방법입니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 18.sp
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "1단계 · Shizuku 앱 설치 : Play 스토어에서 'Shizuku' 앱을 설치합니다.\n" +
-                       "2단계 · 무선 디버깅 켜기 : Wi-Fi 연결 후 [개발자 옵션] → [무선 디버깅] 활성화\n" +
-                       "3단계 · 서비스 시작 : Shizuku 앱을 열고 [무선 디버깅으로 시작]에서 [시작] 터치\n" +
-                       "4단계 · 권한 허용 : 셔터 제로 앱으로 돌아와 아래 [권한 허용하기] 버튼 터치",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 20.sp
-            )
-        }
-    } else {
-        RowDivider()
+    RowDivider()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = CardPaddingH, vertical = CardPaddingV),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
         Text(
-            text = "Shizuku 무선 디버깅이 정상 연동되었습니다. PC 연결 없이 언제든 셔터음 무음 설정을 켜고 끌 수 있습니다.",
+            text = "스마트폰 1대로 100% 자체 완결",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "PC나 Shizuku 등 추가 앱 설치 없이, 개발자 옵션의 6자리 페어링 코드만 입력하면 앱 자체에서 직접 무음 권한을 연동합니다.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = 18.sp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = CardPaddingH, vertical = 12.dp)
+            lineHeight = 18.sp
         )
     }
 
@@ -506,50 +490,24 @@ private fun ShizukuSection(
             .padding(horizontal = CardPaddingH, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        when {
-            hasPermission -> Button(
-                onClick = onApplyShizukuMute,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isMuted)
-                        MaterialTheme.colorScheme.surfaceVariant
-                    else
-                        MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Text(
-                    text = if (isMuted) "셔터음 소리 다시 켜기" else "Shizuku로 셔터음 끄기",
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isMuted) MaterialTheme.colorScheme.onSurfaceVariant else Color.White
-                )
-            }
-            isRunning -> Button(
-                onClick = onRequestPermission,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("👉 Shizuku 권한 허용하기 (1초 완료)", fontWeight = FontWeight.SemiBold)
-            }
-            else -> {
-                Button(
-                    onClick = onOpenShizuku,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        if (isInstalled) "🚀 Shizuku 앱 열기" else "📥 Shizuku 설치하기 (Play 스토어)",
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                OutlinedButton(
-                    onClick = onOpenDeveloperOptions,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("⚙️ 개발자 옵션 (무선 디버깅) 바로가기")
-                }
-            }
+        Button(
+            onClick = onStartPairing,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
+        ) {
+            Text(
+                text = if (hasPermission) "⚡ 무선 페어링 다시 실행하기" else "✨ 스마트폰 단독 무선 페어링 시작",
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+        OutlinedButton(
+            onClick = onOpenDeveloperOptions,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text("⚙️ 개발자 옵션 (무선 디버깅) 바로가기")
         }
     }
 }
