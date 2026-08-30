@@ -10,6 +10,7 @@ import com.hoons.shutterzero.data.PreferencesRepository
 import com.hoons.shutterzero.ui.notification.PairingNotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class PairingNotificationReceiver : BroadcastReceiver() {
@@ -26,45 +27,70 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                 val code = results?.getCharSequence(PairingNotificationHelper.KEY_PAIRING_CODE)?.toString()?.trim()
 
                 if (code.isNullOrBlank()) {
-                    PairingNotificationHelper.showFailureNotification(context, "페어링 코드가 입력되지 않았습니다.")
-                    return
-                }
-
-                val adbManager = StandaloneAdbManager.getInstance(context)
-                val port = intent.getIntExtra("pairing_port", -1).takeIf { it > 0 }
-                    ?: adbManager.lastDiscoveredPairingPort
-
-                if (port == null || port <= 0) {
-                    PairingNotificationHelper.showFailureNotification(
+                    PairingNotificationHelper.showPairingNotification(
                         context,
-                        "페어링 포트를 아직 탐색 중입니다. 잠시 후 상단바에서 다시 코드를 입력해 주세요."
+                        null,
+                        "⚠️ 6자리 코드가 입력되지 않았습니다."
                     )
                     return
                 }
 
+                // 입력 직후 알림이 사라지지 않도록 즉시 '적용 중' 고정 상태로 업데이트
+                PairingNotificationHelper.showProgressNotification(context)
+
+                val adbManager = StandaloneAdbManager.getInstance(context)
                 val pendingResult = goAsync()
+
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
+                        var port = intent.getIntExtra("pairing_port", -1).takeIf { it > 0 }
+                            ?: adbManager.lastDiscoveredPairingPort
+
+                        // mDNS가 아직 포트를 해석 중인 경우 최대 3초간 대기
+                        if (port == null || port <= 0) {
+                            for (i in 0 until 15) {
+                                delay(200)
+                                port = adbManager.lastDiscoveredPairingPort
+                                if (port != null && port > 0) break
+                            }
+                        }
+
+                        if (port == null || port <= 0) {
+                            // 포트를 못 찾더라도 알림창을 끄지 않고 안내와 함께 재입력 유지
+                            PairingNotificationHelper.showPairingNotification(
+                                context,
+                                null,
+                                "⏳ 포트 탐색 대기 중: 화면의 6자리 코드를 다시 입력해 주세요."
+                            )
+                            return@launch
+                        }
+
                         Log.i(TAG, "Attempting pairing via notification with port $port and code $code")
                         val pairResult = adbManager.pairLocal(port, code)
 
                         if (pairResult.isSuccess) {
                             val connectPort = adbManager.lastDiscoveredConnectPort ?: port
-                            val muteResult = adbManager.applyCameraMuteViaAdb(connectPort)
+                            adbManager.applyCameraMuteViaAdb(connectPort)
 
                             PreferencesRepository.getInstance(context).shouldMuteOnBoot = true
-                            if (muteResult.isSuccess) {
-                                PairingNotificationHelper.showSuccessNotification(context)
-                            } else {
-                                PairingNotificationHelper.showSuccessNotification(context)
-                            }
+                            // 페어링 및 무음화가 최종 완료되었을 때만 완료 알림으로 전환
+                            PairingNotificationHelper.showSuccessNotification(context)
                         } else {
-                            val errorMsg = pairResult.exceptionOrNull()?.message ?: "페어링에 실패했습니다."
-                            PairingNotificationHelper.showFailureNotification(context, errorMsg)
+                            val errorMsg = pairResult.exceptionOrNull()?.message ?: "페어링 실패"
+                            // 실패하더라도 알림을 끄지 않고 코드 입력창 유지
+                            PairingNotificationHelper.showPairingNotification(
+                                context,
+                                port,
+                                "❌ $errorMsg: 코드를 다시 입력해 주세요."
+                            )
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Notification pairing error: ${e.message}", e)
-                        PairingNotificationHelper.showFailureNotification(context, "오류 발생: ${e.message}")
+                        PairingNotificationHelper.showPairingNotification(
+                            context,
+                            null,
+                            "❌ 오류 발생: ${e.message}"
+                        )
                     } finally {
                         pendingResult.finish()
                     }

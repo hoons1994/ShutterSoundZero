@@ -61,7 +61,14 @@ object PairingNotificationHelper {
         }
     }
 
-    fun showPairingNotification(context: Context, pairingPort: Int? = null) {
+    /**
+     * 페어링 코드가 입력되어 성공할 때까지 절대 꺼지지 않는 상단바 알림 표시
+     */
+    fun showPairingNotification(
+        context: Context,
+        pairingPort: Int? = null,
+        statusMessage: String? = null
+    ) {
         createNotificationChannel(context)
 
         // 1. RemoteInput: 알림창에서 키보드로 바로 6자리를 치는 인라인 입력 필드
@@ -113,12 +120,20 @@ object PairingNotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
 
-        val title = if (pairingPort != null) "✨ 무선 디버깅 서비스 감지됨 (포트: $pairingPort)" else "무선 디버깅 페어링 대기 중"
-        val summaryText = if (pairingPort != null) "상단바 [코드 입력하기]를 누르고 6자리 코드를 입력하세요" else "개발자 옵션의 [페어링 코드로 기기 페어링]을 누르고 코드를 확인하세요"
-        val bigText = if (pairingPort != null) {
-            "무선 페어링 서비스가 감지되었습니다 (포트: $pairingPort)!\n화면에 뜬 6자리 페어링 코드를 아래 [코드 입력하기]에 입력해 주세요."
+        val title = when {
+            statusMessage != null -> statusMessage
+            pairingPort != null -> "✨ 무선 디버깅 서비스 감지됨 (포트: $pairingPort)"
+            else -> "무선 디버깅 페어링 대기 중"
+        }
+        val summaryText = if (pairingPort != null) {
+            "상단바 [코드 입력하기]를 누르고 6자리 코드를 입력하세요"
         } else {
-            "Wi-Fi 연결 후 개발자 옵션의 [무선 디버깅] ➔ [페어링 코드로 기기 페어링] 화면을 띄운 상태에서 상단바를 내려 아래 [코드 입력하기]를 터치해 주세요."
+            "개발자 옵션의 [페어링 코드로 기기 페어링]을 누르고 코드를 확인하세요"
+        }
+        val bigText = when {
+            statusMessage != null -> "$statusMessage\n화면의 6자리 페어링 코드를 아래 [코드 입력하기]에 입력해 주세요."
+            pairingPort != null -> "무선 페어링 서비스가 감지되었습니다 (포트: $pairingPort)!\n화면에 뜬 6자리 페어링 코드를 아래 [코드 입력하기]에 입력해 주세요."
+            else -> "Wi-Fi 연결 후 개발자 옵션의 [무선 디버깅] ➔ [페어링 코드로 기기 페어링] 화면을 띄운 상태에서 상단바를 내려 아래 [코드 입력하기]를 터치해 주세요."
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -137,11 +152,48 @@ object PairingNotificationHelper {
             .addAction(cancelAction)
             .build()
 
+        // 스와이프 및 모두 지우기로 절대 지워지지 않도록 플래그 고정
+        notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT
+
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
         } catch (_: SecurityException) {}
     }
 
+    /**
+     * 사용자가 코드를 제출했을 때 페어링 진행 중임을 표시 (꺼지지 않음)
+     */
+    fun showProgressNotification(context: Context) {
+        createNotificationChannel(context)
+
+        val contentIntent = Intent(context, MainActivity::class.java)
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            0,
+            contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("무선 페어링 적용 중 ⏳")
+            .setContentText("기기 페어링 및 카메라 셔터음 무음 설정을 적용하고 있습니다...")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setContentIntent(contentPendingIntent)
+            .build()
+
+        notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT
+
+        try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {}
+    }
+
+    /**
+     * 페어링 및 무음화가 완전히 성공했을 때만 알림 완료 상태로 전환
+     */
     fun showSuccessNotification(context: Context) {
         val contentIntent = Intent(context, MainActivity::class.java)
         val contentPendingIntent = PendingIntent.getActivity(
@@ -159,21 +211,6 @@ object PairingNotificationHelper {
             .setOngoing(false)
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
-            .build()
-
-        try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
-        } catch (_: SecurityException) {}
-    }
-
-    fun showFailureNotification(context: Context, errorMsg: String) {
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("셔터 제로: 페어링 실패 ❌")
-            .setContentText(errorMsg)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setOngoing(false)
-            .setAutoCancel(true)
             .build()
 
         try {
