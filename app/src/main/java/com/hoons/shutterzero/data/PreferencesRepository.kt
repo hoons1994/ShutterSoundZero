@@ -14,7 +14,7 @@ class PreferencesRepository(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_AUTO_RESTORE_BOOT, value).apply()
 
     var shouldMuteOnBoot: Boolean
-        get() = prefs.getBoolean(KEY_SHOULD_MUTE_ON_BOOT, true)
+        get() = prefs.getBoolean(KEY_SHOULD_MUTE_ON_BOOT, false)
         set(value) = prefs.edit().putBoolean(KEY_SHOULD_MUTE_ON_BOOT, value).apply()
 
     var isFirmwareUpdateCheckEnabled: Boolean

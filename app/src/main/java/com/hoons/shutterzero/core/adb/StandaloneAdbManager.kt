@@ -182,24 +182,71 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
                 return@withContext Result.failure(Exception("ADB 연결 실패: 무선 디버깅이 활성화되어 있는지 확인해 주세요."))
             }
 
-            Log.i(TAG, "ADB session established! Executing permission and CSC mute commands...")
+            Log.i(TAG, "ADB session established! Granting WRITE_SECURE_SETTINGS & enabling camera mute...")
 
             // 1) WRITE_SECURE_SETTINGS 권한 부여 (영구 권한)
             executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
 
-            // 2) CSC 셔터음 키 무음화 설정 (0)
+            // 2) CSC 셔터음 키 무음화 설정 (0) - 권한 부여 시 켜짐 상태 적용
             executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 0")
 
             disconnect()
-            Log.i(TAG, "CSC Mute & permission commands executed successfully via standalone ADB!")
+            Log.i(TAG, "WRITE_SECURE_SETTINGS granted & camera mute enabled successfully via standalone ADB!")
 
-            // 3) 앱 내부 상태 동기화
-            CscMuteManager.setCscShutterSoundMuted(context, true)
+            // 3) 설정 저장
             PreferencesRepository.getInstance(context).shouldMuteOnBoot = true
 
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to apply CSC mute via ADB: ${e.message}", e)
+            Log.e(TAG, "Failed to grant permission via ADB: ${e.message}", e)
+            try { disconnect() } catch (_: Exception) {}
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 무선 디버깅 셸을 통해 CSC 셔터음 키(0 또는 1)를 직접 변경
+     */
+    suspend fun setCameraMute(enableMute: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val targetVal = if (enableMute) "0" else "1"
+            val host = AndroidUtils.getHostIpAddress(context)
+            var connected = false
+
+            // 1. 캐시된 connectPort로 직접 연결 시도
+            val cachedPort = lastDiscoveredConnectPort
+            if (cachedPort != null && cachedPort > 0) {
+                try {
+                    connected = connect(host, cachedPort)
+                } catch (_: Exception) {}
+            }
+
+            // 2. mDNS 자동 탐색 및 연결 (TLS)
+            if (!connected) {
+                try {
+                    connected = connectTls(context, 5000)
+                } catch (_: Exception) {}
+            }
+
+            // 3. mDNS 자동 탐색 및 연결 (TCP)
+            if (!connected) {
+                try {
+                    connected = connectTcp(context, 3000)
+                } catch (_: Exception) {}
+            }
+
+            if (!connected && !isConnected) {
+                return@withContext Result.failure(Exception("무선 디버깅 연결 실패: 무선 디버깅이 켜져 있는지 확인해 주세요."))
+            }
+
+            executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
+            disconnect()
+
+            PreferencesRepository.getInstance(context).shouldMuteOnBoot = enableMute
+            Log.i(TAG, "Successfully set csc_pref_camera_forced_shuttersound_key to $targetVal via ADB")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set camera mute via ADB: ${e.message}", e)
             try { disconnect() } catch (_: Exception) {}
             Result.failure(e)
         }
