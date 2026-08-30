@@ -69,12 +69,39 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                         val pairResult = adbManager.pairLocal(port, code)
 
                         if (pairResult.isSuccess) {
-                            val connectPort = adbManager.lastDiscoveredConnectPort ?: port
-                            adbManager.applyCameraMuteViaAdb(connectPort)
+                            Log.i(TAG, "Pairing successful! Applying camera mute & permissions via ADB...")
+                            delay(300)
 
-                            PreferencesRepository.getInstance(context).shouldMuteOnBoot = true
-                            // 페어링 및 무음화가 최종 완료되었을 때만 완료 알림으로 전환
-                            PairingNotificationHelper.showSuccessNotification(context)
+                            val muteResult = adbManager.applyCameraMuteViaAdb()
+
+                            if (muteResult.isSuccess) {
+                                Log.i(TAG, "All completed successfully!")
+                                // 1. 상단바 완료 알림
+                                PairingNotificationHelper.showSuccessNotification(context)
+
+                                // 2. 시스템 토스트 알림
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "✨ 셔터 제로: 셔터음 무음화 연동이 완료되었습니다!",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                }
+
+                                // 3. 메인 앱 화면 전면으로 자동 복귀
+                                val launchIntent = Intent(context, com.hoons.shutterzero.MainActivity::class.java).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                }
+                                context.startActivity(launchIntent)
+                            } else {
+                                val errorMsg = muteResult.exceptionOrNull()?.message ?: "무음 설정 적용 실패"
+                                Log.w(TAG, "Mute apply failed after pairing: $errorMsg")
+                                PairingNotificationHelper.showPairingNotification(
+                                    context,
+                                    null,
+                                    "⚠️ 페어링 완료됨: 무선 디버깅 연결 실패 ($errorMsg)"
+                                )
+                            }
                         } else {
                             val errorMsg = pairResult.exceptionOrNull()?.message ?: "페어링 실패"
                             // 실패하더라도 알림을 끄지 않고 코드 입력창 유지

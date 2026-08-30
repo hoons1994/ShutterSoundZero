@@ -2,6 +2,8 @@ package com.hoons.shutterzero.core.adb
 
 import android.content.Context
 import android.util.Log
+import com.hoons.shutterzero.core.CscMuteManager
+import com.hoons.shutterzero.data.PreferencesRepository
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
 import io.github.muntashirakon.adb.android.AdbMdns
 import io.github.muntashirakon.adb.android.AndroidUtils
@@ -126,37 +128,93 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
     }
 
     /**
-     * 무선 디버깅 포트로 연결하여 셔터음 무음화 명령어 실행
+     * 무선 디버깅 포트로 연결하여 권한 부여 및 셔터음 무음화 명령어 실행
      */
-    suspend fun applyCameraMuteViaAdb(connectPort: Int): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun applyCameraMuteViaAdb(connectPort: Int? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val host = AndroidUtils.getHostIpAddress(context)
-            Log.i(TAG, "Connecting to ADB daemon at $host:$connectPort")
+            Log.i(TAG, "Connecting to ADB daemon at $host...")
 
-            val isConnected = connect(host, connectPort)
-            if (!isConnected) {
-                return@withContext Result.failure(Exception("ADB 연결에 실패했습니다. 포트를 확인해 주세요."))
-            }
+            var connected = false
 
-            // CSC 무음화 명령 실행: settings put system csc_pref_camera_forced_shuttersound_key 0
-            val command = "settings put system csc_pref_camera_forced_shuttersound_key 0\n"
-            openStream("shell:$command").use { stream ->
+            // 1. 지정된 connectPort가 있다면 직접 연결 시도
+            if (connectPort != null && connectPort > 0) {
                 try {
-                    stream.openOutputStream().use { out ->
-                        out.write(command.toByteArray(Charsets.UTF_8))
-                        out.flush()
-                    }
-                } catch (_: Exception) {}
-                Thread.sleep(300)
+                    Log.i(TAG, "Attempting direct connect to port $connectPort")
+                    connected = connect(host, connectPort)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Direct connect to $connectPort failed: ${e.message}")
+                }
             }
+
+            // 2. 이미 캐시된 connectPort가 있다면 시도
+            val cachedPort = lastDiscoveredConnectPort
+            if (!connected && cachedPort != null && cachedPort > 0) {
+                try {
+                    Log.i(TAG, "Attempting connect to cached port $cachedPort")
+                    connected = connect(host, cachedPort)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Connect to cached port $cachedPort failed: ${e.message}")
+                }
+            }
+
+            // 3. connectTls (adb-tls-connect mDNS 자동 탐색 및 연결)
+            if (!connected) {
+                try {
+                    Log.i(TAG, "Attempting connectTls with 7s timeout...")
+                    connected = connectTls(context, 7000)
+                } catch (e: Exception) {
+                    Log.w(TAG, "connectTls failed: ${e.message}")
+                }
+            }
+
+            // 4. connectTcp (adb mDNS 자동 탐색 및 연결)
+            if (!connected) {
+                try {
+                    Log.i(TAG, "Attempting connectTcp with 4s timeout...")
+                    connected = connectTcp(context, 4000)
+                } catch (e: Exception) {
+                    Log.w(TAG, "connectTcp failed: ${e.message}")
+                }
+            }
+
+            if (!connected && !isConnected) {
+                return@withContext Result.failure(Exception("ADB 연결 실패: 무선 디버깅이 활성화되어 있는지 확인해 주세요."))
+            }
+
+            Log.i(TAG, "ADB session established! Executing permission and CSC mute commands...")
+
+            // 1) WRITE_SECURE_SETTINGS 권한 부여 (영구 권한)
+            executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+
+            // 2) CSC 셔터음 키 무음화 설정 (0)
+            executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 0")
 
             disconnect()
-            Log.i(TAG, "CSC Mute command executed successfully via standalone ADB!")
+            Log.i(TAG, "CSC Mute & permission commands executed successfully via standalone ADB!")
+
+            // 3) 앱 내부 상태 동기화
+            CscMuteManager.setCscShutterSoundMuted(context, true)
+            PreferencesRepository.getInstance(context).shouldMuteOnBoot = true
+
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to apply CSC mute via ADB: ${e.message}", e)
             try { disconnect() } catch (_: Exception) {}
             Result.failure(e)
+        }
+    }
+
+    private fun executeShellCommand(cmd: String) {
+        try {
+            openStream("shell:$cmd\n").use { stream ->
+                val buffer = ByteArray(1024)
+                try {
+                    while (stream.read(buffer, 0, buffer.size) > 0) {}
+                } catch (_: Exception) {}
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Shell command '$cmd' execution note: ${e.message}")
         }
     }
 }
