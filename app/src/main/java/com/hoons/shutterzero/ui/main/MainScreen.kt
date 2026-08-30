@@ -170,6 +170,14 @@ fun MainScreen(
                     subtitle = "진동·무음 모드 시 촬영음 완전 차단",
                     checked = uiState.isCscMuted,
                     onCheckedChange = { enable ->
+                        if (!com.hoons.shutterzero.core.CscMuteManager.isSamsungDevice()) {
+                            Toast.makeText(
+                                context,
+                                "⚠️ 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@SwitchRow
+                        }
                         if (!hasEffectivePermission) {
                             Toast.makeText(
                                 context,
@@ -203,8 +211,28 @@ fun MainScreen(
             SettingsCard {
                 PermissionSetupSection(
                     hasPermission = hasEffectivePermission,
-                    onStartNotificationPairing = requestPairingNotification,
-                    onStartManualPairing = { showWirelessPairingDialog = true },
+                    onStartNotificationPairing = {
+                        if (!com.hoons.shutterzero.core.CscMuteManager.isSamsungDevice()) {
+                            Toast.makeText(
+                                context,
+                                "⚠️ 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            requestPairingNotification()
+                        }
+                    },
+                    onStartManualPairing = {
+                        if (!com.hoons.shutterzero.core.CscMuteManager.isSamsungDevice()) {
+                            Toast.makeText(
+                                context,
+                                "⚠️ 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            showWirelessPairingDialog = true
+                        }
+                    },
                     onOpenAdbGuide = { showAdbGuideDialog = true },
                     onOpenDeveloperOptions = { viewModel.openDeveloperOptions(context) }
                 )

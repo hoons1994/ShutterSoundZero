@@ -197,6 +197,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun toggleCscMute(enableMute: Boolean) {
         val app = getApplication<Application>()
 
+        if (!CscMuteManager.isSamsungDevice()) {
+            _uiState.update {
+                it.copy(errorMessage = "이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.")
+            }
+            return
+        }
+
         if (!CscMuteManager.hasWritePermission(app)) {
             _uiState.update {
                 it.copy(errorMessage = "보안 설정 변경 권한이 필요합니다. 아래 [권한 설정]을 진행해 주세요.")
