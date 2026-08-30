@@ -262,6 +262,43 @@ fun MainScreen(
                 )
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            GroupLabel("주의사항 및 법적 고지")
+            SettingsCard {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "⚖️",
+                            fontSize = 16.sp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "불법촬영 및 사생활 침해 금지 안내",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "본 앱은 도서관, 미술관, 학술대회, 강의실 등 정숙이 요구되는 공공장소나 반려동물·아기 촬영 등 정당한 편의를 위해 제공됩니다.\n\n" +
+                                "• 타인의 의사에 반하는 불법촬영, 성적 수치심을 유발하는 촬영, 사생활 침해 목적으로 절대 사용할 수 없습니다.\n" +
+                                "• 위반 시 「성폭력범죄의 처벌 등에 관한 특례법」(카메라등이용촬영죄) 등 관련 법률에 따라 엄중한 형사 처벌을 받을 수 있습니다.\n" +
+                                "• 모든 촬영 행위에 대한 법적 책임은 사용자 본인에게 있습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
