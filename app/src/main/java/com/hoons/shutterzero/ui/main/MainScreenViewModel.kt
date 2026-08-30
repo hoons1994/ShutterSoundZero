@@ -60,7 +60,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun createInitialState(): MainUiState {
         val app = getApplication<Application>()
-        val hasPermission = CscMuteManager.hasWritePermission(app)
+        val hasPermission = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
         val isMuted = if (!hasPermission) false else prefs.shouldMuteOnBoot
         return MainUiState(
             isCscMuted = isMuted,
@@ -75,7 +75,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun refreshState() {
         val app = getApplication<Application>()
-        val perm = CscMuteManager.hasWritePermission(app)
+        val perm = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
         val isMuted = if (!perm) false else prefs.shouldMuteOnBoot
         val autoRestore = prefs.isAutoRestoreOnBootEnabled
         val firmwareCheck = prefs.isFirmwareUpdateCheckEnabled
@@ -94,6 +94,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun startMdnsDiscovery() {
+        prefs.isPermissionRevokedByUser = false
         try {
             stopMdnsDiscovery()
             pairingMdns = adbManager.startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_PAIRING) { _, port ->
@@ -252,5 +253,26 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun dismissMessages() {
         _uiState.update { it.copy(infoMessage = null, errorMessage = null) }
+    }
+
+    /**
+     * 권한 연동 해제 및 초기화
+     */
+    fun resetPermission() {
+        prefs.isPermissionRevokedByUser = true
+        prefs.shouldMuteOnBoot = false
+        prefs.lastConnectPort = -1
+        refreshState()
+
+        viewModelScope.launch {
+            adbManager.revokePermissionViaAdb()
+            refreshState()
+            _uiState.update {
+                it.copy(
+                    infoMessage = "권한 연동이 해제되었습니다. 다시 연동하려면 아래 버튼을 눌러주세요.",
+                    errorMessage = null
+                )
+            }
+        }
     }
 }
