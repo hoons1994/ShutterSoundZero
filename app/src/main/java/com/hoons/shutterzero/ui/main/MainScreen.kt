@@ -149,8 +149,8 @@ fun MainScreen(
                 )
                 RowDivider()
                 ActionRow(
-                    title = "스마트폰 단독 자체 페어링 (추천)",
-                    onClick = { showWirelessPairingDialog = true }
+                    title = "상단바 알림으로 무선 페어링 (추천)",
+                    onClick = { viewModel.startNotificationPairing(context) }
                 )
                 RowDivider()
                 ActionRow(
@@ -177,7 +177,8 @@ fun MainScreen(
                 WirelessPairingSection(
                     isMuted = uiState.isCscMuted,
                     hasPermission = hasEffectivePermission,
-                    onStartPairing = { showWirelessPairingDialog = true },
+                    onStartNotificationPairing = { viewModel.startNotificationPairing(context) },
+                    onStartManualPairing = { showWirelessPairingDialog = true },
                     onOpenDeveloperOptions = { viewModel.openDeveloperOptions(context) }
                 )
             }
@@ -457,14 +458,15 @@ private fun InfoRow(title: String, subtitle: String) {
 private fun WirelessPairingSection(
     isMuted: Boolean,
     hasPermission: Boolean,
-    onStartPairing: () -> Unit,
+    onStartNotificationPairing: () -> Unit,
+    onStartManualPairing: () -> Unit,
     onOpenDeveloperOptions: () -> Unit
 ) {
     StatusRow(
         title = "자체 무선 페어링 (외부 앱 불필요)",
         valueText = if (hasPermission) "연동 완료" else "설정 필요",
         valueColor = if (hasPermission) StatusGreen else BrandBlueLight,
-        onClick = onStartPairing
+        onClick = onStartNotificationPairing
     )
 
     RowDivider()
@@ -476,15 +478,17 @@ private fun WirelessPairingSection(
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text(
-            text = "스마트폰 1대로 100% 자체 완결",
+            text = "상단바 알림으로 1초 만에 무음화",
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = "PC나 Shizuku 등 추가 앱 설치 없이, 개발자 옵션의 6자리 페어링 코드만 입력하면 앱 자체에서 직접 무음 권한을 연동합니다.",
+            text = "1. 아래 [상단바 알림 페어링 시작]을 누르면 개발자 옵션이 열립니다.\n" +
+                   "2. [무선 디버깅] ➔ [페어링 코드로 기기 페어링]을 터치합니다.\n" +
+                   "3. 화면을 닫지 않고 상단바를 아래로 내려 알림창에 6자리 코드를 입력하면 즉시 무음화됩니다!",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = 18.sp
+            lineHeight = 20.sp
         )
     }
 
@@ -497,16 +501,23 @@ private fun WirelessPairingSection(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Button(
-            onClick = onStartPairing,
+            onClick = onStartNotificationPairing,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
         ) {
             Text(
-                text = if (hasPermission) "⚡ 무선 페어링 다시 실행하기" else "✨ 스마트폰 단독 무선 페어링 시작",
+                text = if (hasPermission) "⚡ 상단바 알림 페어링 다시 실행" else "✨ 상단바 알림으로 무선 페어링 시작 (추천)",
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
+        }
+        OutlinedButton(
+            onClick = onStartManualPairing,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text("직접 코드 입력 팝업 열기")
         }
         OutlinedButton(
             onClick = onOpenDeveloperOptions,

@@ -57,6 +57,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- 상단바 알림에서 6자리 페어링 코드를 직접 처리하는 리시버 -->
+        <receiver
+            android:name=".receiver.PairingNotificationReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>
