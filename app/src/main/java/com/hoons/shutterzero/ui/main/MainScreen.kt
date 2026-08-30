@@ -23,12 +23,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -39,6 +43,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.hoons.shutterzero.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -155,10 +160,7 @@ fun MainScreen(
         ) {
             AppHeader(
                 isMuted = uiState.isCscMuted,
-                onRefresh = {
-                    viewModel.refreshState()
-                    Toast.makeText(context, "상태를 새로고침했습니다.", Toast.LENGTH_SHORT).show()
-                }
+                onSettingsClick = { onItemClick(Settings) }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -240,30 +242,6 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("자동화")
-            SettingsCard {
-                SwitchRow(
-                    title = "재부팅 후 자동 유지",
-                    subtitle = "기기가 꺼졌다 켜져도 무음 상태 자동 복원",
-                    checked = uiState.isAutoRestoreOnBoot,
-                    onCheckedChange = { viewModel.setAutoRestoreOnBoot(it) }
-                )
-                RowDivider()
-                SwitchRow(
-                    title = "펌웨어 업데이트 자동 감지",
-                    subtitle = "시스템 업데이트로 설정 초기화 시 자동 복원 및 알림",
-                    checked = uiState.isFirmwareUpdateCheckEnabled,
-                    onCheckedChange = { viewModel.setFirmwareUpdateCheck(it) }
-                )
-                RowDivider()
-                InfoRow(
-                    title = "빠른 설정 타일",
-                    subtitle = "알림창 하단 [편집]에서 '카메라 무음' 타일 추가 가능"
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
             GroupLabel("주의사항 및 법적 고지")
             SettingsCard {
                 Column(
@@ -340,7 +318,7 @@ fun MainScreen(
 // ── 헤더 ──────────────────────────────────────
 
 @Composable
-private fun AppHeader(isMuted: Boolean, onRefresh: () -> Unit) {
+private fun AppHeader(isMuted: Boolean, onSettingsClick: () -> Unit) {
     val dotColor by animateColorAsState(
         targetValue = if (isMuted) StatusGreen else Color(0xFFBCC1CA),
         animationSpec = tween(400),
@@ -367,11 +345,11 @@ private fun AppHeader(isMuted: Boolean, onRefresh: () -> Unit) {
                 ),
                 color = MaterialTheme.colorScheme.onBackground
             )
-            TextButton(onClick = onRefresh) {
-                Text(
-                    text = "새로고침",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
+            IconButton(onClick = onSettingsClick) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "설정",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

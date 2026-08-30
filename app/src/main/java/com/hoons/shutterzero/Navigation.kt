@@ -1,4 +1,4 @@
-﻿package com.hoons.shutterzero
+package com.hoons.shutterzero
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -9,6 +9,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.hoons.shutterzero.ui.main.MainScreen
+import com.hoons.shutterzero.ui.settings.SettingsScreen
 
 @Composable
 fun MainNavigation() {
@@ -21,6 +22,9 @@ fun MainNavigation() {
       entryProvider {
         entry<Main> {
           MainScreen(onItemClick = { navKey -> backStack.add(navKey) }, modifier = Modifier.safeDrawingPadding())
+        }
+        entry<Settings> {
+          SettingsScreen(onBackClick = { backStack.removeLastOrNull() }, modifier = Modifier.safeDrawingPadding())
         }
       },
   )

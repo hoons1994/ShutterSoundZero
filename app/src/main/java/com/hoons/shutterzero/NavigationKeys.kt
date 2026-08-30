@@ -1,6 +1,7 @@
-﻿package com.hoons.shutterzero
+package com.hoons.shutterzero
 
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
 @Serializable data object Main : NavKey
+@Serializable data object Settings : NavKey
