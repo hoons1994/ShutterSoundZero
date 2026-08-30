@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 시스템 설정 및 CSC 무음 제어 권한 -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- 기기 재부팅 시 CSC 무음 설정 자동 유지 권한 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

@@ -153,7 +153,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 return@launch
             }
 
-            val connectPort = _uiState.value.detectedConnectPort ?: port
+            val connectPort = _uiState.value.detectedConnectPort
             val muteResult = adbManager.applyCameraMuteViaAdb(connectPort)
 
             if (muteResult.isSuccess) {
