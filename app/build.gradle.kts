@@ -1,7 +1,17 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+}
+
+val localProperties = Properties().apply {
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) {
+        FileInputStream(localFile).use { load(it) }
+    }
 }
 
 android {
@@ -17,13 +27,22 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("../release.jks")
-            storePassword = "cameramute123"
-            keyAlias = "cameramute"
-            keyPassword = "cameramute123"
-            enableV1Signing = true
-            enableV2Signing = true
-            enableV3Signing = true
+            val storeFilePath = localProperties.getProperty("RELEASE_STORE_FILE")
+                ?: System.getenv("RELEASE_STORE_FILE")
+                ?: "../release.jks"
+            val storeFileObj = file(storeFilePath)
+            if (storeFileObj.exists()) {
+                storeFile = storeFileObj
+                storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
+                    ?: System.getenv("RELEASE_STORE_PASSWORD") ?: ""
+                keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
+                    ?: System.getenv("RELEASE_KEY_ALIAS") ?: ""
+                keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
+                    ?: System.getenv("RELEASE_KEY_PASSWORD") ?: ""
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
         }
     }
 
