@@ -20,14 +20,7 @@
         android:windowSoftInputMode="adjustResize"
         android:theme="@style/Theme.ShutterZero">
 
-        <!-- Shizuku 바인더 연동 공급자 (Shizuku 서비스와 통신 필수) -->
-        <provider
-            android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="${applicationId}.shizuku"
-            android:multiprocess="false"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
 
         <activity
             android:name=".MainActivity"
