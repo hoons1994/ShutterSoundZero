@@ -190,6 +190,13 @@ fun MainScreen(
                     onCheckedChange = { viewModel.setAutoRestoreOnBoot(it) }
                 )
                 RowDivider()
+                SwitchRow(
+                    title = "펌웨어 업데이트 자동 감지",
+                    subtitle = "시스템 업데이트로 설정 초기화 시 자동 복원 및 알림",
+                    checked = uiState.isFirmwareUpdateCheckEnabled,
+                    onCheckedChange = { viewModel.setFirmwareUpdateCheck(it) }
+                )
+                RowDivider()
                 InfoRow(
                     title = "빠른 설정 타일",
                     subtitle = "알림창 하단 [편집]에서 '카메라 무음' 타일 추가 가능"

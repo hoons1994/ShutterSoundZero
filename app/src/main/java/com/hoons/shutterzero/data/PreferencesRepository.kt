@@ -1,4 +1,4 @@
-﻿package com.hoons.shutterzero.data
+package com.hoons.shutterzero.data
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -17,10 +17,20 @@ class PreferencesRepository(context: Context) {
         get() = prefs.getBoolean(KEY_SHOULD_MUTE_ON_BOOT, true)
         set(value) = prefs.edit().putBoolean(KEY_SHOULD_MUTE_ON_BOOT, value).apply()
 
+    var isFirmwareUpdateCheckEnabled: Boolean
+        get() = prefs.getBoolean(KEY_FIRMWARE_UPDATE_CHECK, true)
+        set(value) = prefs.edit().putBoolean(KEY_FIRMWARE_UPDATE_CHECK, value).apply()
+
+    var lastFirmwareFingerprint: String?
+        get() = prefs.getString(KEY_LAST_FIRMWARE_FINGERPRINT, null)
+        set(value) = prefs.edit().putString(KEY_LAST_FIRMWARE_FINGERPRINT, value).apply()
+
     companion object {
         private const val PREF_NAME = "galaxy_camera_mute_prefs"
         private const val KEY_AUTO_RESTORE_BOOT = "auto_restore_boot"
         private const val KEY_SHOULD_MUTE_ON_BOOT = "should_mute_on_boot"
+        private const val KEY_FIRMWARE_UPDATE_CHECK = "firmware_update_check"
+        private const val KEY_LAST_FIRMWARE_FINGERPRINT = "last_firmware_fingerprint"
 
         @Volatile
         private var INSTANCE: PreferencesRepository? = null
