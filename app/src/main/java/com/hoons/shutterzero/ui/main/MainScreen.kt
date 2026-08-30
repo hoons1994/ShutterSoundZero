@@ -62,11 +62,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.navigation3.runtime.NavKey
 import com.hoons.shutterzero.theme.BrandBlueLight
 import com.hoons.shutterzero.theme.StatusAmber
 import com.hoons.shutterzero.theme.StatusGreen
 import com.hoons.shutterzero.ui.dialog.WirelessPairingDialog
+import com.hoons.shutterzero.ui.notification.PairingNotificationHelper
 
 private val CardRadius = 20.dp
 private val CardPaddingH = 20.dp
@@ -86,6 +93,33 @@ fun MainScreen(
 
     var showAdbGuideDialog by remember { mutableStateOf(false) }
     var showWirelessPairingDialog by remember { mutableStateOf(false) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.startNotificationPairing(context)
+        } else {
+            Toast.makeText(
+                context,
+                "상단바 코드 입력을 위해 알림 권한이 필요합니다. [앱 설정]에서 알림을 켜주세요.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    val requestPairingNotification: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else if (!PairingNotificationHelper.areNotificationsEnabled(context)) {
+            Toast.makeText(context, "알림이 차단되어 있습니다. 알림 설정을 켜주세요.", Toast.LENGTH_LONG).show()
+            PairingNotificationHelper.openNotificationSettings(context)
+        } else {
+            viewModel.startNotificationPairing(context)
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -166,7 +200,7 @@ fun MainScreen(
             SettingsCard {
                 PermissionSetupSection(
                     hasPermission = hasEffectivePermission,
-                    onStartNotificationPairing = { viewModel.startNotificationPairing(context) },
+                    onStartNotificationPairing = requestPairingNotification,
                     onStartManualPairing = { showWirelessPairingDialog = true },
                     onOpenAdbGuide = { showAdbGuideDialog = true },
                     onOpenDeveloperOptions = { viewModel.openDeveloperOptions(context) }
