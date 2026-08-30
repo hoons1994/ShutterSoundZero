@@ -25,12 +25,17 @@ class PreferencesRepository(context: Context) {
         get() = prefs.getString(KEY_LAST_FIRMWARE_FINGERPRINT, null)
         set(value) = prefs.edit().putString(KEY_LAST_FIRMWARE_FINGERPRINT, value).apply()
 
+    var lastConnectPort: Int
+        get() = prefs.getInt(KEY_LAST_CONNECT_PORT, -1)
+        set(value) = prefs.edit().putInt(KEY_LAST_CONNECT_PORT, value).apply()
+
     companion object {
         private const val PREF_NAME = "galaxy_camera_mute_prefs"
         private const val KEY_AUTO_RESTORE_BOOT = "auto_restore_boot"
         private const val KEY_SHOULD_MUTE_ON_BOOT = "should_mute_on_boot"
         private const val KEY_FIRMWARE_UPDATE_CHECK = "firmware_update_check"
         private const val KEY_LAST_FIRMWARE_FINGERPRINT = "last_firmware_fingerprint"
+        private const val KEY_LAST_CONNECT_PORT = "last_connect_port"
 
         @Volatile
         private var INSTANCE: PreferencesRepository? = null
