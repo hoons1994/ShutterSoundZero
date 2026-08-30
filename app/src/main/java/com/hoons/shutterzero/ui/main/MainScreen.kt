@@ -236,7 +236,7 @@ fun MainScreen(
                         }
                     },
                     onOpenAdbGuide = { showAdbGuideDialog = true },
-                    onOpenDeveloperOptions = { viewModel.openDeveloperOptions(context) }
+                    onResetPermission = { viewModel.resetPermission() }
                 )
             }
 
@@ -530,7 +530,7 @@ private fun PermissionSetupSection(
     onStartNotificationPairing: () -> Unit,
     onStartManualPairing: () -> Unit,
     onOpenAdbGuide: () -> Unit,
-    onOpenDeveloperOptions: () -> Unit
+    onResetPermission: () -> Unit
 ) {
     StatusRow(
         title = "시스템 보안 설정 권한",
@@ -616,11 +616,12 @@ private fun PermissionSetupSection(
                 lineHeight = 18.sp
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onStartNotificationPairing) {
-                    Text("권한 재설정", style = MaterialTheme.typography.labelMedium)
-                }
-                TextButton(onClick = onOpenDeveloperOptions) {
-                    Text("개발자 옵션", style = MaterialTheme.typography.labelMedium)
+                TextButton(onClick = onResetPermission) {
+                    Text(
+                        text = "권한 재설정 (연동 해제)",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }

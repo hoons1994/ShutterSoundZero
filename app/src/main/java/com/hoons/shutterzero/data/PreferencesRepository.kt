@@ -29,6 +29,10 @@ class PreferencesRepository(context: Context) {
         get() = prefs.getInt(KEY_LAST_CONNECT_PORT, -1)
         set(value) = prefs.edit().putInt(KEY_LAST_CONNECT_PORT, value).apply()
 
+    var isPermissionRevokedByUser: Boolean
+        get() = prefs.getBoolean(KEY_PERMISSION_REVOKED_BY_USER, false)
+        set(value) = prefs.edit().putBoolean(KEY_PERMISSION_REVOKED_BY_USER, value).apply()
+
     companion object {
         private const val PREF_NAME = "galaxy_camera_mute_prefs"
         private const val KEY_AUTO_RESTORE_BOOT = "auto_restore_boot"
@@ -36,6 +40,7 @@ class PreferencesRepository(context: Context) {
         private const val KEY_FIRMWARE_UPDATE_CHECK = "firmware_update_check"
         private const val KEY_LAST_FIRMWARE_FINGERPRINT = "last_firmware_fingerprint"
         private const val KEY_LAST_CONNECT_PORT = "last_connect_port"
+        private const val KEY_PERMISSION_REVOKED_BY_USER = "permission_revoked_by_user"
 
         @Volatile
         private var INSTANCE: PreferencesRepository? = null

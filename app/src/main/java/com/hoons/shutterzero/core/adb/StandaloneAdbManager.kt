@@ -200,12 +200,53 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
 
             // 3) 설정 저장
             prefs.shouldMuteOnBoot = true
+            prefs.isPermissionRevokedByUser = false
 
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to grant permission via ADB: ${e.message}", e)
             try { disconnect() } catch (_: Exception) {}
             Result.failure(e)
+        } finally {
+            releaseMulticastLock()
+        }
+    }
+
+    /**
+     * 권한 연동 해제 (WRITE_SECURE_SETTINGS 회수 및 셔터음 소리 기본값 복원)
+     */
+    suspend fun revokePermissionViaAdb(): Result<Unit> = withContext(Dispatchers.IO) {
+        acquireMulticastLock()
+        try {
+            val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
+            val prefs = PreferencesRepository.getInstance(context)
+            val savedPort = lastDiscoveredConnectPort ?: if (prefs.lastConnectPort > 0) prefs.lastConnectPort else null
+
+            var connected = isConnected
+            if (!connected && savedPort != null && savedPort > 0) {
+                try {
+                    connected = connect(host, savedPort)
+                } catch (_: Exception) {}
+            }
+
+            if (connected) {
+                try {
+                    // 1) 셔터음 키 1로 복원 (소리 남)
+                    executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 1")
+                    // 2) WRITE_SECURE_SETTINGS 권한 회수
+                    executeShellCommand("pm revoke ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+                    disconnect()
+                } catch (_: Exception) {}
+            }
+
+            prefs.shouldMuteOnBoot = false
+            prefs.lastConnectPort = -1
+            prefs.isPermissionRevokedByUser = true
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.w(TAG, "Revoke permission note: ${e.message}")
+            PreferencesRepository.getInstance(context).isPermissionRevokedByUser = true
+            Result.success(Unit)
         } finally {
             releaseMulticastLock()
         }
