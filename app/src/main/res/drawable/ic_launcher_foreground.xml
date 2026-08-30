@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 카메라 상단 뷰파인더 험프 (부드러운 곡면) -->
+    <path
+        android:fillColor="#F4F6F9"
+        android:pathData="M 43,36 C 43,32.5 45,31 48,31 H 58 C 61,31 63,32.5 63,36 V 39 H 43 Z" />
+
+    <!-- 카메라 바디 하단 그림자 (2.5D 촉각적 깊이감) -->
+    <path
+        android:fillColor="#15000000"
+        android:pathData="M 31,40 H 75 C 80,40 82,42.5 82,47 V 70 C 82,74.5 80,77 75,77 H 31 C 26,77 24,74.5 24,70 V 47 C 24,42.5 26,40 31,40 Z" />
+
+    <!-- 카메라 바디 본체 (순백색 미니멀 디자인) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 31,39 H 75 C 79.5,39 81.5,41.5 81.5,46 V 69 C 81.5,73.5 79.5,76 75,76 H 31 C 26.5,76 24.5,73.5 24.5,69 V 46 C 24.5,41.5 26.5,39 31,39 Z" />
+
+    <!-- 카메라 렌즈 조리개 홀 (배경과 조화로운 딥 블루) -->
+    <path
+        android:fillColor="#0D55D8"
+        android:pathData="M 52,43.5 A 13.5,13.5 0 1,0 52,70.5 A 13.5,13.5 0 1,0 52,43.5 Z" />
+
+    <!-- 렌즈 내부 코어 하이라이트 링 -->
+    <path
+        android:strokeColor="#33FFFFFF"
+        android:strokeWidth="1.8"
+        android:fillColor="#00000000"
+        android:pathData="M 52,47.5 A 9.5,9.5 0 1,0 52,66.5 A 9.5,9.5 0 1,0 52,47.5 Z" />
+
+    <!-- 플래시 센서 홀 -->
+    <path
+        android:fillColor="#0D55D8"
+        android:pathData="M 72.5,44.5 A 3,3 0 1,0 72.5,50.5 A 3,3 0 1,0 72.5,44.5 Z" />
+
+    <!-- 무음 대각선 슬래시 그림자 (선명한 분리감) -->
+    <path
+        android:strokeColor="#400A24A6"
+        android:strokeWidth="7.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M 31,79 L 77,32" />
+
+    <!-- 무음 대각선 슬래시 본체 (순백색 볼드 스트로크) -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M 31,79 L 77,32" />
+
+</vector>
