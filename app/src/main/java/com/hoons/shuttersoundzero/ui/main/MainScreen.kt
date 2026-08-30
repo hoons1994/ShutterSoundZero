@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -89,6 +90,8 @@ fun MainScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    var showWifiRequiredDialog by remember { mutableStateOf(false) }
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -105,7 +108,9 @@ fun MainScreen(
     }
 
     val requestPairingNotification: () -> Unit = {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        if (!com.hoons.shuttersoundzero.core.CscMuteManager.isWifiConnected(context)) {
+            showWifiRequiredDialog = true
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -259,6 +264,80 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (showWifiRequiredDialog) {
+        AlertDialog(
+            onDismissRequest = { showWifiRequiredDialog = false },
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Text(
+                    text = "Wi-Fi 연결 필요",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text(
+                    text = "무선 디버깅 권한 연동을 진행하려면 기기가 Wi-Fi 네트워크에 연결되어 있어야 합니다.\n\nWi-Fi를 켠 후 다시 시도해 주세요.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showWifiRequiredDialog = false
+                        com.hoons.shuttersoundzero.core.CscMuteManager.openWifiSettings(context)
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Wi-Fi 설정 열기")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWifiRequiredDialog = false }) {
+                    Text("닫기")
+                }
+            }
+        )
+    }
+
+    if (uiState.showSwitchFailureHelp) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissSwitchFailureHelp() },
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Text(
+                    text = "💡 설정 변경 안내",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text(
+                    text = "안드로이드 시스템 보안 정책상 설정을 변경(소리 켜기/끄기)할 때는 일시적으로 [무선 디버깅]이 켜져 있어야 합니다.\n\n※ 이미 적용된 카메라 무음 상태는 평소 무선 디버깅을 꺼두셔도 영구히 유지됩니다.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.dismissSwitchFailureHelp()
+                        com.hoons.shuttersoundzero.core.CscMuteManager.openWirelessDebuggingOrDevOptions(context)
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("무선 디버깅 켜기")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissSwitchFailureHelp() }) {
+                    Text("확인")
+                }
+            }
+        )
     }
 }
 
