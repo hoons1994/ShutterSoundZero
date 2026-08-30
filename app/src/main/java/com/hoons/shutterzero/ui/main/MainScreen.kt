@@ -211,6 +211,12 @@ fun MainScreen(
     }
 
     if (showWirelessPairingDialog) {
+        DisposableEffect(Unit) {
+            viewModel.startMdnsDiscovery()
+            onDispose {
+                viewModel.stopMdnsDiscovery()
+            }
+        }
         WirelessPairingDialog(
             detectedPairingPort = uiState.detectedPairingPort,
             isPairing = uiState.isWirelessPairingInProgress,

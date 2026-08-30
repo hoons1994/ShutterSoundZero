@@ -50,7 +50,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             prefs.lastFirmwareFingerprint = android.os.Build.FINGERPRINT
         }
         refreshState()
-        startMdnsDiscovery()
     }
 
     override fun onCleared() {
