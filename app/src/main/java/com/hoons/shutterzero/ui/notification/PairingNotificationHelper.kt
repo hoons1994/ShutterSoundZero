@@ -205,8 +205,8 @@ object PairingNotificationHelper {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("셔터 제로: 셔터음 무음화 완료 ✨")
-            .setContentText("기기 페어링 및 카메라 셔터음 무음 설정이 성공적으로 완료되었습니다.")
+            .setContentTitle("셔터 제로: 권한 연동 완료 ✨")
+            .setContentText("보안 설정 권한이 연동되었습니다. 앱에서 셔터음 끄기 스위치를 켜보세요.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOngoing(false)
             .setAutoCancel(true)
