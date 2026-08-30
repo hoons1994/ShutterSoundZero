@@ -15,3 +15,4 @@ cloudflared.exe
 *.jks
 *.keystore
 release.jks
+*.apk
