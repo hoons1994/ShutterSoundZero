@@ -94,6 +94,7 @@ fun MainScreen(
     ) { isGranted ->
         if (isGranted) {
             viewModel.startNotificationPairing(context)
+            com.hoons.shuttersoundzero.core.CscMuteManager.navigateToSmartSetupScreen(context)
         } else {
             Toast.makeText(
                 context,
@@ -113,6 +114,7 @@ fun MainScreen(
             PairingNotificationHelper.openNotificationSettings(context)
         } else {
             viewModel.startNotificationPairing(context)
+            com.hoons.shuttersoundzero.core.CscMuteManager.navigateToSmartSetupScreen(context)
         }
     }
 

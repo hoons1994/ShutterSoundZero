@@ -1,4 +1,4 @@
-﻿package com.hoons.shuttersoundzero.core
+package com.hoons.shuttersoundzero.core
 
 import android.content.Context
 import android.content.pm.PackageManager
@@ -105,5 +105,78 @@ object CscMuteManager {
      */
     fun getAdbCheckCommand(): String {
         return "adb shell settings get system $CSC_KEY"
+    }
+
+    /**
+     * 개발자 옵션 활성화 여부 확인
+     */
+    fun isDeveloperOptionsEnabled(context: Context): Boolean {
+        return try {
+            Settings.Global.getInt(
+                context.contentResolver,
+                Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
+                0
+            ) != 0
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 소프트웨어 정보 화면으로 이동 (개발자 모드 활성화 유도)
+     */
+    fun openSoftwareInfoSettings(context: Context) {
+        val samsungIntent = android.content.Intent().apply {
+            setClassName("com.android.settings", "com.android.settings.Settings\$SoftwareInfoSettingsActivity")
+            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        try {
+            context.startActivity(samsungIntent)
+        } catch (_: Exception) {
+            try {
+                context.startActivity(android.content.Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                })
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * 무선 디버깅 화면 또는 개발자 옵션 화면으로 이동
+     */
+    fun openWirelessDebuggingOrDevOptions(context: Context) {
+        val wirelessIntent = android.content.Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS").apply {
+            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        try {
+            context.startActivity(wirelessIntent)
+        } catch (_: Exception) {
+            try {
+                context.startActivity(android.content.Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                })
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * 개발자 모드 켜짐 여부에 따라 스마트하게 적절한 설정 화면으로 이동
+     */
+    fun navigateToSmartSetupScreen(context: Context) {
+        if (!isDeveloperOptionsEnabled(context)) {
+            android.widget.Toast.makeText(
+                context,
+                "💡 '빌드번호' 항목을 7번 연속 터치하여 개발자 옵션을 켜주세요!",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            openSoftwareInfoSettings(context)
+        } else {
+            android.widget.Toast.makeText(
+                context,
+                "💡 [무선 디버깅] 켜기 ➔ [페어링 코드로 기기 페어링] 터치 후 상단바를 내려주세요!",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            openWirelessDebuggingOrDevOptions(context)
+        }
     }
 }
