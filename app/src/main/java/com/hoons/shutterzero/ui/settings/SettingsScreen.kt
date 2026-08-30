@@ -128,12 +128,7 @@ fun SettingsScreen(
             SettingsCard {
                 InfoRow(
                     title = "버전",
-                    subtitle = "1.0.0 (최신 버전)"
-                )
-                RowDivider()
-                InfoRow(
-                    title = "기능 구분",
-                    subtitle = "삼성 갤럭시 One UI 순정 CSC 연동 무음화 도구"
+                    subtitle = "1.0.0"
                 )
             }
 
