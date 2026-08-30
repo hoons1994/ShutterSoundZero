@@ -61,7 +61,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private fun createInitialState(): MainUiState {
         val app = getApplication<Application>()
         val hasPermission = CscMuteManager.hasWritePermission(app)
-        val isMuted = if (!hasPermission) false else (CscMuteManager.isCscShutterSoundMuted(app) || prefs.shouldMuteOnBoot)
+        val isMuted = if (!hasPermission) false else prefs.shouldMuteOnBoot
         return MainUiState(
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
@@ -76,13 +76,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun refreshState() {
         val app = getApplication<Application>()
         val perm = CscMuteManager.hasWritePermission(app)
-        val cscMuted = if (!perm) false else (CscMuteManager.isCscShutterSoundMuted(app) || prefs.shouldMuteOnBoot)
+        val isMuted = if (!perm) false else prefs.shouldMuteOnBoot
         val autoRestore = prefs.isAutoRestoreOnBootEnabled
         val firmwareCheck = prefs.isFirmwareUpdateCheckEnabled
 
         _uiState.update { current ->
             current.copy(
-                isCscMuted = cscMuted,
+                isCscMuted = isMuted,
                 hasCscPermission = perm,
                 isAutoRestoreOnBoot = autoRestore,
                 isFirmwareUpdateCheckEnabled = firmwareCheck,
@@ -197,28 +197,20 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun toggleCscMute(enableMute: Boolean) {
         val app = getApplication<Application>()
 
+        if (!CscMuteManager.hasWritePermission(app)) {
+            _uiState.update {
+                it.copy(errorMessage = "보안 설정 변경 권한이 필요합니다. 아래 [권한 설정]을 진행해 주세요.")
+            }
+            return
+        }
+
+        // 스위치 UI 즉시 반응 (낙관적 업데이트)
+        prefs.shouldMuteOnBoot = enableMute
+        refreshState()
+
         viewModelScope.launch {
-            // Android 10+ 보안 정책으로 직접 설정 쓰기(ContentResolver) 시 "You cannot keep your settings in the secure settings" 에러가 발생하므로
-            // 자체 무선 디버깅(ADB) 세션을 통해 settings put system 명령으로 우선 안전하게 변경합니다.
             val adbResult = adbManager.setCameraMute(enableMute)
             if (adbResult.isSuccess) {
-                prefs.shouldMuteOnBoot = enableMute
-                refreshState()
-                _uiState.update {
-                    it.copy(
-                        infoMessage = if (enableMute) "카메라 셔터음 무음화가 활성화되었습니다. (진동/무음 시 무음)"
-                        else "카메라 셔터음이 기본 상태(소리 발생)로 복원되었습니다.",
-                        errorMessage = null
-                    )
-                }
-                return@launch
-            }
-
-            // ADB 연결 불가 시 직접 시스템 설정 쓰기 시도 (루팅 등 특수 환경)
-            val directResult = CscMuteManager.setCscShutterSoundMuted(app, enableMute)
-            if (directResult.isSuccess) {
-                prefs.shouldMuteOnBoot = enableMute
-                refreshState()
                 _uiState.update {
                     it.copy(
                         infoMessage = if (enableMute) "카메라 셔터음 무음화가 활성화되었습니다. (진동/무음 시 무음)"
@@ -227,10 +219,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     )
                 }
             } else {
+                // 실패 시 스위치 원복 및 안내
+                prefs.shouldMuteOnBoot = !enableMute
                 refreshState()
+                val errorMsg = adbResult.exceptionOrNull()?.message ?: "연결 실패"
                 _uiState.update {
                     it.copy(
-                        errorMessage = "설정 변경 실패: Wi-Fi 연결 및 [무선 디버깅]이 켜져 있는지 확인해 주세요.",
+                        errorMessage = "설정 변경 실패: $errorMsg (무선 디버깅이 켜져 있는지 확인해 주세요)",
                         infoMessage = null
                     )
                 }

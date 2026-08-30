@@ -132,7 +132,9 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
      */
     suspend fun applyCameraMuteViaAdb(connectPort: Int? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            acquireMulticastLock()
             val host = AndroidUtils.getHostIpAddress(context)
+            val prefs = PreferencesRepository.getInstance(context)
             Log.i(TAG, "Connecting to ADB daemon at $host...")
 
             var connected = false
@@ -148,7 +150,7 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
             }
 
             // 2. 이미 캐시된 connectPort가 있다면 시도
-            val cachedPort = lastDiscoveredConnectPort
+            val cachedPort = lastDiscoveredConnectPort ?: if (prefs.lastConnectPort > 0) prefs.lastConnectPort else null
             if (!connected && cachedPort != null && cachedPort > 0) {
                 try {
                     Log.i(TAG, "Attempting connect to cached port $cachedPort")
@@ -182,6 +184,7 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
                 return@withContext Result.failure(Exception("ADB 연결 실패: 무선 디버깅이 활성화되어 있는지 확인해 주세요."))
             }
 
+            saveConnectedPort()
             Log.i(TAG, "ADB session established! Granting WRITE_SECURE_SETTINGS & enabling camera mute...")
 
             // 1) WRITE_SECURE_SETTINGS 권한 부여 (영구 권한)
@@ -190,11 +193,10 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
             // 2) CSC 셔터음 키 무음화 설정 (0) - 권한 부여 시 켜짐 상태 적용
             executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 0")
 
-            disconnect()
             Log.i(TAG, "WRITE_SECURE_SETTINGS granted & camera mute enabled successfully via standalone ADB!")
 
             // 3) 설정 저장
-            PreferencesRepository.getInstance(context).shouldMuteOnBoot = true
+            prefs.shouldMuteOnBoot = true
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -209,46 +211,87 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
      */
     suspend fun setCameraMute(enableMute: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            acquireMulticastLock()
             val targetVal = if (enableMute) "0" else "1"
             val host = AndroidUtils.getHostIpAddress(context)
+            val prefs = PreferencesRepository.getInstance(context)
+
+            // 1. 이미 연결되어 있는 세션이 있다면 즉시 재사용
+            if (isConnected) {
+                try {
+                    executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
+                    prefs.shouldMuteOnBoot = enableMute
+                    Log.i(TAG, "Reused active ADB session to set CSC key to $targetVal")
+                    return@withContext Result.success(Unit)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Active session failed, will reconnect: ${e.message}")
+                    try { disconnect() } catch (_: Exception) {}
+                }
+            }
+
             var connected = false
+            val savedPort = lastDiscoveredConnectPort ?: if (prefs.lastConnectPort > 0) prefs.lastConnectPort else null
 
-            // 1. 캐시된 connectPort로 직접 연결 시도
-            val cachedPort = lastDiscoveredConnectPort
-            if (cachedPort != null && cachedPort > 0) {
+            // 2. 저장된 포트로 초고속 직접 연결 시도
+            if (savedPort != null && savedPort > 0) {
                 try {
-                    connected = connect(host, cachedPort)
-                } catch (_: Exception) {}
+                    Log.i(TAG, "Attempting fast reconnect to saved port $savedPort")
+                    connected = connect(host, savedPort)
+                    if (connected) saveConnectedPort()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Fast connect to saved port $savedPort failed: ${e.message}")
+                }
             }
 
-            // 2. mDNS 자동 탐색 및 연결 (TLS)
+            // 3. mDNS 자동 탐색 및 연결 (TLS)
             if (!connected) {
                 try {
-                    connected = connectTls(context, 5000)
-                } catch (_: Exception) {}
+                    Log.i(TAG, "Attempting connectTls with 4s timeout...")
+                    connected = connectTls(context, 4000)
+                    if (connected) saveConnectedPort()
+                } catch (e: Exception) {
+                    Log.w(TAG, "connectTls failed: ${e.message}")
+                }
             }
 
-            // 3. mDNS 자동 탐색 및 연결 (TCP)
+            // 4. mDNS 자동 탐색 및 연결 (TCP)
             if (!connected) {
                 try {
-                    connected = connectTcp(context, 3000)
-                } catch (_: Exception) {}
+                    Log.i(TAG, "Attempting connectTcp with 2.5s timeout...")
+                    connected = connectTcp(context, 2500)
+                    if (connected) saveConnectedPort()
+                } catch (e: Exception) {
+                    Log.w(TAG, "connectTcp failed: ${e.message}")
+                }
             }
 
             if (!connected && !isConnected) {
-                return@withContext Result.failure(Exception("무선 디버깅 연결 실패: 무선 디버깅이 켜져 있는지 확인해 주세요."))
+                return@withContext Result.failure(Exception("무선 디버깅에 연결할 수 없습니다."))
             }
 
             executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
-            disconnect()
-
-            PreferencesRepository.getInstance(context).shouldMuteOnBoot = enableMute
+            prefs.shouldMuteOnBoot = enableMute
             Log.i(TAG, "Successfully set csc_pref_camera_forced_shuttersound_key to $targetVal via ADB")
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set camera mute via ADB: ${e.message}", e)
             try { disconnect() } catch (_: Exception) {}
             Result.failure(e)
+        }
+    }
+
+    private fun saveConnectedPort() {
+        try {
+            val adbConn = adbConnection ?: return
+            val portField = adbConn.javaClass.getDeclaredField("mPort").apply { isAccessible = true }
+            val port = portField.getInt(adbConn)
+            if (port > 0) {
+                lastDiscoveredConnectPort = port
+                PreferencesRepository.getInstance(context).lastConnectPort = port
+                Log.i(TAG, "Saved active ADB connect port: $port")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not extract connect port: ${e.message}")
         }
     }
 
