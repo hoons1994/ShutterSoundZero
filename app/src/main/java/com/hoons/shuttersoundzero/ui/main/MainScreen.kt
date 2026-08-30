@@ -539,14 +539,20 @@ private fun PermissionSetupSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onResetPermission) {
-                    Text(
-                        text = "권한 재설정 (연동 해제)",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
+            Spacer(modifier = Modifier.height(4.dp))
+            OutlinedButton(
+                onClick = onResetPermission,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text(
+                    text = "권한 재설정 (연동 해제)",
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
