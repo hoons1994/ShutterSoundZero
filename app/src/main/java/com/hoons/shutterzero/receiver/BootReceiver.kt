@@ -53,6 +53,13 @@ class BootReceiver : BroadcastReceiver() {
             }
 
             if (prefs.isAutoRestoreOnBootEnabled && prefs.shouldMuteOnBoot) {
+                // 이미 기기 설정이 0(무음)으로 유지되어 있다면 불필요한 설정 쓰기 생략
+                val alreadyMuted = CscMuteManager.isCscShutterSoundMuted(context)
+                if (alreadyMuted) {
+                    Log.i(TAG, "CSC camera mute is already active (0) after reboot. No action required.")
+                    return
+                }
+
                 if (CscMuteManager.hasWritePermission(context)) {
                     val result = CscMuteManager.setCscShutterSoundMuted(context, true)
                     result.onSuccess {
@@ -64,11 +71,11 @@ class BootReceiver : BroadcastReceiver() {
                             )
                         }
                     }.onFailure { error ->
-                        Log.e(TAG, "Failed to restore CSC camera mute: ${error.message}")
+                        Log.w(TAG, "Direct restore on boot failed: ${error.message}")
                         if (isFirmwareUpdated) {
                             showNotification(
                                 context,
-                                "시스템 업데이트가 감지되었습니다. 셔터음 무음 설정을 위해 앱을 실행해 주세요."
+                                "시스템 업데이트로 셔터음 설정이 초기화되었습니다. 앱을 열어 복원해 주세요."
                             )
                         }
                     }
