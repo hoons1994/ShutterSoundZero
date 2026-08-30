@@ -1,4 +1,4 @@
-﻿package com.hoons.shuttersoundzero.receiver
+package com.hoons.shuttersoundzero.receiver
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -43,7 +43,7 @@ class PairingNotificationReceiver : BroadcastReceiver() {
 
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        kotlinx.coroutines.withTimeoutOrNull(25_000) {
+                        val timedResult = kotlinx.coroutines.withTimeoutOrNull(25_000) {
                             var port = intent.getIntExtra("pairing_port", -1).takeIf { it > 0 }
                                 ?: adbManager.lastDiscoveredPairingPort
 
@@ -62,7 +62,7 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                                     null,
                                     "⏳ 포트 탐색 대기 중: 화면의 6자리 코드를 다시 입력해 주세요."
                                 )
-                                return@withTimeoutOrNull
+                                return@withTimeoutOrNull true
                             }
 
                             Log.i(TAG, "Attempting pairing via notification with port $port and code $code")
@@ -114,6 +114,16 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                                     "❌ $errorMsg: 코드를 다시 입력해 주세요."
                                 )
                             }
+                            true
+                        }
+
+                        if (timedResult == null) {
+                            Log.w(TAG, "Notification pairing timed out after 25 seconds")
+                            PairingNotificationHelper.showPairingNotification(
+                                context,
+                                null,
+                                "⏱️ 시간 초과: 코드를 다시 입력해 주세요."
+                            )
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Notification pairing error: ${e.message}", e)

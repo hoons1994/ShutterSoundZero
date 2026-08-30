@@ -1,4 +1,4 @@
-﻿package com.hoons.shuttersoundzero.service
+package com.hoons.shuttersoundzero.service
 
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -60,7 +60,7 @@ class CameraMuteTileService : TileService() {
             return
         }
 
-        val currentMuted = prefs.shouldMuteOnBoot
+        val currentMuted = CscMuteManager.isCscShutterSoundMuted(context)
         val targetMuted = !currentMuted
 
         // 빠른 체감을 위한 낙관적 타일 업데이트
@@ -89,6 +89,7 @@ class CameraMuteTileService : TileService() {
                     prefs.shouldMuteOnBoot = targetMuted
                     Toast.makeText(context, "카메라 셔터음 설정이 변경되었습니다.", Toast.LENGTH_SHORT).show()
                 } else {
+                    prefs.shouldMuteOnBoot = currentMuted
                     Log.w(TAG, "Tile toggle failed via ADB and direct write: ${result.exceptionOrNull()?.message}")
                     Toast.makeText(context, "설정 변경 실패: Wi-Fi 및 무선 디버깅을 확인해 주세요.", Toast.LENGTH_LONG).show()
                 }
