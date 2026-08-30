@@ -40,6 +40,16 @@ class CameraMuteTileService : TileService() {
         val context = applicationContext
         val prefs = PreferencesRepository.getInstance(context)
 
+        if (!CscMuteManager.isSamsungDevice()) {
+            Toast.makeText(
+                context,
+                "⚠️ 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.",
+                Toast.LENGTH_LONG
+            ).show()
+            updateTileState()
+            return
+        }
+
         if (!CscMuteManager.hasWritePermission(context)) {
             Toast.makeText(
                 context,

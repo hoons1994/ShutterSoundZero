@@ -19,6 +19,15 @@ object CscMuteManager {
     const val CSC_KEY = "csc_pref_camera_forced_shuttersound_key"
 
     /**
+     * 현재 기기가 삼성 갤럭시 기기인지 확인
+     */
+    fun isSamsungDevice(): Boolean {
+        val manufacturer = android.os.Build.MANUFACTURER.lowercase()
+        val brand = android.os.Build.BRAND.lowercase()
+        return manufacturer.contains("samsung") || brand.contains("samsung")
+    }
+
+    /**
      * 현재 CSC 셔터음 강제 설정값 조회
      * @return 0이면 무음 모드 연동(무음/진동 시 셔터음 제거됨), 1이면 강제 소리 발생
      */

@@ -25,6 +25,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 삼성 갤럭시 기기 여부 확인 - 갤럭시가 아닌 기기일 경우 안내 토스트 표시
+        if (!com.hoons.shutterzero.core.CscMuteManager.isSamsungDevice()) {
+            android.widget.Toast.makeText(
+                this,
+                "⚠️ 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+
         // 앱 처음 시작 시 Android 13+ (API 33+) 알림 권한 1회 요청
         requestNotificationPermissionIfNeeded()
 
