@@ -123,7 +123,7 @@ object CscMuteManager {
     }
 
     /**
-     * 소프트웨어 정보 화면으로 이동 (삼성 전용 SoftwareInfoSettingsActivity 100% 직행 및 모든 변종 키 주입)
+     * 소프트웨어 정보 화면으로 이동 (삼성 전용 SoftwareInfoSettingsActivity 100% 직행 및 8중 하이라이트 주입)
      */
     fun openSoftwareInfoSettings(context: Context) {
         val buildNumberBundle = android.os.Bundle().apply {
@@ -131,6 +131,7 @@ object CscMuteManager {
             putString("highlight_menu_key", "build_number")
             putString("highlight_key", "build_number")
             putString("preference_key", "build_number")
+            putString("android.provider.extra.INITIAL_SETTINGS_KEY", "build_number")
         }
         val samsungIntent = android.content.Intent().apply {
             setClassName("com.android.settings", "com.android.settings.Settings\$SoftwareInfoSettingsActivity")
@@ -138,7 +139,10 @@ object CscMuteManager {
             putExtra("highlight_menu_key", "build_number")
             putExtra("highlight_key", "build_number")
             putExtra("preference_key", "build_number")
+            putExtra("android.provider.extra.INITIAL_SETTINGS_KEY", "build_number")
             putExtra(":settings:show_fragment_args", buildNumberBundle)
+            putExtra("extra_show_fragment_arguments", buildNumberBundle)
+            putExtra(":settings:show_fragment_title_resid", 0)
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
         }
         try {
@@ -148,12 +152,18 @@ object CscMuteManager {
                 putString(":settings:fragment_args_key", "software_info_key")
                 putString("highlight_menu_key", "software_info_key")
                 putString("highlight_key", "software_info_key")
+                putString("preference_key", "software_info_key")
+                putString("android.provider.extra.INITIAL_SETTINGS_KEY", "software_info_key")
             }
             val deviceInfoIntent = android.content.Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).apply {
                 putExtra(":settings:fragment_args_key", "software_info_key")
                 putExtra("highlight_menu_key", "software_info_key")
                 putExtra("highlight_key", "software_info_key")
+                putExtra("preference_key", "software_info_key")
+                putExtra("android.provider.extra.INITIAL_SETTINGS_KEY", "software_info_key")
                 putExtra(":settings:show_fragment_args", softwareInfoBundle)
+                putExtra("extra_show_fragment_arguments", softwareInfoBundle)
+                putExtra(":settings:show_fragment_title_resid", 0)
                 flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
             }
             try {
@@ -163,7 +173,7 @@ object CscMuteManager {
     }
 
     /**
-     * 무선 디버깅 화면 또는 개발자 옵션 화면으로 이동 ('무선 디버깅' 항목 하이라이트)
+     * 무선 디버깅 화면 또는 개발자 옵션 화면으로 이동 ('무선 디버깅' 항목 8중 하이라이트 주입)
      */
     fun openWirelessDebuggingOrDevOptions(context: Context) {
         val bundle = android.os.Bundle().apply {
@@ -171,13 +181,17 @@ object CscMuteManager {
             putString("highlight_menu_key", "wireless_debugging")
             putString("highlight_key", "wireless_debugging")
             putString("preference_key", "wireless_debugging")
+            putString("android.provider.extra.INITIAL_SETTINGS_KEY", "wireless_debugging")
         }
         val wirelessIntent = android.content.Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS").apply {
             putExtra(":settings:fragment_args_key", "wireless_debugging")
             putExtra("highlight_menu_key", "wireless_debugging")
             putExtra("highlight_key", "wireless_debugging")
             putExtra("preference_key", "wireless_debugging")
+            putExtra("android.provider.extra.INITIAL_SETTINGS_KEY", "wireless_debugging")
             putExtra(":settings:show_fragment_args", bundle)
+            putExtra("extra_show_fragment_arguments", bundle)
+            putExtra(":settings:show_fragment_title_resid", 0)
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
         }
         try {
@@ -189,7 +203,10 @@ object CscMuteManager {
                     putExtra("highlight_menu_key", "wireless_debugging")
                     putExtra("highlight_key", "wireless_debugging")
                     putExtra("preference_key", "wireless_debugging")
+                    putExtra("android.provider.extra.INITIAL_SETTINGS_KEY", "wireless_debugging")
                     putExtra(":settings:show_fragment_args", bundle)
+                    putExtra("extra_show_fragment_arguments", bundle)
+                    putExtra(":settings:show_fragment_title_resid", 0)
                     flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
                 })
             } catch (_: Exception) {}
