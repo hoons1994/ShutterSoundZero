@@ -264,19 +264,21 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
      * 권한 연동 해제 및 초기화
      */
     fun resetPermission() {
-        prefs.isPermissionRevokedByUser = true
-        prefs.shouldMuteOnBoot = false
-        prefs.lastConnectPort = -1
-        refreshState()
-
         viewModelScope.launch {
-            adbManager.revokePermissionViaAdb()
+            val result = adbManager.revokePermissionViaAdb()
             refreshState()
             _uiState.update {
-                it.copy(
-                    infoMessage = "권한 연동이 해제되었습니다. 다시 연동하려면 아래 버튼을 눌러주세요.",
-                    errorMessage = null
-                )
+                if (result.isSuccess) {
+                    it.copy(
+                        infoMessage = "권한 연동이 해제되었습니다. 다시 연동하려면 아래 버튼을 눌러주세요.",
+                        errorMessage = null
+                    )
+                } else {
+                    it.copy(
+                        infoMessage = null,
+                        errorMessage = "권한 연동 해제에 실패했습니다. 무선 디버깅을 켠 뒤 다시 시도해 주세요."
+                    )
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.charmingcolor.shuttersoundzero.core.adb
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
@@ -9,9 +10,12 @@ import io.github.muntashirakon.adb.android.AdbMdns
 import io.github.muntashirakon.adb.android.AndroidUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.net.InetAddress
 import java.security.PrivateKey
 import java.security.cert.Certificate
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 셔터음 제로 자체 무선 디버깅(On-Device Wireless ADB) 매니저
@@ -21,6 +25,11 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
     companion object {
         private const val TAG = "StandaloneAdbManager"
         private const val DEVICE_NAME = "ShutterSoundZero"
+        private const val SHELL_COMMAND_TIMEOUT_MS = 5_000L
+        private const val SHELL_COMMAND_POLL_INTERVAL_MS = 20L
+        private const val MAX_SHELL_OUTPUT_BYTES = 64 * 1024
+
+        private val shellCommandSequence = AtomicLong()
 
         @Volatile
         private var INSTANCE: StandaloneAdbManager? = null
@@ -229,14 +238,38 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
                 } catch (_: Exception) {}
             }
 
-            if (connected) {
+            if (!connected) {
                 try {
-                    // 1) 셔터음 키 1로 복원 (소리 남)
-                    executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 1")
-                    // 2) WRITE_SECURE_SETTINGS 권한 회수
-                    executeShellCommand("pm revoke ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
-                    disconnect()
-                } catch (_: Exception) {}
+                    connected = connectTls(context, 4000)
+                    if (connected) saveConnectedPort()
+                } catch (e: Exception) {
+                    Log.w(TAG, "TLS reconnect for permission revoke failed: ${e.message}")
+                }
+            }
+
+            if (!connected) {
+                try {
+                    connected = connectTcp(context, 2500)
+                    if (connected) saveConnectedPort()
+                } catch (e: Exception) {
+                    Log.w(TAG, "TCP reconnect for permission revoke failed: ${e.message}")
+                }
+            }
+
+            if (!connected) {
+                return@withContext Result.failure(
+                    Exception("ADB 연결 실패: 무선 디버깅을 켠 뒤 다시 시도해 주세요.")
+                )
+            }
+
+            // 1) 셔터음 키 1로 복원 (소리 남)
+            executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 1")
+            // 2) WRITE_SECURE_SETTINGS 권한 회수
+            executeShellCommand("pm revoke ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+            try {
+                disconnect()
+            } catch (e: Exception) {
+                Log.w(TAG, "ADB disconnect after permission revoke failed: ${e.message}")
             }
 
             prefs.shouldMuteOnBoot = false
@@ -244,9 +277,8 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
             prefs.isPermissionRevokedByUser = true
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.w(TAG, "Revoke permission note: ${e.message}")
-            PreferencesRepository.getInstance(context).isPermissionRevokedByUser = true
-            Result.success(Unit)
+            Log.e(TAG, "Failed to revoke permission via ADB: ${e.message}", e)
+            Result.failure(e)
         } finally {
             releaseMulticastLock()
         }
@@ -343,22 +375,63 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
         }
     }
 
-    private fun executeShellCommand(cmd: String) {
-        try {
-            openStream("shell:$cmd\n").use { stream ->
-                val buffer = ByteArray(1024)
-                val startTime = System.currentTimeMillis()
-                try {
-                    while (System.currentTimeMillis() - startTime < 3000) {
-                        if (stream.isClosed) break
-                        val readBytes = stream.read(buffer, 0, buffer.size)
-                        if (readBytes <= 0) break
+    private fun executeShellCommand(cmd: String): String {
+        val marker = "__SSZ_EXIT_${SystemClock.elapsedRealtimeNanos()}_${shellCommandSequence.incrementAndGet()}__"
+        val wrappedCommand = "$cmd; printf '\\n$marker:%d\\n' \$?"
+        val output = ByteArrayOutputStream()
+        var commandResult: AdbShellCommandResult? = null
+        val deadline = SystemClock.elapsedRealtime() + SHELL_COMMAND_TIMEOUT_MS
+
+        openStream("shell:$wrappedCommand").use { stream ->
+            val buffer = ByteArray(1024)
+
+            while (commandResult == null) {
+                if (SystemClock.elapsedRealtime() >= deadline) {
+                    throw IOException("ADB 명령 응답 시간이 초과되었습니다.")
+                }
+
+                val availableBytes = stream.available()
+                if (availableBytes <= 0) {
+                    if (stream.isClosed) break
+                    try {
+                        Thread.sleep(SHELL_COMMAND_POLL_INTERVAL_MS)
+                    } catch (e: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw IOException("ADB 명령 대기가 중단되었습니다.", e)
                     }
-                } catch (_: Exception) {}
+                    continue
+                }
+
+                val readBytes = stream.read(buffer, 0, minOf(buffer.size, availableBytes))
+                if (readBytes <= 0) {
+                    if (stream.isClosed) break
+                    continue
+                }
+
+                if (output.size() + readBytes > MAX_SHELL_OUTPUT_BYTES) {
+                    throw IOException("ADB 명령 출력이 허용 크기를 초과했습니다.")
+                }
+                output.write(buffer, 0, readBytes)
+                commandResult = AdbShellCommandResultParser.parseOrNull(
+                    output.toString(Charsets.UTF_8.name()),
+                    marker
+                )
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Shell command '$cmd' execution note: ${e.message}")
         }
+
+        val result = commandResult
+            ?: throw IOException("ADB 명령의 완료 상태를 확인할 수 없습니다.")
+        if (result.exitCode != 0) {
+            val errorOutput = result.output
+                .lineSequence()
+                .joinToString(" ")
+                .trim()
+                .take(512)
+                .ifBlank { "출력 없음" }
+            throw IOException("ADB 명령이 종료 코드 ${result.exitCode}로 실패했습니다: $errorOutput")
+        }
+
+        return result.output
     }
 }
 
