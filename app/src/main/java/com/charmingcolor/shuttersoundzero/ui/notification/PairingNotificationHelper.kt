@@ -146,7 +146,7 @@ object PairingNotificationHelper {
             .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(false)
@@ -159,8 +159,8 @@ object PairingNotificationHelper {
 
         val notification = builder.build()
 
-        // 스와이프 및 모두 지우기로 절대 지워지지 않도록 플래그 고정
-        notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT
+        // 스와이프 및 모두 지우기로 절대 지워지지 않도록 플래그 고정 (지속 노출)
+        notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_FOREGROUND_SERVICE
 
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
