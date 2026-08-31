@@ -67,7 +67,8 @@ object PairingNotificationHelper {
     fun showPairingNotification(
         context: Context,
         pairingPort: Int? = null,
-        statusMessage: String? = null
+        statusMessage: String? = null,
+        isDevOptionsOff: Boolean = false
     ) {
         createNotificationChannel(context)
 
@@ -122,18 +123,20 @@ object PairingNotificationHelper {
 
         val title = when {
             statusMessage != null -> statusMessage
+            isDevOptionsOff -> "💡 1단계: '빌드번호'를 7번 연속 터치하세요"
             pairingPort != null -> "✨ 무선 디버깅 서비스 감지됨 (포트: $pairingPort)"
-            else -> "무선 디버깅 페어링 대기 중"
+            else -> "💡 2단계: [무선 디버깅] ➔ [페어링 코드로 기기 페어링]"
         }
-        val summaryText = if (pairingPort != null) {
-            "상단바 [코드 입력하기]를 누르고 6자리 코드를 입력하세요"
-        } else {
-            "개발자 옵션의 [페어링 코드로 기기 페어링]을 누르고 코드를 확인하세요"
+        val summaryText = when {
+            isDevOptionsOff -> "소프트웨어 정보 화면의 [빌드번호] 항목을 7회 연속 터치해 주세요"
+            pairingPort != null -> "상단바 [코드 입력하기]를 누르고 6자리 코드를 입력하세요"
+            else -> "개발자 옵션의 [페어링 코드로 기기 페어링]을 누르고 코드를 확인하세요"
         }
         val bigText = when {
-            statusMessage != null -> "$statusMessage\n화면의 6자리 페어링 코드를 아래 [코드 입력하기]에 입력해 주세요."
+            statusMessage != null -> "$statusMessage\n화면에 뜬 6자리 페어링 코드를 아래 [코드 입력하기]에 입력해 주세요."
+            isDevOptionsOff -> "화면 하단의 [빌드번호] 항목을 7번 연속 터치하면 '개발자 옵션이 켜졌습니다'라는 문구가 뜹니다.\n그 후 뒤로가기를 누르고 [무선 디버깅] ➔ [페어링 코드로 기기 페어링]으로 이동해 주세요."
             pairingPort != null -> "무선 페어링 서비스가 감지되었습니다 (포트: $pairingPort)!\n화면에 뜬 6자리 페어링 코드를 아래 [코드 입력하기]에 입력해 주세요."
-            else -> "Wi-Fi 연결 후 개발자 옵션의 [무선 디버깅] ➔ [페어링 코드로 기기 페어링] 화면을 띄운 상태에서 상단바를 내려 아래 [코드 입력하기]를 터치해 주세요."
+            else -> "개발자 옵션의 [무선 디버깅] ➔ [페어링 코드로 기기 페어링] 화면을 띄운 상태에서 상단바를 내려 아래 [코드 입력하기]를 터치해 주세요."
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)

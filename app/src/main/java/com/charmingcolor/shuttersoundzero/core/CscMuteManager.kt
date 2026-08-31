@@ -178,22 +178,22 @@ object CscMuteManager {
     }
 
     /**
-     * 개발자 모드 켜짐 여부에 따라 스마트하게 적절한 설정 화면으로 이동
+     * 개발자 모드 켜짐 여부에 따라 스마트하게 적절한 설정 화면으로 이동하고,
+     * 상단바 헤드업 알림을 떠 있게 하여 사용자가 언제든 안내를 확인할 수 있도록 지원
      */
     fun navigateToSmartSetupScreen(context: Context) {
-        if (!isDeveloperOptionsEnabled(context)) {
-            showExtendedToast(
-                context,
-                "💡 '빌드번호' 항목을 7번 연속 터치하여 개발자 옵션을 켜주세요!",
-                durationMultiplier = 2
-            )
+        val devOptionsOff = !isDeveloperOptionsEnabled(context)
+
+        // 1. 상단바 알림창에 헤드업 팝업 및 고정 알림 띄우기 (사용자가 지울 때까지 상단바에 지속 유지)
+        com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper.showPairingNotification(
+            context,
+            isDevOptionsOff = devOptionsOff
+        )
+
+        // 2. 적절한 설정 화면으로 직행
+        if (devOptionsOff) {
             openSoftwareInfoSettings(context)
         } else {
-            showExtendedToast(
-                context,
-                "💡 [무선 디버깅] 켜기 ➔ [페어링 코드로 기기 페어링] 터치 후 상단바를 내려주세요!",
-                durationMultiplier = 2
-            )
             openWirelessDebuggingOrDevOptions(context)
         }
     }
