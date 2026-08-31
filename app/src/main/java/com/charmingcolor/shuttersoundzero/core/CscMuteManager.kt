@@ -123,34 +123,39 @@ object CscMuteManager {
     }
 
     /**
-     * 소프트웨어 정보 화면으로 이동 (개발자 모드 활성화 유도 - '소프트웨어 정보' 및 '빌드번호' 항목 하이라이트)
+     * 소프트웨어 정보 화면으로 이동 (개발자 모드 활성화 유도 - '소프트웨어 정보' 최우선 하이라이트 후 '빌드번호' 하이라이트)
      */
     fun openSoftwareInfoSettings(context: Context) {
-        val buildNumberBundle = android.os.Bundle().apply {
-            putString(":settings:fragment_args_key", "build_number")
-            putString("highlight_menu_key", "build_number")
+        val softwareInfoBundle = android.os.Bundle().apply {
+            putString(":settings:fragment_args_key", "software_info_key")
+            putString("highlight_menu_key", "software_info_key")
+            putString("highlight_key", "software_info_key")
         }
-        val samsungIntent = android.content.Intent().apply {
-            setClassName("com.android.settings", "com.android.settings.Settings\$SoftwareInfoSettingsActivity")
-            putExtra(":settings:fragment_args_key", "build_number")
-            putExtra("highlight_menu_key", "build_number")
-            putExtra(":settings:show_fragment_args", buildNumberBundle)
+        val deviceInfoIntent = android.content.Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).apply {
+            putExtra(":settings:fragment_args_key", "software_info_key")
+            putExtra("highlight_menu_key", "software_info_key")
+            putExtra("highlight_key", "software_info_key")
+            putExtra(":settings:show_fragment_args", softwareInfoBundle)
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
         }
         try {
-            context.startActivity(samsungIntent)
+            context.startActivity(deviceInfoIntent)
         } catch (_: Exception) {
-            val softwareInfoBundle = android.os.Bundle().apply {
-                putString(":settings:fragment_args_key", "software_info_key")
-                putString("highlight_menu_key", "software_info_key")
+            val buildNumberBundle = android.os.Bundle().apply {
+                putString(":settings:fragment_args_key", "build_number")
+                putString("highlight_menu_key", "build_number")
+                putString("highlight_key", "build_number")
+            }
+            val samsungIntent = android.content.Intent().apply {
+                setClassName("com.android.settings", "com.android.settings.Settings\$SoftwareInfoSettingsActivity")
+                putExtra(":settings:fragment_args_key", "build_number")
+                putExtra("highlight_menu_key", "build_number")
+                putExtra("highlight_key", "build_number")
+                putExtra(":settings:show_fragment_args", buildNumberBundle)
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
             }
             try {
-                context.startActivity(android.content.Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).apply {
-                    putExtra(":settings:fragment_args_key", "software_info_key")
-                    putExtra("highlight_menu_key", "software_info_key")
-                    putExtra(":settings:show_fragment_args", softwareInfoBundle)
-                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                })
+                context.startActivity(samsungIntent)
             } catch (_: Exception) {}
         }
     }
