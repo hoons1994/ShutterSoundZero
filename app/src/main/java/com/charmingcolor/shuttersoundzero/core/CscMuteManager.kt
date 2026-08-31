@@ -160,22 +160,40 @@ object CscMuteManager {
     }
 
     /**
+     * 토스트 알림의 노출 시간을 길게 연장하여 사용자가 설정 화면 이동 후에도 충분히 읽고 조작할 수 있도록 지원
+     */
+    fun showExtendedToast(context: Context, message: String, durationMultiplier: Int = 2) {
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        for (i in 0 until durationMultiplier) {
+            handler.postDelayed({
+                try {
+                    android.widget.Toast.makeText(
+                        context,
+                        message,
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                } catch (_: Exception) {}
+            }, i * 2500L)
+        }
+    }
+
+    /**
      * 개발자 모드 켜짐 여부에 따라 스마트하게 적절한 설정 화면으로 이동
      */
     fun navigateToSmartSetupScreen(context: Context) {
         if (!isDeveloperOptionsEnabled(context)) {
-            android.widget.Toast.makeText(
+            showExtendedToast(
                 context,
                 "💡 '빌드번호' 항목을 7번 연속 터치하여 개발자 옵션을 켜주세요!",
-                android.widget.Toast.LENGTH_LONG
-            ).show()
+                durationMultiplier = 2
+            )
             openSoftwareInfoSettings(context)
         } else {
-            android.widget.Toast.makeText(
+            showExtendedToast(
                 context,
                 "💡 [무선 디버깅] 켜기 ➔ [페어링 코드로 기기 페어링] 터치 후 상단바를 내려주세요!",
-                android.widget.Toast.LENGTH_LONG
-            ).show()
+                durationMultiplier = 2
+            )
             openWirelessDebuggingOrDevOptions(context)
         }
     }
