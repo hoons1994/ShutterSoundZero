@@ -123,11 +123,16 @@ object CscMuteManager {
     }
 
     /**
-     * 소프트웨어 정보 화면으로 이동 (개발자 모드 활성화 유도)
+     * 소프트웨어 정보 화면으로 이동 (개발자 모드 활성화 유도 - '빌드번호' 항목 하이라이트)
      */
     fun openSoftwareInfoSettings(context: Context) {
+        val bundle = android.os.Bundle().apply {
+            putString(":settings:fragment_args_key", "build_number")
+        }
         val samsungIntent = android.content.Intent().apply {
             setClassName("com.android.settings", "com.android.settings.Settings\$SoftwareInfoSettingsActivity")
+            putExtra(":settings:fragment_args_key", "build_number")
+            putExtra(":settings:show_fragment_args", bundle)
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
         }
         try {
@@ -135,6 +140,8 @@ object CscMuteManager {
         } catch (_: Exception) {
             try {
                 context.startActivity(android.content.Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).apply {
+                    putExtra(":settings:fragment_args_key", "build_number")
+                    putExtra(":settings:show_fragment_args", bundle)
                     flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
                 })
             } catch (_: Exception) {}
@@ -142,10 +149,15 @@ object CscMuteManager {
     }
 
     /**
-     * 무선 디버깅 화면 또는 개발자 옵션 화면으로 이동
+     * 무선 디버깅 화면 또는 개발자 옵션 화면으로 이동 ('무선 디버깅' 항목 하이라이트)
      */
     fun openWirelessDebuggingOrDevOptions(context: Context) {
+        val bundle = android.os.Bundle().apply {
+            putString(":settings:fragment_args_key", "wireless_debugging")
+        }
         val wirelessIntent = android.content.Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS").apply {
+            putExtra(":settings:fragment_args_key", "wireless_debugging")
+            putExtra(":settings:show_fragment_args", bundle)
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
         }
         try {
@@ -153,6 +165,8 @@ object CscMuteManager {
         } catch (_: Exception) {
             try {
                 context.startActivity(android.content.Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
+                    putExtra(":settings:fragment_args_key", "wireless_debugging")
+                    putExtra(":settings:show_fragment_args", bundle)
                     flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
                 })
             } catch (_: Exception) {}
