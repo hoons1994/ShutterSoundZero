@@ -133,7 +133,7 @@ fun SettingsScreen(
             SettingsCard {
                 InfoRow(
                     title = "버전",
-                    subtitle = "1.0.0"
+                    subtitle = "1.1.0"
                 )
                 RowDivider()
                 InfoRow(
