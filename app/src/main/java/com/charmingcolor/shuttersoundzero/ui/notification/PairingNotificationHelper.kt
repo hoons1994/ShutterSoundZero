@@ -139,7 +139,7 @@ object PairingNotificationHelper {
             else -> "하이라이트된 [무선 디버깅] ➔ [페어링 코드로 기기 페어링] 화면의 6자리 코드를 아래 [코드 입력]에 입력해 주세요."
         }
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(summaryText)
@@ -151,9 +151,13 @@ object PairingNotificationHelper {
             .setOngoing(true)
             .setAutoCancel(false)
             .setContentIntent(contentPendingIntent)
-            .addAction(replyAction)
-            .addAction(cancelAction)
-            .build()
+
+        if (!isDevOptionsOff) {
+            builder.addAction(replyAction)
+            builder.addAction(cancelAction)
+        }
+
+        val notification = builder.build()
 
         // 스와이프 및 모두 지우기로 절대 지워지지 않도록 플래그 고정
         notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT

@@ -128,10 +128,12 @@ object CscMuteManager {
     fun openSoftwareInfoSettings(context: Context) {
         val buildNumberBundle = android.os.Bundle().apply {
             putString(":settings:fragment_args_key", "build_number")
+            putString("highlight_menu_key", "build_number")
         }
         val samsungIntent = android.content.Intent().apply {
             setClassName("com.android.settings", "com.android.settings.Settings\$SoftwareInfoSettingsActivity")
             putExtra(":settings:fragment_args_key", "build_number")
+            putExtra("highlight_menu_key", "build_number")
             putExtra(":settings:show_fragment_args", buildNumberBundle)
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
         }
@@ -140,10 +142,12 @@ object CscMuteManager {
         } catch (_: Exception) {
             val softwareInfoBundle = android.os.Bundle().apply {
                 putString(":settings:fragment_args_key", "software_info_key")
+                putString("highlight_menu_key", "software_info_key")
             }
             try {
                 context.startActivity(android.content.Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).apply {
                     putExtra(":settings:fragment_args_key", "software_info_key")
+                    putExtra("highlight_menu_key", "software_info_key")
                     putExtra(":settings:show_fragment_args", softwareInfoBundle)
                     flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
                 })
@@ -157,9 +161,11 @@ object CscMuteManager {
     fun openWirelessDebuggingOrDevOptions(context: Context) {
         val bundle = android.os.Bundle().apply {
             putString(":settings:fragment_args_key", "wireless_debugging")
+            putString("highlight_menu_key", "wireless_debugging")
         }
         val wirelessIntent = android.content.Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS").apply {
             putExtra(":settings:fragment_args_key", "wireless_debugging")
+            putExtra("highlight_menu_key", "wireless_debugging")
             putExtra(":settings:show_fragment_args", bundle)
             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
         }
@@ -169,6 +175,7 @@ object CscMuteManager {
             try {
                 context.startActivity(android.content.Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
                     putExtra(":settings:fragment_args_key", "wireless_debugging")
+                    putExtra("highlight_menu_key", "wireless_debugging")
                     putExtra(":settings:show_fragment_args", bundle)
                     flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
                 })
