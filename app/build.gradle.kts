@@ -69,7 +69,7 @@ android {
 
     packaging {
       resources {
-        excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        excludes += "/META-INF/{AL2.0,LGPL2.1,LICENSE.md}"
       }
     }
 }
@@ -93,7 +93,9 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.compose)
 
   // Standalone ADB & Wireless Pairing (100% On-Device)
-  implementation(libs.libadb.android)
+  implementation(libs.libadb.android) {
+    exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
+  }
   implementation(libs.bouncycastle.bcpkix)
   implementation(libs.conscrypt.android)
 
