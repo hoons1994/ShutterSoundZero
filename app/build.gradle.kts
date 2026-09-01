@@ -16,7 +16,7 @@ val localProperties = Properties().apply {
 
 android {
     namespace = "com.charmingcolor.shuttersoundzero"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = "com.charmingcolor.shuttersoundzero"
         minSdk = 30
