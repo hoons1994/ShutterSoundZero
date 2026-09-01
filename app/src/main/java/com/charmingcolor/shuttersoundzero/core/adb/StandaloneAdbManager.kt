@@ -1,5 +1,6 @@
 package com.charmingcolor.shuttersoundzero.core.adb
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
@@ -24,7 +25,9 @@ import java.util.concurrent.atomic.AtomicReference
  * 셔터음 제로 자체 무선 디버깅(On-Device Wireless ADB) 매니저
  * PC나 외부 앱 없이 앱 단독으로 로컬 adbd와 TLS 페어링 및 셸 명령어 실행
  */
-class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManager() {
+class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
+    private val context = context.applicationContext
+
     companion object {
         private const val TAG = "StandaloneAdbManager"
         private const val DEVICE_NAME = "ShutterSoundZero"
@@ -34,12 +37,13 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
 
         private val shellCommandSequence = AtomicLong()
 
+        @SuppressLint("StaticFieldLeak") // The manager stores only applicationContext.
         @Volatile
         private var INSTANCE: StandaloneAdbManager? = null
 
         fun getInstance(context: Context): StandaloneAdbManager {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: StandaloneAdbManager(context.applicationContext).also { INSTANCE = it }
+                INSTANCE ?: StandaloneAdbManager(context).also { INSTANCE = it }
             }
         }
     }
