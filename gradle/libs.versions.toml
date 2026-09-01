@@ -14,7 +14,7 @@ kotlin = "2.4.10"
 nav3Core = "1.1.7"
 lifecycleViewmodelNav3 = "2.11.0"
 libadb = "3.1.1"
-bouncycastle = "1.81"
+bouncycastle = "1.85"
 conscrypt = "2.6.3"
 
 [libraries]
