@@ -1,6 +1,8 @@
 package com.charmingcolor.shuttersoundzero.core
 
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
 import android.util.Log
@@ -16,6 +18,10 @@ import android.util.Log
  */
 object CscMuteManager {
     private const val TAG = "CscMuteManager"
+    private const val SETTINGS_PACKAGE = "com.android.settings"
+    private const val SETTINGS_FRAGMENT_ARG_KEY = ":settings:fragment_args_key"
+    private const val SOFTWARE_INFO_PREFERENCE_KEY = "software_info"
+    private const val WIRELESS_DEBUGGING_PREFERENCE_KEY = "toggle_adb_wireless"
     const val CSC_KEY = "csc_pref_camera_forced_shuttersound_key"
 
     /**
@@ -122,40 +128,53 @@ object CscMuteManager {
         }
     }
 
-    /**
-     * 소프트웨어 정보 화면으로 이동 (삼성 전용 SoftwareInfoSettingsActivity 직행)
-     */
+    /** 휴대전화 정보 화면을 열고 소프트웨어 정보 항목을 강조한다. */
     fun openSoftwareInfoSettings(context: Context) {
-        val samsungIntent = android.content.Intent().apply {
-            setClassName("com.android.settings", "com.android.settings.Settings\$SoftwareInfoSettingsActivity")
-            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-        }
         try {
-            context.startActivity(samsungIntent)
+            context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).apply {
+                putExtra(SETTINGS_FRAGMENT_ARG_KEY, SOFTWARE_INFO_PREFERENCE_KEY)
+                flags = settingsTaskFlags(context)
+            })
         } catch (_: Exception) {
-            try {
-                context.startActivity(android.content.Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).apply {
-                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                })
-            } catch (_: Exception) {}
         }
     }
 
-    /**
-     * 무선 디버깅 화면 또는 개발자 옵션 화면으로 이동
-     */
-    fun openWirelessDebuggingOrDevOptions(context: Context) {
-        val wirelessIntent = android.content.Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS").apply {
-            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+    private fun settingsTaskFlags(context: Context): Int {
+        var flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        if (!context.hasActivity()) flags = flags or Intent.FLAG_ACTIVITY_NEW_TASK
+        return flags
+    }
+
+    private fun Context.hasActivity(): Boolean {
+        var current: Context? = this
+        while (current is ContextWrapper) {
+            if (current is android.app.Activity) return true
+            val base = current.baseContext
+            if (base === current) break
+            current = base
         }
+        return current is android.app.Activity
+    }
+
+    /** 개발자 옵션을 열고 무선 디버깅 항목으로 이동해 강조한다. */
+    fun openWirelessDebuggingOrDevOptions(context: Context) {
+        val developerOptionsIntent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
+            setPackage(SETTINGS_PACKAGE)
+            putExtra(SETTINGS_FRAGMENT_ARG_KEY, WIRELESS_DEBUGGING_PREFERENCE_KEY)
+            flags = settingsTaskFlags(context)
+        }
+
         try {
-            context.startActivity(wirelessIntent)
+            context.startActivity(developerOptionsIntent)
         } catch (_: Exception) {
             try {
-                context.startActivity(android.content.Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
-                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
+                    putExtra(SETTINGS_FRAGMENT_ARG_KEY, WIRELESS_DEBUGGING_PREFERENCE_KEY)
+                    flags = settingsTaskFlags(context)
                 })
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                // 설정 앱을 열 수 없는 기기에서는 아무 작업도 하지 않는다.
+            }
         }
     }
 
@@ -177,9 +196,17 @@ object CscMuteManager {
         }
     }
 
+    /** 개발자 옵션 상태에 맞는 페어링 설정 화면으로 이동한다. */
+    fun openPairingSetupScreen(context: Context) {
+        if (!isDeveloperOptionsEnabled(context)) {
+            openSoftwareInfoSettings(context)
+        } else {
+            openWirelessDebuggingOrDevOptions(context)
+        }
+    }
+
     /**
-     * 개발자 모드 켜짐 여부에 따라 스마트하게 적절한 설정 화면으로 이동하고,
-     * 상단바 헤드업 알림을 떠 있게 하여 사용자가 언제든 안내를 확인할 수 있도록 지원
+     * 페어링 안내 알림을 표시한 뒤 개발자 옵션 상태에 맞는 설정 화면으로 이동한다.
      */
     fun navigateToSmartSetupScreen(context: Context) {
         val devOptionsOff = !isDeveloperOptionsEnabled(context)
@@ -191,11 +218,7 @@ object CscMuteManager {
         )
 
         // 2. 적절한 설정 화면으로 직행
-        if (devOptionsOff) {
-            openSoftwareInfoSettings(context)
-        } else {
-            openWirelessDebuggingOrDevOptions(context)
-        }
+        openPairingSetupScreen(context)
     }
 
     /**

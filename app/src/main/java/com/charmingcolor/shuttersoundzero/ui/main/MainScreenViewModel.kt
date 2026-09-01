@@ -2,15 +2,12 @@ package com.charmingcolor.shuttersoundzero.ui.main
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
-import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
-import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
-import io.github.muntashirakon.adb.android.AdbMdns
+import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,18 +41,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private val _uiState = MutableStateFlow(createInitialState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
-    private var pairingMdns: AdbMdns? = null
-    private var connectMdns: AdbMdns? = null
-
     init {
         if (prefs.lastFirmwareFingerprint == null) {
             prefs.lastFirmwareFingerprint = android.os.Build.FINGERPRINT
         }
         refreshState()
-    }
-
-    override fun onCleared() {
-        stopMdnsDiscovery()
     }
 
     private fun createInitialState(): MainUiState {
@@ -93,28 +83,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun startMdnsDiscovery() {
-        prefs.isPermissionRevokedByUser = false
-        try {
-            stopMdnsDiscovery()
-            pairingMdns = adbManager.startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_PAIRING) { _, port ->
-                _uiState.update { it.copy(detectedPairingPort = port) }
-                try {
-                    PairingNotificationHelper.showPairingNotification(getApplication(), port)
-                } catch (_: Exception) {}
-            }
-            connectMdns = adbManager.startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_CONNECT) { _, port ->
-                _uiState.update { it.copy(detectedConnectPort = port) }
-            }
-        } catch (e: Exception) {
-            // mDNS might not be supported on some network configurations
-        }
-    }
-
     fun startNotificationPairing(context: Context) {
-        startMdnsDiscovery()
-        PairingNotificationHelper.showPairingNotification(context, _uiState.value.detectedPairingPort)
-        openDeveloperOptions(context)
+        prefs.isPermissionRevokedByUser = false
+        val devOptionsOff = !CscMuteManager.isDeveloperOptionsEnabled(context)
+        PairingForegroundService.start(context, devOptionsOff)
+        CscMuteManager.openPairingSetupScreen(context)
         _uiState.update {
             it.copy(
                 infoMessage = "상단바에 페어링 알림이 등록되었습니다! [페어링 코드로 기기 페어링] 화면을 띄운 뒤 상단바를 내려 6자리 코드를 입력해 주세요."
@@ -123,18 +96,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun cancelNotificationPairing(context: Context) {
-        stopMdnsDiscovery()
-        PairingNotificationHelper.cancelNotification(context)
+        PairingForegroundService.stop(context)
     }
 
     fun stopMdnsDiscovery() {
-        try {
-            pairingMdns?.stop()
-            connectMdns?.stop()
-            adbManager.releaseMulticastLock()
-        } catch (_: Exception) {}
-        pairingMdns = null
-        connectMdns = null
+        PairingForegroundService.stop(getApplication())
     }
 
     /**
@@ -160,6 +126,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             val muteResult = adbManager.applyCameraMuteViaAdb(connectPort)
 
             if (muteResult.isSuccess) {
+                stopMdnsDiscovery()
                 prefs.shouldMuteOnBoot = true
                 refreshState()
                 _uiState.update {
@@ -181,14 +148,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 }
                 onComplete(true)
             }
-        }
-    }
-
-    fun openDeveloperOptions(context: Context) {
-        try {
-            context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
-        } catch (e: Exception) {
-            context.startActivity(Intent(Settings.ACTION_SETTINGS))
         }
     }
 

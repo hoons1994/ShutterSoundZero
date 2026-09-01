@@ -95,7 +95,6 @@ fun MainScreen(
 
     val startPairing = {
         viewModel.startNotificationPairing(context)
-        com.charmingcolor.shuttersoundzero.core.CscMuteManager.navigateToSmartSetupScreen(context)
     }
 
     val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
