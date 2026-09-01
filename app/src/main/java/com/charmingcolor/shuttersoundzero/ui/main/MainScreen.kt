@@ -78,6 +78,7 @@ import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHel
 private val CardRadius = 20.dp
 private val CardPaddingH = 20.dp
 private val CardPaddingV = 16.dp
+private const val AccessLocalNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
 
 @Composable
 fun MainScreen(
@@ -92,12 +93,40 @@ fun MainScreen(
 
     var showWifiRequiredDialog by remember { mutableStateOf(false) }
 
+    val startPairing = {
+        viewModel.startNotificationPairing(context)
+        com.charmingcolor.shuttersoundzero.core.CscMuteManager.navigateToSmartSetupScreen(context)
+    }
+
+    val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startPairing()
+        } else {
+            Toast.makeText(
+                context,
+                "무선 ADB 연결을 위해 로컬 네트워크 권한이 필요합니다. [앱 설정]에서 허용해주세요.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    val requestLocalNetworkAccess: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= 37 &&
+            ContextCompat.checkSelfPermission(context, AccessLocalNetworkPermission) != PackageManager.PERMISSION_GRANTED
+        ) {
+            localNetworkPermissionLauncher.launch(AccessLocalNetworkPermission)
+        } else {
+            startPairing()
+        }
+    }
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            viewModel.startNotificationPairing(context)
-            com.charmingcolor.shuttersoundzero.core.CscMuteManager.navigateToSmartSetupScreen(context)
+            requestLocalNetworkAccess()
         } else {
             Toast.makeText(
                 context,
@@ -118,8 +147,7 @@ fun MainScreen(
             Toast.makeText(context, "알림이 차단되어 있습니다. 알림 설정을 켜주세요.", Toast.LENGTH_LONG).show()
             PairingNotificationHelper.openNotificationSettings(context)
         } else {
-            viewModel.startNotificationPairing(context)
-            com.charmingcolor.shuttersoundzero.core.CscMuteManager.navigateToSmartSetupScreen(context)
+            requestLocalNetworkAccess()
         }
     }
 

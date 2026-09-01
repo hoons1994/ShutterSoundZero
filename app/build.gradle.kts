@@ -20,7 +20,7 @@ android {
     defaultConfig {
         applicationId = "com.charmingcolor.shuttersoundzero"
         minSdk = 30
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 110
         versionName = "1.1.0"
     }
