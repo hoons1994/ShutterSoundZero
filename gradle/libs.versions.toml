@@ -15,7 +15,7 @@ nav3Core = "1.1.7"
 lifecycleViewmodelNav3 = "2.11.0"
 libadb = "3.1.1"
 bouncycastle = "1.85"
-conscrypt = "2.6.3"
+conscrypt = "2.7.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -40,7 +40,7 @@ androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runt
 androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "nav3Core" }
 androidx-lifecycle-viewmodel-navigation3 = { module = "androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "lifecycleViewmodelNav3" }
 libadb-android = { module = "com.github.MuntashirAkon:libadb-android", version.ref = "libadb" }
-bouncycastle-bcpkix = { module = "org.bouncycastle:bcpkix-jdk15to18", version.ref = "bouncycastle" }
+bouncycastle-bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
 conscrypt-android = { module = "org.conscrypt:conscrypt-android", version.ref = "conscrypt" }
 androidx-compose-material-icons-core = { module = "androidx.compose.material:material-icons-core" }
 
