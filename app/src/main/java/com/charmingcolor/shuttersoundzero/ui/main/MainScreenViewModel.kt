@@ -55,7 +55,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     override fun onCleared() {
-        super.onCleared()
         stopMdnsDiscovery()
     }
 
