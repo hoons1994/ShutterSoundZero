@@ -2,6 +2,7 @@ package com.charmingcolor.shuttersoundzero.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 
 /**
  * 앱 환경설정 저장소 (재부팅 시 자동 적용 여부 등 관리)
@@ -11,27 +12,27 @@ class PreferencesRepository(context: Context) {
 
     var isAutoRestoreOnBootEnabled: Boolean
         get() = prefs.getBoolean(KEY_AUTO_RESTORE_BOOT, true)
-        set(value) = prefs.edit().putBoolean(KEY_AUTO_RESTORE_BOOT, value).apply()
+        set(value) = prefs.edit { putBoolean(KEY_AUTO_RESTORE_BOOT, value) }
 
     var shouldMuteOnBoot: Boolean
         get() = prefs.getBoolean(KEY_SHOULD_MUTE_ON_BOOT, false)
-        set(value) = prefs.edit().putBoolean(KEY_SHOULD_MUTE_ON_BOOT, value).apply()
+        set(value) = prefs.edit { putBoolean(KEY_SHOULD_MUTE_ON_BOOT, value) }
 
     var isFirmwareUpdateCheckEnabled: Boolean
         get() = prefs.getBoolean(KEY_FIRMWARE_UPDATE_CHECK, true)
-        set(value) = prefs.edit().putBoolean(KEY_FIRMWARE_UPDATE_CHECK, value).apply()
+        set(value) = prefs.edit { putBoolean(KEY_FIRMWARE_UPDATE_CHECK, value) }
 
     var lastFirmwareFingerprint: String?
         get() = prefs.getString(KEY_LAST_FIRMWARE_FINGERPRINT, null)
-        set(value) = prefs.edit().putString(KEY_LAST_FIRMWARE_FINGERPRINT, value).apply()
+        set(value) = prefs.edit { putString(KEY_LAST_FIRMWARE_FINGERPRINT, value) }
 
     var lastConnectPort: Int
         get() = prefs.getInt(KEY_LAST_CONNECT_PORT, -1)
-        set(value) = prefs.edit().putInt(KEY_LAST_CONNECT_PORT, value).apply()
+        set(value) = prefs.edit { putInt(KEY_LAST_CONNECT_PORT, value) }
 
     var isPermissionRevokedByUser: Boolean
         get() = prefs.getBoolean(KEY_PERMISSION_REVOKED_BY_USER, false)
-        set(value) = prefs.edit().putBoolean(KEY_PERMISSION_REVOKED_BY_USER, value).apply()
+        set(value) = prefs.edit { putBoolean(KEY_PERMISSION_REVOKED_BY_USER, value) }
 
     companion object {
         private const val PREF_NAME = "galaxy_camera_mute_prefs"

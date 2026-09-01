@@ -81,8 +81,8 @@ private val CardPaddingV = 16.dp
 
 @Composable
 fun MainScreen(
-    onItemClick: (NavKey) -> Unit = {},
     modifier: Modifier = Modifier,
+    onItemClick: (NavKey) -> Unit = {},
     viewModel: MainScreenViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
