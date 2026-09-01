@@ -14,6 +14,7 @@ import androidx.core.app.RemoteInput
 import com.charmingcolor.shuttersoundzero.MainActivity
 import com.charmingcolor.shuttersoundzero.R
 import com.charmingcolor.shuttersoundzero.receiver.PairingNotificationReceiver
+import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
 
 object PairingNotificationHelper {
     const val CHANNEL_ID = "adb_pairing_channel"
@@ -54,12 +55,13 @@ object PairingNotificationHelper {
     /**
      * 페어링 코드가 입력되어 성공할 때까지 절대 꺼지지 않는 상단바 알림 표시
      */
-    fun showPairingNotification(
+    fun buildPairingNotification(
         context: Context,
         pairingPort: Int? = null,
         statusMessage: String? = null,
-        isDevOptionsOff: Boolean = false
-    ) {
+        isDevOptionsOff: Boolean = false,
+        statusDetail: String? = null
+    ): Notification {
         createNotificationChannel(context)
 
         // 1. RemoteInput: 알림창에서 키보드로 바로 6자리를 치는 인라인 입력 필드
@@ -87,13 +89,10 @@ object PairingNotificationHelper {
         ).addRemoteInput(remoteInput).build()
 
         // 2. 취소 버튼
-        val cancelIntent = Intent(context, PairingNotificationReceiver::class.java).apply {
-            action = ACTION_CANCEL_PAIRING
-        }
-        val cancelPendingIntent = PendingIntent.getBroadcast(
+        val cancelPendingIntent = PendingIntent.getService(
             context,
             2,
-            cancelIntent,
+            PairingForegroundService.stopIntent(context),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val cancelAction = NotificationCompat.Action.Builder(
@@ -113,18 +112,20 @@ object PairingNotificationHelper {
 
         val title = when {
             statusMessage != null -> statusMessage
-            isDevOptionsOff -> "💡 '빌드번호' 7번 터치"
-            pairingPort != null -> "✨ 6자리 코드 입력 준비 완료! (포트: $pairingPort)"
-            else -> "🔑 6자리 코드 입력 대기 중"
+            isDevOptionsOff -> "개발자 옵션 활성화"
+            pairingPort != null -> "페어링 코드 입력 (포트: $pairingPort)"
+            else -> "무선 디버깅 페어링"
         }
         val summaryText = when {
-            isDevOptionsOff -> "소프트웨어 정보 화면의 [빌드번호]를 7번 누르세요"
-            pairingPort != null -> "상단바 [코드 입력]을 누르고 6자리 코드를 입력하세요"
-            else -> "[페어링 코드로 기기 페어링] 터치 후 아래에 입력"
+            statusDetail != null -> statusDetail
+            isDevOptionsOff -> "강조된 [소프트웨어 정보]를 누른 후 [빌드번호]를 7번 누르세요"
+            pairingPort != null -> "알림의 [코드 입력]을 누르고 페어링 코드를 입력하고 [전송]을 누르세요"
+            else -> "[무선 디버깅]을 누른 후 진입하여 [페어링 코드로 기기 페어링]을 누르세요"
         }
         val bigText = when {
+            statusDetail != null -> statusDetail
             statusMessage != null -> "$statusMessage\n화면에 뜬 6자리 페어링 코드를 아래 [코드 입력]에 입력해 주세요."
-            isDevOptionsOff -> "소프트웨어 정보 화면 하단의 [빌드번호] 항목을 7번 연속 터치하면 '개발자 옵션이 켜졌습니다'라는 문구가 뜹니다.\n그 후 뒤로가기를 누르고 [무선 디버깅] ➔ [페어링 코드로 기기 페어링]으로 이동해 주세요."
+            isDevOptionsOff -> "휴대전화 정보 화면에서 강조된 [소프트웨어 정보]를 누르세요."
             pairingPort != null -> "무선 페어링 서비스가 감지되었습니다 (포트: $pairingPort)!\n화면에 뜬 6자리 페어링 코드를 아래 [코드 입력]에 입력해 주세요."
             else -> "개발자 옵션의 [무선 디버깅] ➔ [페어링 코드로 기기 페어링] 화면을 띄운 상태에서 상단바를 내려 아래 [코드 입력]을 터치해 주세요."
         }
@@ -133,7 +134,6 @@ object PairingNotificationHelper {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(summaryText)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -142,16 +142,35 @@ object PairingNotificationHelper {
             .setAutoCancel(false)
             .setContentIntent(contentPendingIntent)
 
-        if (!isDevOptionsOff) {
-            builder.addAction(replyAction)
-            builder.addAction(cancelAction)
+        if (statusMessage != null) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
         }
+
+        if (pairingPort != null) builder.addAction(replyAction)
+        builder.addAction(cancelAction)
 
         val notification = builder.build()
 
         // 스와이프 및 모두 지우기로 절대 지워지지 않도록 플래그 고정 (지속 노출)
         notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_FOREGROUND_SERVICE
 
+        return notification
+    }
+
+    fun showPairingNotification(
+        context: Context,
+        pairingPort: Int? = null,
+        statusMessage: String? = null,
+        isDevOptionsOff: Boolean = false,
+        statusDetail: String? = null
+    ) {
+        val notification = buildPairingNotification(
+            context,
+            pairingPort,
+            statusMessage,
+            isDevOptionsOff,
+            statusDetail
+        )
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
         } catch (_: SecurityException) {}

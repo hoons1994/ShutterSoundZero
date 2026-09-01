@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.core.app.RemoteInput
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
+import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +66,8 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                                 return@withTimeoutOrNull true
                             }
 
+                            // 유효한 포트를 확보했으므로 재탐색·알림 재생성을 중단하고 페어링을 시작한다.
+                            adbManager.stopPairingDiscovery()
                             Log.i(TAG, "Attempting pairing via notification with port $port and code $code")
                             val pairResult = adbManager.pairLocal(port, code)
 
@@ -77,7 +80,7 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                                 if (muteResult.isSuccess) {
                                     Log.i(TAG, "All completed successfully!")
                                     // 1. 상단바 완료 알림
-                                    PairingNotificationHelper.showSuccessNotification(context)
+                                    PairingForegroundService.complete(context)
 
                                     // 2. 시스템 토스트 알림
                                     android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -140,7 +143,7 @@ class PairingNotificationReceiver : BroadcastReceiver() {
 
             PairingNotificationHelper.ACTION_CANCEL_PAIRING -> {
                 Log.i(TAG, "Pairing cancelled by user from notification")
-                PairingNotificationHelper.cancelNotification(context)
+                PairingForegroundService.stop(context)
             }
         }
     }

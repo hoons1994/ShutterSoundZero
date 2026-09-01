@@ -74,6 +74,48 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
     var lastDiscoveredConnectPort: Int? = null
 
     private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+    private var pairingMdns: AdbMdns? = null
+    private var pairingConnectMdns: AdbMdns? = null
+
+    @Volatile
+    private var isPairingDiscoveryActive = false
+
+    /** 사용자가 명시적으로 시작한 페어링 세션의 mDNS 탐색을 시작한다. */
+    @Synchronized
+    fun startPairingDiscovery(
+        onPairingPortDiscovered: (Int) -> Unit,
+        onConnectPortDiscovered: (Int) -> Unit
+    ) {
+        stopPairingDiscovery()
+        isPairingDiscoveryActive = true
+
+        try {
+            pairingMdns = startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_PAIRING) { _, port ->
+                if (isPairingDiscoveryActive) onPairingPortDiscovered(port)
+            }
+            pairingConnectMdns = startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_CONNECT) { _, port ->
+                if (isPairingDiscoveryActive) onConnectPortDiscovered(port)
+            }
+        } catch (e: Exception) {
+            stopPairingDiscovery()
+            throw e
+        }
+    }
+
+    /** 페어링 취소·완료 시 관련 탐색과 멀티캐스트 잠금을 즉시 해제한다. */
+    @Synchronized
+    fun stopPairingDiscovery() {
+        isPairingDiscoveryActive = false
+        try {
+            pairingMdns?.stop()
+            pairingConnectMdns?.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to stop pairing discovery: ${e.message}")
+        }
+        pairingMdns = null
+        pairingConnectMdns = null
+        releaseMulticastLock()
+    }
 
     /**
      * mDNS를 활용하여 활성화된 무선 디버깅 포트를 탐색

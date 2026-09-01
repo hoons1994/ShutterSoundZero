@@ -18,8 +18,16 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <!-- Android 17+ 로컬 네트워크(mDNS·무선 ADB) 접근 권한 -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+
+    <!-- One UI 버전에 따라 달라지는 삼성 설정의 소프트웨어 정보 Activity 조회 -->
+    <queries>
+        <package android:name="com.android.settings" />
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -55,6 +63,13 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+
+        <!-- Shizuku 방식의 무선 페어링 탐색 및 코드 입력 알림 유지 -->
+        <service
+            android:name=".service.PairingForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"
+            android:stopWithTask="false" />
 
         <!-- 기기 부팅 시 CSC 설정 자동 복구 리시버 -->
         <receiver
