@@ -16,3 +16,4 @@ cloudflared.exe
 *.keystore
 release.jks
 *.apk
+*.aab
