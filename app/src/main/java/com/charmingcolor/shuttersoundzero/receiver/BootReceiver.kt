@@ -131,17 +131,15 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     private fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "시스템 업데이트 복원 알림",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "펌웨어 업데이트 후 셔터음 무음 설정 자동 복원 안내"
-            }
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-            manager?.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "시스템 업데이트 복원 알림",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "펌웨어 업데이트 후 셔터음 무음 설정 자동 복원 안내"
         }
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        manager?.createNotificationChannel(channel)
     }
 }
 
