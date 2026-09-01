@@ -15,7 +15,10 @@ import java.io.IOException
 import java.net.InetAddress
 import java.security.PrivateKey
 import java.security.cert.Certificate
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 셔터음 제로 자체 무선 디버깅(On-Device Wireless ADB) 매니저
@@ -78,13 +81,17 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
         acquireMulticastLock()
         val mdns = AdbMdns(context, serviceType) { address, port ->
             if (address != null) {
-                Log.i(TAG, "mDNS Discovered: $address:$port for $serviceType")
-                if (serviceType == AdbMdns.SERVICE_TYPE_TLS_PAIRING) {
-                    lastDiscoveredPairingPort = port
-                } else if (serviceType == AdbMdns.SERVICE_TYPE_TLS_CONNECT) {
-                    lastDiscoveredConnectPort = port
+                if (LocalAdbEndpointPolicy.isLocalDeviceAddress(address)) {
+                    Log.i(TAG, "Local mDNS service discovered: $address:$port for $serviceType")
+                    if (serviceType == AdbMdns.SERVICE_TYPE_TLS_PAIRING) {
+                        lastDiscoveredPairingPort = port
+                    } else if (serviceType == AdbMdns.SERVICE_TYPE_TLS_CONNECT) {
+                        lastDiscoveredConnectPort = port
+                    }
+                    onDiscovered(address, port)
+                } else {
+                    Log.w(TAG, "Ignoring non-local mDNS service: $address:$port for $serviceType")
                 }
-                onDiscovered(address, port)
             }
         }
         mdns.start()
@@ -172,23 +179,13 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
                 }
             }
 
-            // 3. connectTls (adb-tls-connect mDNS 자동 탐색 및 연결)
+            // 3. 현재 기기가 게시한 adb-tls-connect 서비스만 탐색하여 연결
             if (!connected) {
                 try {
-                    Log.i(TAG, "Attempting connectTls with 7s timeout...")
-                    connected = connectTls(context, 7000)
+                    Log.i(TAG, "Attempting local-only TLS discovery with 7s timeout...")
+                    connected = connectLocalTls(7000)
                 } catch (e: Exception) {
-                    Log.w(TAG, "connectTls failed: ${e.message}")
-                }
-            }
-
-            // 4. connectTcp (adb mDNS 자동 탐색 및 연결)
-            if (!connected) {
-                try {
-                    Log.i(TAG, "Attempting connectTcp with 4s timeout...")
-                    connected = connectTcp(context, 4000)
-                } catch (e: Exception) {
-                    Log.w(TAG, "connectTcp failed: ${e.message}")
+                    Log.w(TAG, "Local-only TLS discovery failed: ${e.message}")
                 }
             }
 
@@ -240,19 +237,10 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
 
             if (!connected) {
                 try {
-                    connected = connectTls(context, 4000)
+                    connected = connectLocalTls(4000)
                     if (connected) saveConnectedPort()
                 } catch (e: Exception) {
-                    Log.w(TAG, "TLS reconnect for permission revoke failed: ${e.message}")
-                }
-            }
-
-            if (!connected) {
-                try {
-                    connected = connectTcp(context, 2500)
-                    if (connected) saveConnectedPort()
-                } catch (e: Exception) {
-                    Log.w(TAG, "TCP reconnect for permission revoke failed: ${e.message}")
+                    Log.w(TAG, "Local-only TLS reconnect for permission revoke failed: ${e.message}")
                 }
             }
 
@@ -321,25 +309,14 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
                 }
             }
 
-            // 3. mDNS 자동 탐색 및 연결 (TLS)
+            // 3. 현재 기기의 mDNS 서비스만 탐색하여 TLS 연결
             if (!connected) {
                 try {
-                    Log.i(TAG, "Attempting connectTls with 4s timeout...")
-                    connected = connectTls(context, 4000)
+                    Log.i(TAG, "Attempting local-only TLS discovery with 4s timeout...")
+                    connected = connectLocalTls(4000)
                     if (connected) saveConnectedPort()
                 } catch (e: Exception) {
-                    Log.w(TAG, "connectTls failed: ${e.message}")
-                }
-            }
-
-            // 4. mDNS 자동 탐색 및 연결 (TCP)
-            if (!connected) {
-                try {
-                    Log.i(TAG, "Attempting connectTcp with 2.5s timeout...")
-                    connected = connectTcp(context, 2500)
-                    if (connected) saveConnectedPort()
-                } catch (e: Exception) {
-                    Log.w(TAG, "connectTcp failed: ${e.message}")
+                    Log.w(TAG, "Local-only TLS discovery failed: ${e.message}")
                 }
             }
 
@@ -372,6 +349,30 @@ class StandaloneAdbManager(private val context: Context) : AbsAdbConnectionManag
             }
         } catch (e: Exception) {
             Log.w(TAG, "Could not extract connect port: ${e.message}")
+        }
+    }
+
+    private fun connectLocalTls(timeoutMs: Long): Boolean {
+        val endpoint = AtomicReference<Pair<InetAddress, Int>?>(null)
+        val discovered = CountDownLatch(1)
+        val mdns = startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_CONNECT) { address, port ->
+            if (endpoint.compareAndSet(null, address to port)) {
+                discovered.countDown()
+            }
+        }
+
+        return try {
+            if (!discovered.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+                Log.w(TAG, "Timed out waiting for this device's TLS ADB service")
+                false
+            } else {
+                val (address, port) = endpoint.get() ?: return false
+                Log.i(TAG, "Connecting only to local TLS ADB service at $address:$port")
+                val hostAddress = address.hostAddress ?: return false
+                connect(hostAddress, port)
+            }
+        } finally {
+            mdns.stop()
         }
     }
 

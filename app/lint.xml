@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- ADB Wi-Fi bootstraps trust with SPAKE2 and the paired host public key. -->
+    <issue id="TrustAllX509TrustManager">
+        <ignore regexp=".*libadb-android-3\.1\.1.*" />
+        <!-- The unused Bouncy Castle EST helper is unrelated to certificate generation. -->
+        <ignore regexp=".*bcpkix-jdk15to18-1\.81\.jar.*" />
+    </issue>
+</lint>
