@@ -1,0 +1,140 @@
+name: 기기 호환성 제보
+description: Galaxy 기기와 One UI 버전에서의 동작 결과를 공유해 주세요.
+title: "[Compatibility] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        실제 기기 테스트 결과를 공유해 주시면 호환성 표 개선에 큰 도움이 됩니다.
+
+        **개인정보 및 보안 주의:** IMEI, 기기 일련번호, Wi-Fi 비밀번호, 무선 디버깅 페어링 코드는 절대 입력하지 마세요.
+
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: 확인 사항
+      options:
+        - label: 아래 내용은 실제 기기에서 직접 테스트한 결과입니다.
+          required: true
+        - label: 개인정보나 페어링 코드 등 민감한 정보를 포함하지 않았습니다.
+          required: true
+
+  - type: input
+    id: test-date
+    attributes:
+      label: 테스트 날짜
+      placeholder: 2026-09-03
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: 앱 버전
+      placeholder: 1.2.0
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Galaxy 기기명
+      placeholder: Galaxy Z Fold7
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: 모델 번호
+      description: IMEI나 일련번호가 아니라 SM-으로 시작하는 모델 번호만 입력해 주세요.
+      placeholder: SM-F966N
+    validations:
+      required: true
+
+  - type: input
+    id: android-version
+    attributes:
+      label: Android 버전
+      placeholder: Android 17
+    validations:
+      required: true
+
+  - type: input
+    id: one-ui-version
+    attributes:
+      label: One UI 버전
+      placeholder: One UI 9.0 Beta
+    validations:
+      required: true
+
+  - type: input
+    id: security-patch
+    attributes:
+      label: Android 보안 패치 수준
+      placeholder: 2026-08-05
+    validations:
+      required: false
+
+  - type: dropdown
+    id: pairing
+    attributes:
+      label: 무선 디버깅 페어링
+      options:
+        - 정상
+        - 문제 있음
+        - 테스트하지 않음
+    validations:
+      required: true
+
+  - type: dropdown
+    id: shutter-setting
+    attributes:
+      label: 셔터음 설정 변경
+      options:
+        - 정상
+        - 문제 있음
+        - 테스트하지 않음
+    validations:
+      required: true
+
+  - type: dropdown
+    id: quick-settings
+    attributes:
+      label: 빠른 설정 타일
+      options:
+        - 정상
+        - 문제 있음
+        - 테스트하지 않음
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reboot-restore
+    attributes:
+      label: 재부팅 후 자동 복원
+      options:
+        - 정상
+        - 문제 있음
+        - 테스트하지 않음
+    validations:
+      required: true
+
+  - type: dropdown
+    id: overall
+    attributes:
+      label: 전체 결과
+      options:
+        - 정상 사용 가능
+        - 일부 기능에 문제 있음
+        - 사용 불가
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: 특이사항
+      description: 문제, 우회 방법, 베타 펌웨어 여부 등 참고할 내용을 적어주세요.
+    validations:
+      required: false
