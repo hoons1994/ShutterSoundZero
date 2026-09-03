@@ -31,6 +31,8 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout source
@@ -146,17 +148,40 @@ jobs:
           sha256sum "$RELEASE_APK" > "${RELEASE_APK}.sha256"
           echo "RELEASE_APK=$RELEASE_APK" >> "$GITHUB_ENV"
 
+      - name: Generate APK provenance attestation
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ env.RELEASE_APK }}
+
+      - name: Prepare Sigstore attestation bundle
+        shell: bash
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          if [ -z "$ATTESTATION_BUNDLE" ] || [ ! -f "$ATTESTATION_BUNDLE" ]; then
+            echo 'Attestation bundle was not produced.'
+            exit 1
+          fi
+
+          cp "$ATTESTATION_BUNDLE" "${RELEASE_APK}.sigstore.json"
+
       - name: Create or update GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$RELEASE_APK" "${RELEASE_APK}.sha256" --clobber
+            gh release upload "$GITHUB_REF_NAME" \
+              "$RELEASE_APK" \
+              "${RELEASE_APK}.sha256" \
+              "${RELEASE_APK}.sigstore.json" \
+              --clobber
           else
             gh release create "$GITHUB_REF_NAME" \
               "$RELEASE_APK" \
               "${RELEASE_APK}.sha256" \
+              "${RELEASE_APK}.sigstore.json" \
               --verify-tag \
               --generate-notes \
               --title "$GITHUB_REF_NAME"
