@@ -32,10 +32,30 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK tools
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools platforms;android-37'
+          packages: ''
+
+      - name: Install Android 17 SDK
+        shell: bash
+        run: |
+          sdkmanager --list --channel=3 > sdk-packages.txt
+
+          if grep -q 'platforms;android-CinnamonBun' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-CinnamonBun'
+          elif grep -q 'platforms;android-37.0' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-37.0'
+          elif grep -q 'platforms;android-37 ' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-37'
+          else
+            echo 'Android 17 SDK platform package was not found.'
+            grep -E 'platforms;android-(CinnamonBun|37)' sdk-packages.txt || true
+            exit 1
+          fi
+
+          echo "Installing $PLATFORM_PACKAGE"
+          sdkmanager --channel=3 "$PLATFORM_PACKAGE" 'build-tools;37.0.0' platform-tools
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
