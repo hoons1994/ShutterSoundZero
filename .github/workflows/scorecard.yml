@@ -1,0 +1,61 @@
+name: OpenSSF Scorecard
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/scorecard.yml'
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '15 0 * * 1'
+
+permissions: read-all
+
+concurrency:
+  group: openssf-scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-workflow:
+    name: Validate Scorecard Workflow
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm Scorecard workflow is loadable
+        run: echo 'OpenSSF Scorecard workflow loaded successfully.'
+
+  analysis:
+    name: OpenSSF Scorecard
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run OpenSSF Scorecard
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload Scorecard artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openssf-scorecard-results
+          path: results.sarif
+          retention-days: 5
+
+      - name: Upload Scorecard results to code scanning
+        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4.37.4
+        with:
+          sarif_file: results.sarif
