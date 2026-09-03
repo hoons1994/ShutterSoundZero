@@ -66,6 +66,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: true
 
       - name: Ensure Gradle wrapper is executable
         run: chmod +x gradlew
@@ -78,7 +80,7 @@ jobs:
           queries: security-extended
 
       - name: Build app for CodeQL
-        run: ./gradlew clean assembleDebug --no-daemon --stacktrace
+        run: ./gradlew clean assembleDebug --rerun-tasks --no-build-cache --no-configuration-cache --no-daemon --stacktrace
 
       - name: Analyze with CodeQL
         uses: github/codeql-action/analyze@v4
