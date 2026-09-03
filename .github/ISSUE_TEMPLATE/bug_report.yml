@@ -1,120 +1,120 @@
 name: 버그 신고
- description: 셔터음 제로 사용 중 발생한 문제를 알려주세요.
- title: "[Bug] "
- body:
-   - type: markdown
-     attributes:
-       value: |
-         제보해 주셔서 감사합니다. 아래 정보를 가능한 범위에서 작성해 주세요.
+description: 셔터음 제로 사용 중 발생한 문제를 알려주세요.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        제보해 주셔서 감사합니다. 아래 정보를 가능한 범위에서 작성해 주세요.
 
-         **개인정보 및 보안 주의:** IMEI, 기기 일련번호, Wi-Fi 비밀번호, 무선 디버깅 페어링 코드, 개인 인증 정보는 절대 첨부하지 마세요.
+        **개인정보 및 보안 주의:** IMEI, 기기 일련번호, Wi-Fi 비밀번호, 무선 디버깅 페어링 코드, 개인 인증 정보는 절대 첨부하지 마세요.
 
-   - type: checkboxes
-     id: precheck
-     attributes:
-       label: 사전 확인
-       options:
-         - label: 기존 이슈에 같은 문제가 있는지 확인했습니다.
-           required: true
-         - label: 개인정보나 페어링 코드 등 민감한 정보를 포함하지 않았습니다.
-           required: true
+  - type: checkboxes
+    id: precheck
+    attributes:
+      label: 사전 확인
+      options:
+        - label: 기존 이슈에 같은 문제가 있는지 확인했습니다.
+          required: true
+        - label: 개인정보나 페어링 코드 등 민감한 정보를 포함하지 않았습니다.
+          required: true
 
-   - type: input
-     id: app-version
-     attributes:
-       label: 앱 버전
-       description: 예) 1.2.0
-       placeholder: 1.2.0
-     validations:
-       required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: 앱 버전
+      description: 예) 1.2.0
+      placeholder: 1.2.0
+    validations:
+      required: true
 
-   - type: input
-     id: device
-     attributes:
-       label: Galaxy 기기명
-       description: 예) Galaxy Z Fold7
-       placeholder: Galaxy Z Fold7
-     validations:
-       required: true
+  - type: input
+    id: device
+    attributes:
+      label: Galaxy 기기명
+      description: 예) Galaxy Z Fold7
+      placeholder: Galaxy Z Fold7
+    validations:
+      required: true
 
-   - type: input
-     id: model
-     attributes:
-       label: 모델 번호
-       description: 설정 > 휴대전화 정보에서 확인할 수 있습니다. IMEI나 일련번호는 입력하지 마세요.
-       placeholder: SM-F966N
-     validations:
-       required: true
+  - type: input
+    id: model
+    attributes:
+      label: 모델 번호
+      description: 설정 > 휴대전화 정보에서 확인할 수 있습니다. IMEI나 일련번호는 입력하지 마세요.
+      placeholder: SM-F966N
+    validations:
+      required: true
 
-   - type: input
-     id: android-version
-     attributes:
-       label: Android 버전
-       placeholder: Android 17
-     validations:
-       required: true
+  - type: input
+    id: android-version
+    attributes:
+      label: Android 버전
+      placeholder: Android 17
+    validations:
+      required: true
 
-   - type: input
-     id: one-ui-version
-     attributes:
-       label: One UI 버전
-       placeholder: One UI 9.0 Beta
-     validations:
-       required: true
+  - type: input
+    id: one-ui-version
+    attributes:
+      label: One UI 버전
+      placeholder: One UI 9.0 Beta
+    validations:
+      required: true
 
-   - type: input
-     id: security-patch
-     attributes:
-       label: Android 보안 패치 수준
-       description: 설정 > 휴대전화 정보 > 소프트웨어 정보에서 확인할 수 있습니다.
-       placeholder: 2026-08-05
-     validations:
-       required: false
+  - type: input
+    id: security-patch
+    attributes:
+      label: Android 보안 패치 수준
+      description: 설정 > 휴대전화 정보 > 소프트웨어 정보에서 확인할 수 있습니다.
+      placeholder: 2026-08-05
+    validations:
+      required: false
 
-   - type: dropdown
-     id: pairing-state
-     attributes:
-       label: 무선 디버깅 페어링 상태
-       options:
-         - 페어링 완료 후 발생
-         - 페어링 과정에서 발생
-         - 아직 페어링하지 않음
-         - 해당 없음 / 알 수 없음
-     validations:
-       required: true
+  - type: dropdown
+    id: pairing-state
+    attributes:
+      label: 무선 디버깅 페어링 상태
+      options:
+        - 페어링 완료 후 발생
+        - 페어링 과정에서 발생
+        - 아직 페어링하지 않음
+        - 해당 없음 / 알 수 없음
+    validations:
+      required: true
 
-   - type: textarea
-     id: reproduction
-     attributes:
-       label: 재현 방법
-       description: 문제가 다시 발생하도록 만드는 순서를 적어주세요.
-       placeholder: |
-         1. 앱 실행
-         2. ...
-         3. 문제가 발생
-     validations:
-       required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 재현 방법
+      description: 문제가 다시 발생하도록 만드는 순서를 적어주세요.
+      placeholder: |
+        1. 앱 실행
+        2. ...
+        3. 문제가 발생
+    validations:
+      required: true
 
-   - type: textarea
-     id: expected
-     attributes:
-       label: 기대한 동작
-       description: 정상이라면 어떻게 동작해야 하는지 적어주세요.
-     validations:
-       required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 동작
+      description: 정상이라면 어떻게 동작해야 하는지 적어주세요.
+    validations:
+      required: true
 
-   - type: textarea
-     id: actual
-     attributes:
-       label: 실제 동작
-       description: 실제로 어떤 일이 발생했는지 적어주세요.
-     validations:
-       required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 동작
+      description: 실제로 어떤 일이 발생했는지 적어주세요.
+    validations:
+      required: true
 
-   - type: textarea
-     id: logs
-     attributes:
-       label: 추가 정보 / 로그 / 스크린샷
-       description: 문제 해결에 도움이 되는 정보가 있다면 첨부해 주세요. 민감한 정보는 반드시 제거해 주세요.
-     validations:
-       required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: 추가 정보 / 로그 / 스크린샷
+      description: 문제 해결에 도움이 되는 정보가 있다면 첨부해 주세요. 민감한 정보는 반드시 제거해 주세요.
+    validations:
+      required: false
