@@ -69,13 +69,16 @@ android {
         excludes += "/META-INF/{AL2.0,LGPL2.1,LICENSE.md}"
       }
     }
+}
 
-    applicationVariants.all {
-        val variantName = name
-        val vName = versionName
-        outputs.all {
-            val outputImpl = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            outputImpl?.outputFileName = "ShutterSoundZero_v${vName}_${variantName}.apk"
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set(
+                output.versionName.map { versionName ->
+                    "ShutterSoundZero_v${versionName}_${variant.name}.apk"
+                }
+            )
         }
     }
 }
