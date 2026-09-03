@@ -33,9 +33,13 @@ Ordinary crashes, UI problems, compatibility failures, or expected feature behav
 
 **Do not disclose vulnerability details in a public GitHub Issue, Pull Request, Discussion, commit message, or screenshot.**
 
-1. Open the repository's **Security** area and use **Report a vulnerability** if that option is available.
-2. If private vulnerability reporting is not available, open only a minimal public issue titled **`[Security contact request]`** asking for a private reporting channel.
-3. Do not include technical details, proof-of-concept code, logs, screenshots, keys, credentials, pairing information, or exploit steps in that public request.
+Preferred reporting path:
+
+1. Visit the repository Security page: https://github.com/hoons1994/ShutterSoundZero/security
+2. If **Report a vulnerability** is available, use that private form to submit the report directly to the maintainer.
+3. GitHub's official private-reporting instructions are available at https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/report-privately
+4. If private vulnerability reporting is not available, open only a minimal public issue titled **`[Security contact request]`** asking for a private reporting channel.
+5. Do not include technical details, proof-of-concept code, logs, screenshots, keys, credentials, pairing information, or exploit steps in that public request.
 
 A useful private report should include, where applicable:
 
@@ -46,6 +50,17 @@ A useful private report should include, where applicable:
 - Whether physical access, Wireless Debugging, prior pairing, root, or a modified OS is required
 - Any proof of concept that demonstrates the issue without unnecessarily accessing unrelated data
 - Suggested mitigation or fix, if known
+
+## Response and disclosure timeline
+
+For a credible vulnerability report, the project aims to:
+
+- acknowledge receipt within **7 days**;
+- provide an initial assessment or request for additional information as soon as practical;
+- provide a status update within **30 days** when investigation or remediation is still in progress; and
+- coordinate public disclosure after a fix or suitable mitigation is available whenever reasonably possible.
+
+These are target timelines rather than guarantees. Complex issues, platform dependencies, or coordinated disclosure with third parties may require more time. If a timeline changes materially, the reporter should be informed through the private reporting channel.
 
 ## Sensitive information
 
@@ -79,4 +94,4 @@ The following are generally not treated as vulnerabilities unless they demonstra
 
 ## Security-related development
 
-Changes affecting ADB, pairing, cryptographic key handling, exported Android components, local-network access, release signing, or GitHub Actions secrets should receive extra review. Pull requests must continue to pass the repository's required Android CI and CodeQL checks before merge.
+Changes affecting ADB, pairing, cryptographic key handling, exported Android components, local-network access, release signing, or GitHub Actions secrets should receive extra review. Pull requests must continue to pass the repository's required Android CI, CodeQL, and Dependency Review checks before merge.
