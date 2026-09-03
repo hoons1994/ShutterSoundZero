@@ -24,10 +24,10 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
@@ -73,7 +73,7 @@ jobs:
         run: ./gradlew lintDebug --no-daemon --stacktrace
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ShutterSoundZero-debug-${{ github.sha }}
           path: app/build/outputs/apk/debug/*.apk
