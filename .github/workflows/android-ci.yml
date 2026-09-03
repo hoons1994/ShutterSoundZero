@@ -71,3 +71,12 @@ jobs:
 
       - name: Run Android Lint
         run: ./gradlew lintDebug --no-daemon --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShutterSoundZero-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
