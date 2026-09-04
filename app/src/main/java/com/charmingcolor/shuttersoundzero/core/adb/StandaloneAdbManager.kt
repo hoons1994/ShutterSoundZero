@@ -165,7 +165,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 if (it.isHeld) it.release()
             }
             multicastLock = null
-            Log.d(TAG, "Released WifiManager MulticastLock")
+            Log.d(TAG, "Released WifiManager MulticastLock for mDNS discovery")
         } catch (_: Exception) {}
     }
 
@@ -176,7 +176,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         acquireMulticastLock()
         try {
             val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
-            Log.i(TAG, "Attempting pairing with $host:$port using code $pairingCode")
+            Log.i(TAG, "Attempting pairing with $host:$port")
             val success = pair(host, port, pairingCode)
             if (success) {
                 Log.i(TAG, "Pairing successful!")
@@ -424,7 +424,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
 
     private fun executeShellCommand(cmd: String): String {
         val marker = "__SSZ_EXIT_${SystemClock.elapsedRealtimeNanos()}_${shellCommandSequence.incrementAndGet()}__"
-        val wrappedCommand = "$cmd; printf '\\n$marker:%d\\n' \$?"
+        val wrappedCommand = "$cmd; printf '\n$marker:%d\n' \$?"
         val output = ByteArrayOutputStream()
         var commandResult: AdbShellCommandResult? = null
         val deadline = SystemClock.elapsedRealtime() + SHELL_COMMAND_TIMEOUT_MS
@@ -481,4 +481,3 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         return result.output
     }
 }
-
