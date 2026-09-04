@@ -188,6 +188,17 @@ jobs:
 
           cp "$ATTESTATION_BUNDLE" "${RELEASE_APK}.sigstore.json"
 
+      - name: Verify APK provenance attestation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify "$RELEASE_APK" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "${RELEASE_APK}.sigstore.json" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/android-release.yml" \
+            --source-digest "$GITHUB_SHA"
+
       - name: Upload dry-run verification artifacts
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
