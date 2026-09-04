@@ -165,7 +165,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 if (it.isHeld) it.release()
             }
             multicastLock = null
-            Log.d(TAG, "Released WifiManager MulticastLock for mDNS discovery")
+            Log.d(TAG, "Released WifiManager MulticastLock")
         } catch (_: Exception) {}
     }
 
@@ -424,7 +424,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
 
     private fun executeShellCommand(cmd: String): String {
         val marker = "__SSZ_EXIT_${SystemClock.elapsedRealtimeNanos()}_${shellCommandSequence.incrementAndGet()}__"
-        val wrappedCommand = "$cmd; printf '\n$marker:%d\n' \$?"
+        val wrappedCommand = "$cmd; printf '\\n$marker:%d\\n' \$?"
         val output = ByteArrayOutputStream()
         var commandResult: AdbShellCommandResult? = null
         val deadline = SystemClock.elapsedRealtime() + SHELL_COMMAND_TIMEOUT_MS
@@ -481,3 +481,4 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         return result.output
     }
 }
+
