@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Device-bound ADB identity and setup state must never leave this device. -->
-    <exclude domain="file" path="adb_private_key.der" />
-    <exclude domain="file" path="adb_cert.der" />
-    <exclude domain="sharedpref" path="galaxy_camera_mute_prefs.xml" />
+    <!-- This utility has no portable user data. Deny all backup domains. -->
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
+    <exclude domain="device_root" path="." />
+    <exclude domain="device_file" path="." />
+    <exclude domain="device_database" path="." />
+    <exclude domain="device_sharedpref" path="." />
 </full-backup-content>
