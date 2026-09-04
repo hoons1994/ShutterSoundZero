@@ -142,7 +142,7 @@ class AdbShellCommandResultParserTest {
 
     @Test
     fun parseOrNull_forRandomMarkerLikeNoise_neverTreatsPartialLinesAsCompletion() {
-        val random = Random(0xF00DCAFE)
+        val random = Random(0xF00DCAFE.toInt())
         val separators = listOf(" ", "\t", "-", "+", ":", "x")
 
         repeat(512) { index ->
