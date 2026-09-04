@@ -13,12 +13,10 @@
     <!-- 펌웨어 업데이트 감지 및 복원 알림 권한 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- 로컬 무선 디버깅(자체 페어링) 소켓 통신 및 mDNS 포트 탐색 권한 -->
+    <!-- 로컬 무선 디버깅 소켓, Wi-Fi 연결 확인, mDNS 수신 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <!-- Android 17+ 로컬 네트워크(mDNS·무선 ADB) 접근 권한 -->
