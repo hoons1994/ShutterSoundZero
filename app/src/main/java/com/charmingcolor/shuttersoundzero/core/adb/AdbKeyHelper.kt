@@ -8,6 +8,7 @@ import org.bouncycastle.cert.X509v3CertificateBuilder
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 import java.io.File
+import java.io.IOException
 import java.math.BigInteger
 import java.security.KeyFactory
 import java.security.KeyPair
@@ -20,7 +21,10 @@ import java.util.Date
 
 /**
  * 자체 무선 디버깅(On-Device ADB) 페어링 및 TLS 연결에 필요한
- * 2048비트 RSA 키페어와 X.509 인증서를 생성하고 영구 보관하는 헬퍼
+ * 2048비트 RSA 키페어와 X.509 인증서를 생성하고 기기 로컬에 영구 보관하는 헬퍼.
+ *
+ * ADB identity는 다른 기기로 복원되면 안 되므로 Android 자동 백업 대상이 아닌
+ * noBackupFilesDir에 저장한다.
  */
 object AdbKeyHelper {
     private const val TAG = "AdbKeyHelper"
@@ -29,23 +33,16 @@ object AdbKeyHelper {
 
     @Synchronized
     fun getOrCreateKeyPairAndCertificate(context: Context): Pair<PrivateKey, Certificate> {
-        val privFile = File(context.filesDir, PRIV_KEY_FILE)
-        val certFile = File(context.filesDir, CERT_FILE)
+        val privFile = File(context.noBackupFilesDir, PRIV_KEY_FILE)
+        val certFile = File(context.noBackupFilesDir, CERT_FILE)
 
-        if (privFile.exists() && certFile.exists()) {
-            try {
-                val privBytes = privFile.readBytes()
-                val keySpec = PKCS8EncodedKeySpec(privBytes)
-                val keyFactory = KeyFactory.getInstance("RSA")
-                val privateKey = keyFactory.generatePrivate(keySpec)
+        migrateLegacyIdentityIfNeeded(context, privFile, certFile)
 
-                val certFactory = CertificateFactory.getInstance("X.509")
-                val cert = certFile.inputStream().use { certFactory.generateCertificate(it) }
-                return Pair(privateKey, cert)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to load existing keys, regenerating: ${e.message}")
-            }
-        }
+        loadIdentity(privFile, certFile)?.let { return it }
+
+        // 손상되거나 한쪽만 남은 identity는 새로 생성한다.
+        privFile.delete()
+        certFile.delete()
 
         // 2048비트 RSA 키페어 생성
         val keyGen = KeyPairGenerator.getInstance("RSA")
@@ -72,15 +69,73 @@ object AdbKeyHelper {
         val certHolder = certBuilder.build(signer)
         val cert = JcaX509CertificateConverter().getCertificate(certHolder)
 
-        // 내부 스토리지에 안전하게 영구 저장
         try {
             privFile.writeBytes(keyPair.private.encoded)
             certFile.writeBytes(cert.encoded)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to persist keys: ${e.message}")
+            privFile.delete()
+            certFile.delete()
+            Log.e(TAG, "Failed to persist ADB identity: ${e.message}")
         }
 
         return Pair(keyPair.private, cert)
     }
-}
 
+    private fun loadIdentity(privFile: File, certFile: File): Pair<PrivateKey, Certificate>? {
+        if (!privFile.exists() || !certFile.exists()) return null
+
+        return try {
+            val keySpec = PKCS8EncodedKeySpec(privFile.readBytes())
+            val privateKey = KeyFactory.getInstance("RSA").generatePrivate(keySpec)
+            val cert = certFile.inputStream().use {
+                CertificateFactory.getInstance("X.509").generateCertificate(it)
+            }
+            Pair(privateKey, cert)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load existing ADB identity: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * 1.2.0 이하에서 filesDir에 저장하던 identity를 noBackupFilesDir로 1회 이전한다.
+     * 이전이 검증된 뒤에만 legacy 파일을 삭제하여 기존 페어링을 최대한 보존한다.
+     */
+    private fun migrateLegacyIdentityIfNeeded(
+        context: Context,
+        targetPrivFile: File,
+        targetCertFile: File
+    ) {
+        val legacyPrivFile = File(context.filesDir, PRIV_KEY_FILE)
+        val legacyCertFile = File(context.filesDir, CERT_FILE)
+
+        if (loadIdentity(targetPrivFile, targetCertFile) != null) {
+            legacyPrivFile.delete()
+            legacyCertFile.delete()
+            return
+        }
+
+        // 불완전한 새 위치 파일은 제거한 뒤 legacy identity 이전을 다시 시도한다.
+        targetPrivFile.delete()
+        targetCertFile.delete()
+
+        if (!legacyPrivFile.exists() || !legacyCertFile.exists()) return
+
+        try {
+            legacyPrivFile.copyTo(targetPrivFile, overwrite = false)
+            legacyCertFile.copyTo(targetCertFile, overwrite = false)
+
+            if (loadIdentity(targetPrivFile, targetCertFile) == null) {
+                throw IOException("Migrated ADB identity could not be validated")
+            }
+
+            legacyPrivFile.delete()
+            legacyCertFile.delete()
+            Log.i(TAG, "Migrated ADB identity to no-backup storage")
+        } catch (e: Exception) {
+            targetPrivFile.delete()
+            targetCertFile.delete()
+            Log.w(TAG, "Unable to migrate legacy ADB identity: ${e.message}")
+        }
+    }
+}
