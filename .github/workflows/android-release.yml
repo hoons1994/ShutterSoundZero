@@ -139,7 +139,14 @@ jobs:
             exit 1
           fi
 
-          apksigner verify --verbose --print-certs "$APK_PATH"
+          APKSIGNER="$ANDROID_HOME/build-tools/37.0.0/apksigner"
+          if [ ! -x "$APKSIGNER" ]; then
+            echo "apksigner was not found at expected path: $APKSIGNER"
+            find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner -print || true
+            exit 1
+          fi
+
+          "$APKSIGNER" verify --verbose --print-certs "$APK_PATH"
           echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
       - name: Prepare release assets
