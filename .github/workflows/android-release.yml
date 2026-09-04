@@ -25,9 +25,163 @@ jobs:
       - name: Confirm release workflow is loadable
         run: echo 'Android Release workflow loaded successfully.'
 
+  preflight:
+    name: Validate Signed Release Preflight
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: ''
+
+      - name: Install Android 17 SDK
+        shell: bash
+        run: |
+          sdkmanager --list --channel=3 > sdk-packages.txt
+
+          if grep -q 'platforms;android-CinnamonBun' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-CinnamonBun'
+          elif grep -q 'platforms;android-37.0' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-37.0'
+          elif grep -q 'platforms;android-37 ' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-37'
+          else
+            echo 'Android 17 SDK platform package was not found.'
+            grep -E 'platforms;android-(CinnamonBun|37)' sdk-packages.txt || true
+            exit 1
+          fi
+
+          echo "Installing $PLATFORM_PACKAGE"
+          sdkmanager --channel=3 "$PLATFORM_PACKAGE" 'build-tools;37.0.0' platform-tools
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x gradlew
+
+      - name: Restore release keystore
+        shell: bash
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          for name in RELEASE_KEYSTORE_BASE64 RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required GitHub Actions secret is missing: $name"
+              exit 1
+            fi
+          done
+
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          APK_PATH="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+          if [ -z "$APK_PATH" ]; then
+            echo 'Release APK was not produced.'
+            exit 1
+          fi
+
+          APKSIGNER="$ANDROID_HOME/build-tools/37.0.0/apksigner"
+          if [ ! -x "$APKSIGNER" ]; then
+            echo "apksigner was not found at expected path: $APKSIGNER"
+            find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner -print || true
+            exit 1
+          fi
+
+          "$APKSIGNER" verify --verbose --print-certs "$APK_PATH"
+          echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
+
+      - name: Prepare preflight asset
+        shell: bash
+        run: |
+          APP_VERSION="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          if [ -z "$APP_VERSION" ]; then
+            echo "Could not read versionName from app/build.gradle.kts."
+            exit 1
+          fi
+
+          mkdir -p dist
+          PREFLIGHT_APK="dist/ShutterSoundZero-v${APP_VERSION}-preflight.apk"
+          cp "$APK_PATH" "$PREFLIGHT_APK"
+          sha256sum "$PREFLIGHT_APK" > "${PREFLIGHT_APK}.sha256"
+          echo "PREFLIGHT_APK=$PREFLIGHT_APK" >> "$GITHUB_ENV"
+
+      - name: Generate APK provenance attestation
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ env.PREFLIGHT_APK }}
+
+      - name: Prepare Sigstore attestation bundle
+        shell: bash
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          if [ -z "$ATTESTATION_BUNDLE" ] || [ ! -f "$ATTESTATION_BUNDLE" ]; then
+            echo 'Attestation bundle was not produced.'
+            exit 1
+          fi
+
+          cp "$ATTESTATION_BUNDLE" "${PREFLIGHT_APK}.sigstore.json"
+
+      - name: Verify APK provenance attestation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify "$PREFLIGHT_APK" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "${PREFLIGHT_APK}.sigstore.json" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/android-release.yml" \
+            --source-digest "$GITHUB_SHA"
+
+      - name: Record preflight result
+        shell: bash
+        run: |
+          {
+            echo '### Signed release preflight passed ✅'
+            echo
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo '- APK signature: verified with apksigner'
+            echo '- Provenance: generated and verified'
+            echo '- GitHub Release: not created'
+            echo '- Signed APK: not uploaded as a workflow artifact'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   release:
     name: Build Signed Release APK
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -42,7 +196,6 @@ jobs:
           fetch-depth: 0
 
       - name: Verify tag belongs to main
-        if: github.event_name == 'push'
         shell: bash
         run: |
           git fetch origin main
@@ -52,7 +205,6 @@ jobs:
           fi
 
       - name: Verify tag matches app version
-        if: github.event_name == 'push'
         shell: bash
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
@@ -153,19 +305,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-
-          if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ]; then
-            APP_VERSION="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
-            if [ -z "$APP_VERSION" ]; then
-              echo "Could not read versionName from app/build.gradle.kts."
-              exit 1
-            fi
-            ASSET_LABEL="v${APP_VERSION}-dry-run"
-          else
-            ASSET_LABEL="$GITHUB_REF_NAME"
-          fi
-
-          RELEASE_APK="dist/ShutterSoundZero-${ASSET_LABEL}.apk"
+          RELEASE_APK="dist/ShutterSoundZero-${GITHUB_REF_NAME}.apk"
           cp "$APK_PATH" "$RELEASE_APK"
           sha256sum "$RELEASE_APK" > "${RELEASE_APK}.sha256"
           echo "RELEASE_APK=$RELEASE_APK" >> "$GITHUB_ENV"
@@ -199,18 +339,7 @@ jobs:
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/android-release.yml" \
             --source-digest "$GITHUB_SHA"
 
-      - name: Upload dry-run verification artifacts
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: ShutterSoundZero-signed-release-dry-run-${{ github.sha }}
-          path: dist/*
-          if-no-files-found: error
-          retention-days: 7
-          compression-level: 0
-
       - name: Create or update GitHub Release
-        if: github.event_name == 'push'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
