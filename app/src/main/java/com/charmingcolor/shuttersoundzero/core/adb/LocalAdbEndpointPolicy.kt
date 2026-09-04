@@ -1,5 +1,6 @@
 package com.charmingcolor.shuttersoundzero.core.adb
 
+import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.NetworkInterface
 import java.util.Collections
@@ -15,8 +16,22 @@ internal object LocalAdbEndpointPolicy {
     ): Boolean {
         if (candidate.isLoopbackAddress) return true
         return deviceAddresses.any { address ->
-            candidate.address.contentEquals(address.address)
+            addressesMatch(candidate, address)
         }
+    }
+
+    private fun addressesMatch(candidate: InetAddress, deviceAddress: InetAddress): Boolean {
+        if (!candidate.address.contentEquals(deviceAddress.address)) return false
+
+        if (
+            candidate is Inet6Address &&
+            deviceAddress is Inet6Address &&
+            candidate.isLinkLocalAddress
+        ) {
+            return candidate.scopeId == deviceAddress.scopeId
+        }
+
+        return true
     }
 
     private fun currentDeviceAddresses(): List<InetAddress> {

@@ -1,5 +1,6 @@
 package com.charmingcolor.shuttersoundzero.core.adb
 
+import java.net.Inet6Address
 import java.net.InetAddress
 import kotlin.random.Random
 import org.junit.Assert.assertFalse
@@ -72,6 +73,33 @@ class LocalAdbEndpointPolicyTest {
     }
 
     @Test
+    fun `accepts link-local IPv6 address only on the same scope`() {
+        val bytes = InetAddress.getByName("fe80::1234").address
+        val candidate = Inet6Address.getByAddress(null, bytes, 7)
+        val localAddress = Inet6Address.getByAddress(null, bytes.copyOf(), 7)
+
+        assertTrue(LocalAdbEndpointPolicy.isLocalDeviceAddress(candidate, listOf(localAddress)))
+    }
+
+    @Test
+    fun `rejects byte-identical link-local IPv6 address on a different scope`() {
+        val bytes = InetAddress.getByName("fe80::1234").address
+        val candidate = Inet6Address.getByAddress(null, bytes, 7)
+        val otherInterfaceAddress = Inet6Address.getByAddress(null, bytes.copyOf(), 8)
+
+        assertFalse(LocalAdbEndpointPolicy.isLocalDeviceAddress(candidate, listOf(otherInterfaceAddress)))
+    }
+
+    @Test
+    fun `rejects scoped link-local IPv6 candidate when device address is unscoped`() {
+        val bytes = InetAddress.getByName("fe80::1234").address
+        val candidate = Inet6Address.getByAddress(null, bytes, 7)
+        val unscopedAddress = Inet6Address.getByAddress(null, bytes.copyOf(), 0)
+
+        assertFalse(LocalAdbEndpointPolicy.isLocalDeviceAddress(candidate, listOf(unscopedAddress)))
+    }
+
+    @Test
     fun `for many IPv4 addresses exact byte matches are accepted and mutations rejected`() {
         val random = Random(0x1A2B3C4D)
 
@@ -111,6 +139,31 @@ class LocalAdbEndpointPolicyTest {
             val differentDevice = InetAddress.getByAddress(mutated)
 
             assertFalse("mutated IPv6 iteration=$index", LocalAdbEndpointPolicy.isLocalDeviceAddress(candidate, listOf(differentDevice)))
+        }
+    }
+
+    @Test
+    fun `for many link-local IPv6 addresses scope is part of identity`() {
+        val random = Random(0x51C0FE)
+
+        repeat(256) { index ->
+            val bytes = ByteArray(16)
+            random.nextBytes(bytes)
+            bytes[0] = 0xFE.toByte()
+            bytes[1] = 0x80.toByte()
+            val scopeId = random.nextInt(1, 64)
+            val candidate = Inet6Address.getByAddress(null, bytes, scopeId)
+            val sameScope = Inet6Address.getByAddress(null, bytes.copyOf(), scopeId)
+            val differentScope = Inet6Address.getByAddress(null, bytes.copyOf(), scopeId + 64)
+
+            assertTrue(
+                "same-scope IPv6 iteration=$index scope=$scopeId",
+                LocalAdbEndpointPolicy.isLocalDeviceAddress(candidate, listOf(sameScope))
+            )
+            assertFalse(
+                "different-scope IPv6 iteration=$index scope=$scopeId",
+                LocalAdbEndpointPolicy.isLocalDeviceAddress(candidate, listOf(differentScope))
+            )
         }
     }
 
