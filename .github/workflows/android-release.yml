@@ -7,6 +7,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,7 +27,7 @@ jobs:
 
   release:
     name: Build Signed Release APK
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -41,6 +42,7 @@ jobs:
           fetch-depth: 0
 
       - name: Verify tag belongs to main
+        if: github.event_name == 'push'
         shell: bash
         run: |
           git fetch origin main
@@ -50,6 +52,7 @@ jobs:
           fi
 
       - name: Verify tag matches app version
+        if: github.event_name == 'push'
         shell: bash
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
@@ -143,7 +146,19 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          RELEASE_APK="dist/ShutterSoundZero-${GITHUB_REF_NAME}.apk"
+
+          if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ]; then
+            APP_VERSION="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+            if [ -z "$APP_VERSION" ]; then
+              echo "Could not read versionName from app/build.gradle.kts."
+              exit 1
+            fi
+            ASSET_LABEL="v${APP_VERSION}-dry-run"
+          else
+            ASSET_LABEL="$GITHUB_REF_NAME"
+          fi
+
+          RELEASE_APK="dist/ShutterSoundZero-${ASSET_LABEL}.apk"
           cp "$APK_PATH" "$RELEASE_APK"
           sha256sum "$RELEASE_APK" > "${RELEASE_APK}.sha256"
           echo "RELEASE_APK=$RELEASE_APK" >> "$GITHUB_ENV"
@@ -166,7 +181,18 @@ jobs:
 
           cp "$ATTESTATION_BUNDLE" "${RELEASE_APK}.sigstore.json"
 
+      - name: Upload dry-run verification artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ShutterSoundZero-signed-release-dry-run-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
       - name: Create or update GitHub Release
+        if: github.event_name == 'push'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -185,4 +211,3 @@ jobs:
               --verify-tag \
               --generate-notes \
               --title "$GITHUB_REF_NAME"
-          fi
