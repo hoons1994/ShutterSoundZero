@@ -141,6 +141,34 @@ class AdbShellCommandResultParserTest {
     }
 
     @Test
+    fun parseOrNull_forRandomMarkerLikeNoise_neverTreatsPartialLinesAsCompletion() {
+        val random = Random(0xF00DCAFE.toInt())
+        val separators = listOf(" ", "\t", "-", "+", "x")
+
+        repeat(512) { index ->
+            val prefix = "noise-${random.nextLong()}"
+            val separator = separators[random.nextInt(separators.size)]
+            val raw = "$prefix\n$marker$separator${random.nextInt(0, 1000)}\n"
+
+            assertNull(
+                "iteration=$index separator=$separator",
+                AdbShellCommandResultParser.parseOrNull(raw, marker)
+            )
+        }
+    }
+
+    @Test
+    fun parseOrNull_acceptsMaximumIntExitCode() {
+        val result = AdbShellCommandResultParser.parseOrNull(
+            "output\n$marker:${Int.MAX_VALUE}\n",
+            marker
+        )
+
+        assertEquals("output", result?.output)
+        assertEquals(Int.MAX_VALUE, result?.exitCode)
+    }
+
+    @Test
     fun parseOrNull_whenNumericExitCodeOverflowsInt_returnsNull() {
         val result = AdbShellCommandResultParser.parseOrNull(
             "output\n$marker:999999999999999999999999999999\n",
