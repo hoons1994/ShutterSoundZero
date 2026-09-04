@@ -176,7 +176,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         acquireMulticastLock()
         try {
             val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
-            Log.i(TAG, "Attempting pairing with $host:$port using code $pairingCode")
+            Log.i(TAG, "Attempting pairing with $host:$port")
             val success = pair(host, port, pairingCode)
             if (success) {
                 Log.i(TAG, "Pairing successful!")

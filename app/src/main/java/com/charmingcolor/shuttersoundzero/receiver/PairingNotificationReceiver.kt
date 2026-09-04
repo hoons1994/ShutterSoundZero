@@ -68,7 +68,7 @@ class PairingNotificationReceiver : BroadcastReceiver() {
 
                             // 유효한 포트를 확보했으므로 재탐색·알림 재생성을 중단하고 페어링을 시작한다.
                             adbManager.stopPairingDiscovery()
-                            Log.i(TAG, "Attempting pairing via notification with port $port and code $code")
+                            Log.i(TAG, "Attempting pairing via notification with port $port")
                             val pairResult = adbManager.pairLocal(port, code)
 
                             if (pairResult.isSuccess) {
@@ -148,4 +148,3 @@ class PairingNotificationReceiver : BroadcastReceiver() {
         }
     }
 }
-

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Never transfer the device-bound ADB identity through Android 11 backup. -->
+    <!-- Device-bound ADB identity and setup state must never leave this device. -->
     <exclude domain="file" path="adb_private_key.der" />
     <exclude domain="file" path="adb_cert.der" />
+    <exclude domain="sharedpref" path="galaxy_camera_mute_prefs.xml" />
 </full-backup-content>

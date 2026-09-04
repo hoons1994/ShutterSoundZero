@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Never back up the device-bound ADB identity to cloud storage. -->
+        <!-- Device-bound ADB identity and setup state must never leave this device. -->
         <exclude domain="file" path="adb_private_key.der" />
         <exclude domain="file" path="adb_cert.der" />
+        <exclude domain="sharedpref" path="galaxy_camera_mute_prefs.xml" />
     </cloud-backup>
     <device-transfer>
-        <!-- A restored ADB identity must not be reused on a different device. -->
+        <!-- A restored ADB identity or cached setup state must not be reused on another device. -->
         <exclude domain="file" path="adb_private_key.der" />
         <exclude domain="file" path="adb_cert.der" />
+        <exclude domain="sharedpref" path="galaxy_camera_mute_prefs.xml" />
     </device-transfer>
 </data-extraction-rules>
