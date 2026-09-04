@@ -1,5 +1,6 @@
 package com.charmingcolor.shuttersoundzero.core.adb
 
+import kotlin.random.Random
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -94,6 +95,55 @@ class AdbShellCommandResultParserTest {
     fun parseOrNull_whenMarkerHasTrailingCharacters_doesNotAcceptIt() {
         val result = AdbShellCommandResultParser.parseOrNull(
             "output\n$marker:0 extra\n",
+            marker
+        )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun parseOrNull_forManyLiteralMarkers_roundTripsOutputAndExitCode() {
+        val random = Random(0x5A17)
+        val markerAlphabet = "abcXYZ0123456789._+[](){}?^|-$"
+
+        repeat(512) { index ->
+            val generatedMarker = buildString {
+                append("__SSZ_")
+                repeat(random.nextInt(4, 20)) {
+                    append(markerAlphabet[random.nextInt(markerAlphabet.length)])
+                }
+                append("__")
+            }
+            val exitCode = random.nextInt(0, 1000)
+            val output = "payload-$index-${random.nextLong()}"
+            val lineEnding = if (random.nextBoolean()) "\n" else "\r\n"
+            val raw = "$output\t$lineEnding$generatedMarker:$exitCode$lineEnding"
+
+            val result = AdbShellCommandResultParser.parseOrNull(raw, generatedMarker)
+
+            assertNotNull("iteration=$index marker=$generatedMarker", result)
+            assertEquals("iteration=$index", output, result?.output)
+            assertEquals("iteration=$index", exitCode, result?.exitCode)
+        }
+    }
+
+    @Test
+    fun parseOrNull_forManyIncompleteMarkerLines_neverAcceptsThem() {
+        val random = Random(0xBAD5EED)
+        val invalidSuffixes = listOf(" extra", "x", ":1", "-1", "+1", " 0")
+
+        repeat(512) { index ->
+            val suffix = invalidSuffixes[random.nextInt(invalidSuffixes.size)]
+            val raw = "payload-$index\n$marker:${random.nextInt(0, 1000)}$suffix\n"
+
+            assertNull("iteration=$index suffix=$suffix", AdbShellCommandResultParser.parseOrNull(raw, marker))
+        }
+    }
+
+    @Test
+    fun parseOrNull_whenNumericExitCodeOverflowsInt_returnsNull() {
+        val result = AdbShellCommandResultParser.parseOrNull(
+            "output\n$marker:999999999999999999999999999999\n",
             marker
         )
 
