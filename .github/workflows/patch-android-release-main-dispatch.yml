@@ -1,0 +1,149 @@
+name: Patch Android Release Main Dispatch
+
+on:
+  push:
+    branches:
+      - ci/release-main-dispatch
+    paths:
+      - '.github/workflows/patch-android-release-main-dispatch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ci/release-main-dispatch
+          fetch-depth: 0
+
+      - name: Patch Android Release workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/android-release.yml')
+          text = path.read_text()
+
+          old_dispatch = "  workflow_dispatch:\n"
+          new_dispatch = """  workflow_dispatch:
+            inputs:
+              release_tag:
+                description: 'Release tag to publish (leave empty for signed preflight)'
+                required: false
+                type: string
+          """
+          if old_dispatch not in text:
+              raise SystemExit('workflow_dispatch marker not found')
+          text = text.replace(old_dispatch, new_dispatch, 1)
+
+          old_preflight = "    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'"
+          new_preflight = "    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag == ''"
+          if old_preflight not in text:
+              raise SystemExit('preflight condition not found')
+          text = text.replace(old_preflight, new_preflight, 1)
+
+          dispatch_job = """
+            dispatch-tag-release:
+              name: Dispatch Tagged Release
+              if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+              runs-on: ubuntu-latest
+              permissions:
+                actions: write
+                contents: read
+              steps:
+                - name: Dispatch release on main
+                  shell: bash
+                  env:
+                    GH_TOKEN: ${{ github.token }}
+                    RELEASE_TAG: ${{ github.ref_name }}
+                  run: gh workflow run android-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f release_tag="$RELEASE_TAG"
+
+          """
+          marker = "  preflight:\n"
+          if marker not in text:
+              raise SystemExit('preflight job marker not found')
+          text = text.replace(marker, dispatch_job + marker, 1)
+
+          head, release = text.split("  release:\n", 1)
+
+          old_release_if = "    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/v')"
+          new_release_if = "    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag != ''"
+          if old_release_if not in release:
+              raise SystemExit('release condition not found')
+          release = release.replace(old_release_if, new_release_if, 1)
+
+          old_checkout = """      - name: Checkout source
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+                with:
+                  fetch-depth: 0
+
+              - name: Verify tag belongs to main
+                shell: bash
+                run: |
+                  git fetch origin main
+                  if ! git merge-base --is-ancestor \"$GITHUB_SHA\" \"origin/main\"; then
+                    echo \"Release tags must point to a commit contained in main.\"
+                    exit 1
+                  fi
+          """
+          # Build the exact block with normal YAML indentation.
+          old_checkout = old_checkout.replace('              ', '      ', 1)
+          old_checkout = old_checkout.replace('                ', '        ')
+          new_checkout = """      - name: Checkout source
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+                with:
+                  fetch-depth: 0
+
+              - name: Resolve release tag
+                shell: bash
+                env:
+                  DISPATCH_RELEASE_TAG: ${{ inputs.release_tag }}
+                run: |
+                  RELEASE_TAG="$DISPATCH_RELEASE_TAG"
+                  if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
+                    echo "Invalid release tag: $RELEASE_TAG"
+                    exit 1
+                  fi
+                  git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+                  RELEASE_SOURCE_SHA="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+                  git checkout --detach "$RELEASE_SOURCE_SHA"
+                  echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+                  echo "RELEASE_SOURCE_SHA=$RELEASE_SOURCE_SHA" >> "$GITHUB_ENV"
+
+              - name: Verify tag belongs to main
+                shell: bash
+                run: |
+                  git fetch origin main
+                  if ! git merge-base --is-ancestor "$RELEASE_SOURCE_SHA" "origin/main"; then
+                    echo "Release tags must point to a commit contained in main."
+                    exit 1
+                  fi
+          """
+          new_checkout = new_checkout.replace('              ', '      ', 1)
+          new_checkout = new_checkout.replace('                ', '        ')
+          if old_checkout not in release:
+              raise SystemExit('release checkout/ancestry block not found')
+          release = release.replace(old_checkout, new_checkout, 1)
+
+          replacements = {
+              'TAG_VERSION="${GITHUB_REF_NAME#v}"': 'TAG_VERSION="${RELEASE_TAG#v}"',
+              '"$GITHUB_REF_NAME"': '"$RELEASE_TAG"',
+              'ShutterSoundZero-${GITHUB_REF_NAME}.apk': 'ShutterSoundZero-${RELEASE_TAG}.apk',
+          }
+          for old, new in replacements.items():
+              release = release.replace(old, new)
+
+          path.write_text(head + "  release:\n" + release)
+          PY
+
+          git rm .github/workflows/patch-android-release-main-dispatch.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/android-release.yml
+          git commit -m 'ci: run signed releases from main context'
+          git push origin HEAD:ci/release-main-dispatch
