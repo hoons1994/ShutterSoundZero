@@ -17,8 +17,6 @@ import kotlinx.coroutines.launch
 data class MainUiState(
     val isCscMuted: Boolean = false,
     val hasCscPermission: Boolean = false,
-    val isAutoRestoreOnBoot: Boolean = true,
-    val isFirmwareUpdateCheckEnabled: Boolean = true,
     val adbGrantCommand: String = "",
     val adbDirectSetCommand: String = "",
     val adbCheckCommand: String = "",
@@ -42,9 +40,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     init {
-        if (prefs.lastFirmwareFingerprint == null) {
-            prefs.lastFirmwareFingerprint = android.os.Build.FINGERPRINT
-        }
+        prefs.ensureSoftwareUpdateBaseline(android.os.Build.FINGERPRINT)
         refreshState()
     }
 
@@ -55,8 +51,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         return MainUiState(
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
-            isAutoRestoreOnBoot = prefs.isAutoRestoreOnBootEnabled,
-            isFirmwareUpdateCheckEnabled = prefs.isFirmwareUpdateCheckEnabled,
             adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
             adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
             adbCheckCommand = CscMuteManager.getAdbCheckCommand()
@@ -67,15 +61,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val app = getApplication<Application>()
         val perm = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
         val isMuted = if (!perm) false else prefs.shouldMuteOnBoot
-        val autoRestore = prefs.isAutoRestoreOnBootEnabled
-        val firmwareCheck = prefs.isFirmwareUpdateCheckEnabled
 
         _uiState.update { current ->
             current.copy(
                 isCscMuted = isMuted,
                 hasCscPermission = perm,
-                isAutoRestoreOnBoot = autoRestore,
-                isFirmwareUpdateCheckEnabled = firmwareCheck,
                 adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
                 adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
                 adbCheckCommand = CscMuteManager.getAdbCheckCommand()
@@ -206,16 +196,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.update { it.copy(showSwitchFailureHelp = false) }
     }
 
-    fun setAutoRestoreOnBoot(enabled: Boolean) {
-        prefs.isAutoRestoreOnBootEnabled = enabled
-        _uiState.update { it.copy(isAutoRestoreOnBoot = enabled) }
-    }
-
-    fun setFirmwareUpdateCheck(enabled: Boolean) {
-        prefs.isFirmwareUpdateCheckEnabled = enabled
-        _uiState.update { it.copy(isFirmwareUpdateCheckEnabled = enabled) }
-    }
-
     fun dismissMessages() {
         _uiState.update { it.copy(infoMessage = null, errorMessage = null) }
     }
@@ -243,4 +223,3 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 }
-
