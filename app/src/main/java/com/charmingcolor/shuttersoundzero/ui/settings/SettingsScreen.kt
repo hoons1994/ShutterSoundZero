@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.security.AppLockAuthenticator
 import com.charmingcolor.shuttersoundzero.security.AppLockSession
@@ -71,6 +72,9 @@ fun SettingsScreen(
     var isAppLockEnabled by remember { mutableStateOf(prefs.isAppLockEnabled) }
     var isLockSetupInProgress by remember { mutableStateOf(false) }
     var lockErrorMessage by remember { mutableStateOf<String?>(null) }
+    var showDeveloperOptionsConfirm by remember { mutableStateOf(false) }
+    var showDeveloperOptionsFallback by remember { mutableStateOf(false) }
+    var developerOptionsResultMessage by remember { mutableStateOf<String?>(null) }
     var showLicenseDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -154,6 +158,18 @@ fun SettingsScreen(
                         )
                     }
                 )
+                RowDivider()
+                ClickableRow(
+                    title = "개발자 옵션 끄기",
+                    subtitle = "설정 완료 후 개발자 옵션과 USB·무선 디버깅 종료",
+                    onClick = {
+                        if (DeveloperOptionsManager.canDisableDirectly(context)) {
+                            showDeveloperOptionsConfirm = true
+                        } else {
+                            showDeveloperOptionsFallback = true
+                        }
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -217,6 +233,90 @@ fun SettingsScreen(
                 text = { Text(message) },
                 confirmButton = {
                     TextButton(onClick = { lockErrorMessage = null }) {
+                        Text("확인")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
+        if (showDeveloperOptionsConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeveloperOptionsConfirm = false },
+                title = { Text("개발자 옵션 끄기") },
+                text = {
+                    Text(
+                        "개발자 옵션과 USB·무선 디버깅을 모두 끕니다.\n\n" +
+                            "무선 디버깅 연결은 즉시 종료됩니다. 이미 ShutterSoundZero에 부여된 " +
+                            "WRITE_SECURE_SETTINGS 권한은 이 작업에서 취소하지 않습니다.\n\n" +
+                            "카메라 무음 권한 설정을 완료한 뒤 진행하는 것을 권장합니다."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeveloperOptionsConfirm = false
+                            val result = DeveloperOptionsManager.disableDeveloperOptions(context)
+                            if (result.isSuccess) {
+                                developerOptionsResultMessage =
+                                    "개발자 옵션과 USB·무선 디버깅을 껐습니다. 필요할 때는 기기 설정에서 개발자 옵션을 다시 활성화할 수 있습니다."
+                            } else {
+                                showDeveloperOptionsFallback = true
+                            }
+                        }
+                    ) {
+                        Text("끄기")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeveloperOptionsConfirm = false }) {
+                        Text("취소")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
+        if (showDeveloperOptionsFallback) {
+            AlertDialog(
+                onDismissRequest = { showDeveloperOptionsFallback = false },
+                title = { Text("개발자 옵션 끄기") },
+                text = {
+                    Text(
+                        "이 기기에서는 앱이 개발자 옵션을 직접 끌 수 없습니다.\n\n" +
+                            "개발자 옵션 화면을 연 뒤 화면 상단의 사용 스위치를 꺼 주세요. " +
+                            "가능하면 무선 디버깅도 꺼져 있는지 확인해 주세요."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeveloperOptionsFallback = false
+                            DeveloperOptionsManager.openDeveloperOptions(context)
+                        }
+                    ) {
+                        Text("개발자 옵션 열기")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeveloperOptionsFallback = false }) {
+                        Text("취소")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
+        developerOptionsResultMessage?.let { message ->
+            AlertDialog(
+                onDismissRequest = { developerOptionsResultMessage = null },
+                title = { Text("완료") },
+                text = { Text(message) },
+                confirmButton = {
+                    TextButton(onClick = { developerOptionsResultMessage = null }) {
                         Text("확인")
                     }
                 },
