@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Quick Settings icons should be a simple monochrome glyph on a transparent background. -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M6,6.5L8.2,6.5L9.6,4.5L14.4,4.5L15.8,6.5L18,6.5C19.1,6.5 20,7.4 20,8.5L20,17C20,18.1 19.1,19 18,19L6,19C4.9,19 4,18.1 4,17L4,8.5C4,7.4 4.9,6.5 6,6.5Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineJoin="round" />
+
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M12,8.5A3.5,3.5 0,1 0,12 15.5A3.5,3.5 0,1 0,12 8.5"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8" />
+
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M4.5,4.5L19.5,19.5"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round" />
+</vector>

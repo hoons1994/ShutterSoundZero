@@ -1,5 +1,6 @@
 package com.charmingcolor.shuttersoundzero.service
 
+import android.graphics.drawable.Icon
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.util.Log
@@ -65,6 +66,7 @@ class CameraMuteTileService : TileService() {
 
         // 빠른 체감을 위한 낙관적 타일 업데이트
         qsTile?.let { tile ->
+            tile.icon = Icon.createWithResource(this, R.drawable.ic_qs_camera_mute)
             tile.state = if (targetMuted) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
             tile.subtitle = if (targetMuted) getString(R.string.tile_muted) else getString(R.string.tile_unmuted)
             tile.updateTile()
@@ -103,6 +105,8 @@ class CameraMuteTileService : TileService() {
         val context = applicationContext
         val isMuted = CscMuteManager.isCscShutterSoundMuted(context)
 
+        // Refresh the icon explicitly so existing tiles do not remain stuck on a cached launcher icon.
+        tile.icon = Icon.createWithResource(this, R.drawable.ic_qs_camera_mute)
         tile.state = if (isMuted) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         tile.label = getString(R.string.tile_name)
         tile.subtitle = if (isMuted) getString(R.string.tile_muted) else getString(R.string.tile_unmuted)
