@@ -1,7 +1,6 @@
 package com.charmingcolor.shuttersoundzero.ui.pairing
 
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -23,7 +22,6 @@ import com.charmingcolor.shuttersoundzero.ui.components.ModernPromptCard
 
 /**
  * 최초 무선 페어링 전에 One UI의 앱별 알림 팝업 스타일을 한 번 안내한다.
- * 시스템 기본 팝업 스타일이 이미 "자세히"라면 불필요한 안내를 건너뛴다.
  * 실제 삼성 페어링 코드 화면을 열기 전에만 표시되므로 페어링 모드에는 영향을 주지 않는다.
  */
 class PairingPopupStyleGuideActivity : ComponentActivity() {
@@ -34,7 +32,7 @@ class PairingPopupStyleGuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (isSamsungDetailedPopupStyleEnabled() || prefs.hasShownPairingPopupStyleGuide) {
+        if (prefs.hasShownPairingPopupStyleGuide) {
             startPairingAndFinish()
             return
         }
@@ -93,28 +91,6 @@ class PairingPopupStyleGuideActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Samsung SystemUI stores the global Brief/Detailed notification pop-up choice in
-     * Settings.System "edge_lighting" on supported One UI builds (1 = Brief, 0 = Detailed).
-     *
-     * This is a Samsung implementation detail rather than a public Android contract, so only a
-     * positively observed 0 is treated as Detailed. Missing, changed, or unreadable values fall
-     * back to the existing one-time guide instead of silently skipping it.
-     */
-    private fun isSamsungDetailedPopupStyleEnabled(): Boolean {
-        if (!Build.MANUFACTURER.equals("samsung", ignoreCase = true)) return false
-
-        return try {
-            Settings.System.getInt(
-                contentResolver,
-                SAMSUNG_BRIEF_POPUP_SETTING,
-                SETTING_UNAVAILABLE
-            ) == SAMSUNG_DETAILED_POPUP_VALUE
-        } catch (_: Exception) {
-            false
-        }
-    }
-
     private fun startPairingAndFinish() {
         if (pairingStarted) return
         pairingStarted = true
@@ -123,11 +99,5 @@ class PairingPopupStyleGuideActivity : ComponentActivity() {
         PairingForegroundService.start(this, devOptionsOff)
         CscMuteManager.openPairingSetupScreen(this)
         finish()
-    }
-
-    companion object {
-        private const val SAMSUNG_BRIEF_POPUP_SETTING = "edge_lighting"
-        private const val SAMSUNG_DETAILED_POPUP_VALUE = 0
-        private const val SETTING_UNAVAILABLE = -1
     }
 }
