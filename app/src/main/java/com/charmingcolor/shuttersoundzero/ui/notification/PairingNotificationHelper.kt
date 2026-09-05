@@ -17,7 +17,8 @@ import com.charmingcolor.shuttersoundzero.receiver.PairingNotificationReceiver
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
 
 object PairingNotificationHelper {
-    const val CHANNEL_ID = "adb_pairing_channel"
+    const val CHANNEL_ID = "adb_pairing_private_v2"
+    private const val LEGACY_CHANNEL_ID = "adb_pairing_channel"
     const val NOTIFICATION_ID = 2001
 
     const val KEY_PAIRING_CODE = "key_pairing_code"
@@ -46,10 +47,14 @@ object PairingNotificationHelper {
             setShowBadge(true)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 200, 100, 200)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
+
+        // Notification channel behavior is immutable after first creation. Move existing installs
+        // away from the legacy PUBLIC channel so pairing details are private by default as well.
+        manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
     }
 
     /**
@@ -137,7 +142,8 @@ object PairingNotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(buildRedactedPublicVersion(context, completed = false))
             .setOngoing(true)
             .setAutoCancel(false)
             .setContentIntent(contentPendingIntent)
@@ -195,6 +201,9 @@ object PairingNotificationHelper {
             .setContentTitle("무선 페어링 적용 중 ⏳")
             .setContentText("기기 페어링 및 카메라 셔터음 무음 설정을 적용하고 있습니다...")
             .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(buildRedactedPublicVersion(context, completed = false))
             .setOngoing(true)
             .setAutoCancel(false)
             .setContentIntent(contentPendingIntent)
@@ -211,6 +220,8 @@ object PairingNotificationHelper {
      * 페어링 및 무음화가 완전히 성공했을 때만 알림 완료 상태로 전환
      */
     fun showSuccessNotification(context: Context) {
+        createNotificationChannel(context)
+
         val contentIntent = Intent(context, MainActivity::class.java)
         val contentPendingIntent = PendingIntent.getActivity(
             context,
@@ -224,6 +235,8 @@ object PairingNotificationHelper {
             .setContentTitle("셔터음 제로: 권한 연동 완료 ✨")
             .setContentText("보안 설정 권한이 연동되었습니다. 앱에서 셔터음 끄기 스위치를 켜보세요.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(buildRedactedPublicVersion(context, completed = true))
             .setOngoing(false)
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
@@ -234,10 +247,20 @@ object PairingNotificationHelper {
         } catch (_: SecurityException) {}
     }
 
+    private fun buildRedactedPublicVersion(context: Context, completed: Boolean): Notification {
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(if (completed) "ShutterSoundZero 알림" else "무선 디버깅 페어링 진행 중")
+            .setContentText(if (completed) "앱을 열어 결과를 확인하세요." else "앱을 열어 페어링을 계속하세요.")
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOngoing(!completed)
+            .build()
+    }
+
     fun cancelNotification(context: Context) {
         try {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
         } catch (_: Exception) {}
     }
 }
-
