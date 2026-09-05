@@ -17,7 +17,6 @@ import com.charmingcolor.shuttersoundzero.MainActivity
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
-import com.charmingcolor.shuttersoundzero.ui.pairing.PairingCodeOverlay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,7 +33,6 @@ class PairingForegroundService : Service() {
         private const val ACTION_STOP = "com.charmingcolor.shuttersoundzero.action.STOP_PAIRING"
         private const val ACTION_COMPLETE = "com.charmingcolor.shuttersoundzero.action.COMPLETE_PAIRING"
         private const val ACTION_SUBMIT_CODE = "com.charmingcolor.shuttersoundzero.action.SUBMIT_PAIRING_CODE"
-        private const val ACTION_SHOW_CODE_INPUT = "com.charmingcolor.shuttersoundzero.action.SHOW_PAIRING_CODE_INPUT"
         private const val EXTRA_DEV_OPTIONS_OFF = "dev_options_off"
         private const val EXTRA_PAIRING_CODE = "pairing_code"
 
@@ -52,10 +50,6 @@ class PairingForegroundService : Service() {
                 putExtra(EXTRA_PAIRING_CODE, code)
             }
             ContextCompat.startForegroundService(context, intent)
-        }
-
-        fun showCodeInputIntent(context: Context): Intent {
-            return Intent(context, PairingForegroundService::class.java).setAction(ACTION_SHOW_CODE_INPUT)
         }
 
         fun stop(context: Context) {
@@ -84,7 +78,6 @@ class PairingForegroundService : Service() {
     }
 
     private val adbManager by lazy { StandaloneAdbManager.getInstance(this) }
-    private val pairingCodeOverlay by lazy { PairingCodeOverlay(this) }
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pairingJob: Job? = null
     private var isDeveloperOptionsObserverRegistered = false
@@ -107,7 +100,6 @@ class PairingForegroundService : Service() {
         when (intent?.action) {
             ACTION_START -> startPairing(intent.getBooleanExtra(EXTRA_DEV_OPTIONS_OFF, false))
             ACTION_SUBMIT_CODE -> submitPairingCode(intent.getStringExtra(EXTRA_PAIRING_CODE).orEmpty().trim())
-            ACTION_SHOW_CODE_INPUT -> showPairingCodeInput()
             ACTION_STOP -> stopPairing(showSuccess = false)
             ACTION_COMPLETE -> stopPairing(showSuccess = true)
             else -> stopSelf(startId)
@@ -145,31 +137,6 @@ class PairingForegroundService : Service() {
         }
     }
 
-    private fun showPairingCodeInput() {
-        val pairingPort = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
-        if (pairingPort == null) {
-            Toast.makeText(
-                this,
-                "먼저 [페어링 코드로 기기 페어링]을 눌러 6자리 코드 화면을 띄워 주세요.",
-                Toast.LENGTH_LONG
-            ).show()
-            return
-        }
-
-        if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(
-                this,
-                "간편 입력 권한이 없어 기존 알림 입력 방식을 사용합니다. 알림을 펼쳐 [코드 입력]을 눌러 주세요.",
-                Toast.LENGTH_LONG
-            ).show()
-            return
-        }
-
-        pairingCodeOverlay.show { code ->
-            submitPairingCode(code)
-        }
-    }
-
     private fun submitPairingCode(code: String) {
         val pairingPort = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
 
@@ -189,7 +156,6 @@ class PairingForegroundService : Service() {
 
         if (pairingJob?.isActive == true) return
 
-        pairingCodeOverlay.dismiss()
         startForeground(
             PairingNotificationHelper.NOTIFICATION_ID,
             PairingNotificationHelper.buildProgressNotification(this),
@@ -309,7 +275,6 @@ class PairingForegroundService : Service() {
 
     private fun stopPairing(showSuccess: Boolean) {
         unregisterDeveloperOptionsObserver()
-        pairingCodeOverlay.dismiss()
         pairingJob?.cancel()
         pairingJob = null
         adbManager.stopPairingDiscovery()
@@ -320,7 +285,6 @@ class PairingForegroundService : Service() {
 
     override fun onDestroy() {
         unregisterDeveloperOptionsObserver()
-        pairingCodeOverlay.dismiss()
         pairingJob?.cancel()
         pairingJob = null
         serviceScope.cancel()
