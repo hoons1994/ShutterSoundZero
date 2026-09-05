@@ -1,0 +1,61 @@
+name: Format Pairing Success Fix
+
+on:
+  push:
+    branches:
+      - fix/pairing-success-false-error
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/pairing-success-false-error
+          fetch-depth: 0
+
+      - name: Normalize Kotlin block
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path("app/src/main/java/com/charmingcolor/shuttersoundzero/service/PairingForegroundService.kt")
+          text = path.read_text()
+          pattern = re.compile(
+              r'\n\s*\} catch \(e: java\.util\.concurrent\.CancellationException\) \{\n'
+              r'\s*// Successful completion stops the foreground service, which cancels its coroutine\n'
+              r'\s*// scope\. Cancellation during that shutdown is expected and must not overwrite the\n'
+              r'\s*// success notification with a false pairing-error notification\.\n'
+              r'\s*Log\.i\(TAG, "Pairing workflow cancelled during service shutdown"\)\n'
+              r'\s*throw e\n'
+              r'\s*\} catch \(e: Exception\) \{\n'
+              r'\s*logFailure\("Pairing error", e\)'
+          )
+          replacement = (
+              "\n" + " " * 12 + "} catch (e: java.util.concurrent.CancellationException) {\n"
+              + " " * 16 + "// Successful completion stops the foreground service, which cancels its coroutine\n"
+              + " " * 16 + "// scope. Cancellation during that shutdown is expected and must not overwrite the\n"
+              + " " * 16 + "// success notification with a false pairing-error notification.\n"
+              + " " * 16 + "Log.i(TAG, \"Pairing workflow cancelled during service shutdown\")\n"
+              + " " * 16 + "throw e\n"
+              + " " * 12 + "} catch (e: Exception) {\n"
+              + " " * 16 + "logFailure(\"Pairing error\", e)"
+          )
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"Expected one Kotlin block, found {count}")
+          path.write_text(text)
+
+      - name: Remove one-shot workflow and push formatting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/format-pairing-success-fix.yml
+          git add app/src/main/java/com/charmingcolor/shuttersoundzero/service/PairingForegroundService.kt
+          git commit -m "chore: format pairing success fix"
+          git push origin HEAD:fix/pairing-success-false-error
