@@ -1,5 +1,10 @@
 package com.charmingcolor.shuttersoundzero.ui.settings
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -45,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
+import com.charmingcolor.shuttersoundzero.security.AppLockAuthenticator
 
 private val CardRadius = 20.dp
 private val CardPaddingH = 20.dp
@@ -58,8 +64,12 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val prefs = remember { PreferencesRepository.getInstance(context) }
+    val versionName = remember(context) { currentVersionName(context) }
     var isAutoRestore by remember { mutableStateOf(prefs.isAutoRestoreOnBootEnabled) }
     var isFirmwareCheck by remember { mutableStateOf(prefs.isFirmwareUpdateCheckEnabled) }
+    var isAppLockEnabled by remember { mutableStateOf(prefs.isAppLockEnabled) }
+    var isLockSetupInProgress by remember { mutableStateOf(false) }
+    var lockErrorMessage by remember { mutableStateOf<String?>(null) }
     var showLicenseDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -99,6 +109,53 @@ fun SettingsScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
+            GroupLabel("보안")
+            SettingsCard {
+                SwitchRow(
+                    title = "앱 잠금",
+                    subtitle = "앱 실행 시 지문 또는 PIN·패턴·비밀번호로 확인",
+                    checked = isAppLockEnabled,
+                    onCheckedChange = { enabled ->
+                        if (isLockSetupInProgress) return@SwitchRow
+
+                        if (!enabled) {
+                            isAppLockEnabled = false
+                            prefs.isAppLockEnabled = false
+                            return@SwitchRow
+                        }
+
+                        val activity = context.findActivity()
+                        if (activity == null || !AppLockAuthenticator.canAuthenticate(context)) {
+                            lockErrorMessage =
+                                "기기에 지문 또는 PIN·패턴·비밀번호를 먼저 설정한 뒤 다시 시도해 주세요."
+                            return@SwitchRow
+                        }
+
+                        isLockSetupInProgress = true
+                        AppLockAuthenticator.authenticate(
+                            activity = activity,
+                            title = "앱 잠금 설정",
+                            subtitle = "지문 또는 화면 잠금으로 본인 확인해 주세요.",
+                            onSuccess = {
+                                isLockSetupInProgress = false
+                                prefs.isAppLockEnabled = true
+                                isAppLockEnabled = true
+                            },
+                            onCancelled = {
+                                isLockSetupInProgress = false
+                            },
+                            onError = {
+                                isLockSetupInProgress = false
+                                lockErrorMessage =
+                                    "인증을 사용할 수 없습니다. 기기의 화면 잠금 설정을 확인해 주세요."
+                            }
+                        )
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             GroupLabel("자동화")
             SettingsCard {
                 SwitchRow(
@@ -133,7 +190,7 @@ fun SettingsScreen(
             SettingsCard {
                 InfoRow(
                     title = "버전",
-                    subtitle = "1.2.0"
+                    subtitle = versionName
                 )
                 RowDivider()
                 InfoRow(
@@ -149,6 +206,21 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
+        }
+
+        lockErrorMessage?.let { message ->
+            AlertDialog(
+                onDismissRequest = { lockErrorMessage = null },
+                title = { Text("앱 잠금") },
+                text = { Text(message) },
+                confirmButton = {
+                    TextButton(onClick = { lockErrorMessage = null }) {
+                        Text("확인")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         }
 
         if (showLicenseDialog) {
@@ -205,6 +277,28 @@ fun SettingsScreen(
             )
         }
     }
+}
+
+@Suppress("DEPRECATION")
+private fun currentVersionName(context: Context): String {
+    val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(0)
+        )
+    } else {
+        context.packageManager.getPackageInfo(context.packageName, 0)
+    }
+    return packageInfo.versionName ?: "-"
+}
+
+private fun Context.findActivity(): Activity? {
+    var currentContext: Context = this
+    while (currentContext is ContextWrapper) {
+        if (currentContext is Activity) return currentContext
+        currentContext = currentContext.baseContext
+    }
+    return currentContext as? Activity
 }
 
 @Composable
@@ -335,4 +429,3 @@ private fun ClickableRow(
         )
     }
 }
-
