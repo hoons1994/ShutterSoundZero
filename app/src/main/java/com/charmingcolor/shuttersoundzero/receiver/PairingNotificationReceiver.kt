@@ -3,156 +3,27 @@ package com.charmingcolor.shuttersoundzero.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.util.Log
 import androidx.core.app.RemoteInput
-import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 class PairingNotificationReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "PairingNotificationReceiver"
     }
 
-    private fun logFailure(context: Context, summary: String, error: Throwable) {
-        val isDebuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        if (isDebuggable) {
-            Log.w(TAG, "$summary: ${error.message}", error)
-        } else {
-            Log.w(TAG, "$summary (${error.javaClass.simpleName})")
-        }
-    }
-
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action ?: return
-
-        when (action) {
+        when (intent.action) {
             PairingNotificationHelper.ACTION_SUBMIT_PAIRING_CODE -> {
-                val adbManager = StandaloneAdbManager.getInstance(context)
                 val results = RemoteInput.getResultsFromIntent(intent)
-                val code = results?.getCharSequence(PairingNotificationHelper.KEY_PAIRING_CODE)?.toString()?.trim()
+                val code = results
+                    ?.getCharSequence(PairingNotificationHelper.KEY_PAIRING_CODE)
+                    ?.toString()
+                    ?.trim()
+                    .orEmpty()
 
-                if (code.isNullOrBlank() || !code.all { it.isDigit() } || code.length != 6) {
-                    PairingNotificationHelper.showPairingNotification(
-                        context,
-                        adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 },
-                        "⚠️ 숫자 6자리 페어링 코드를 정확히 입력해 주세요."
-                    )
-                    return
-                }
-
-                // 입력 직후 알림이 사라지지 않도록 즉시 '적용 중' 고정 상태로 업데이트
-                PairingNotificationHelper.showProgressNotification(context)
-
-                val pendingResult = goAsync()
-
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val timedResult = kotlinx.coroutines.withTimeoutOrNull(25_000) {
-                            // RemoteInput requires a mutable PendingIntent, so never trust endpoint
-                            // data from the delivered Intent. Resolve the pairing port only from the
-                            // app-owned mDNS discovery state.
-                            var port = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
-
-                            // mDNS가 아직 포트를 해석 중인 경우 최대 3초간 대기
-                            if (port == null) {
-                                for (i in 0 until 15) {
-                                    delay(200)
-                                    port = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
-                                    if (port != null) break
-                                }
-                            }
-
-                            if (port == null) {
-                                PairingNotificationHelper.showPairingNotification(
-                                    context,
-                                    null,
-                                    "⏳ 포트 탐색 대기 중: 화면의 6자리 코드를 다시 입력해 주세요."
-                                )
-                                return@withTimeoutOrNull true
-                            }
-
-                            // 유효한 포트를 확보했으므로 재탐색·알림 재생성을 중단하고 페어링을 시작한다.
-                            adbManager.stopPairingDiscovery()
-                            Log.i(TAG, "Attempting pairing via notification using discovered endpoint")
-                            val pairResult = adbManager.pairLocal(port, code)
-
-                            if (pairResult.isSuccess) {
-                                Log.i(TAG, "Pairing successful; applying camera mute and permissions")
-                                delay(300)
-
-                                val muteResult = adbManager.applyCameraMuteViaAdb()
-
-                                if (muteResult.isSuccess) {
-                                    Log.i(TAG, "Pairing workflow completed successfully")
-                                    // 1. 상단바 완료 알림
-                                    PairingForegroundService.complete(context)
-
-                                    // 2. 시스템 토스트 알림
-                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "✨ 셔터음 제로: 셔터음 무음화 연동이 완료되었습니다!",
-                                            android.widget.Toast.LENGTH_LONG
-                                        ).show()
-                                    }
-
-                                    // 3. 메인 앱 화면 전면으로 복귀 시도 (BAL 제한 방어)
-                                    try {
-                                        val launchIntent = Intent(context, com.charmingcolor.shuttersoundzero.MainActivity::class.java).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                        }
-                                        context.startActivity(launchIntent)
-                                    } catch (e: Exception) {
-                                        logFailure(context, "Background activity launch restricted", e)
-                                    }
-                                } else {
-                                    muteResult.exceptionOrNull()?.let {
-                                        logFailure(context, "Mute apply failed after pairing", it)
-                                    } ?: Log.w(TAG, "Mute apply failed after pairing")
-                                    PairingNotificationHelper.showPairingNotification(
-                                        context,
-                                        null,
-                                        "⚠️ 페어링은 완료됐지만 무음 설정 적용에 실패했습니다. 무선 디버깅 상태를 확인한 뒤 다시 시도해 주세요."
-                                    )
-                                }
-                            } else {
-                                pairResult.exceptionOrNull()?.let {
-                                    logFailure(context, "Pairing failed from notification", it)
-                                } ?: Log.w(TAG, "Pairing failed from notification")
-                                PairingNotificationHelper.showPairingNotification(
-                                    context,
-                                    port,
-                                    "❌ 페어링에 실패했습니다. 화면의 6자리 코드를 확인해 다시 입력해 주세요."
-                                )
-                            }
-                            true
-                        }
-
-                        if (timedResult == null) {
-                            Log.w(TAG, "Notification pairing timed out after 25 seconds")
-                            PairingNotificationHelper.showPairingNotification(
-                                context,
-                                null,
-                                "⏱️ 시간 초과: 코드를 다시 입력해 주세요."
-                            )
-                        }
-                    } catch (e: Exception) {
-                        logFailure(context, "Notification pairing error", e)
-                        PairingNotificationHelper.showPairingNotification(
-                            context,
-                            null,
-                            "❌ 페어링 중 오류가 발생했습니다. 무선 디버깅 상태를 확인하고 다시 시도해 주세요."
-                        )
-                    } finally {
-                        pendingResult.finish()
-                    }
-                }
+                PairingForegroundService.submitCode(context, code)
             }
 
             PairingNotificationHelper.ACTION_CANCEL_PAIRING -> {
