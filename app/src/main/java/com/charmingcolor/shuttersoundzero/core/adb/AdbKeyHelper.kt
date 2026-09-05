@@ -69,16 +69,18 @@ object AdbKeyHelper {
         val certHolder = certBuilder.build(signer)
         val cert = JcaX509CertificateConverter().getCertificate(certHolder)
 
-        try {
+        return try {
             privFile.writeBytes(keyPair.private.encoded)
             certFile.writeBytes(cert.encoded)
+
+            loadIdentity(privFile, certFile)
+                ?: throw IOException("Persisted ADB identity could not be validated")
         } catch (e: Exception) {
             privFile.delete()
             certFile.delete()
-            Log.e(TAG, "Failed to persist ADB identity: ${e.message}")
+            Log.e(TAG, "Failed to persist a valid ADB identity: ${e.message}", e)
+            throw IOException("Failed to persist a valid ADB identity", e)
         }
-
-        return Pair(keyPair.private, cert)
     }
 
     private fun loadIdentity(privFile: File, certFile: File): Pair<PrivateKey, Certificate>? {
@@ -90,6 +92,12 @@ object AdbKeyHelper {
             val cert = certFile.inputStream().use {
                 CertificateFactory.getInstance("X.509").generateCertificate(it)
             }
+
+            if (!AdbIdentityValidator.keysMatch(privateKey, cert.publicKey)) {
+                Log.w(TAG, "ADB private key does not match the persisted certificate")
+                return null
+            }
+
             Pair(privateKey, cert)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load existing ADB identity: ${e.message}")
