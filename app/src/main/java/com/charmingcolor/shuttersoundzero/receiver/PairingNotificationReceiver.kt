@@ -23,13 +23,14 @@ class PairingNotificationReceiver : BroadcastReceiver() {
 
         when (action) {
             PairingNotificationHelper.ACTION_SUBMIT_PAIRING_CODE -> {
+                val adbManager = StandaloneAdbManager.getInstance(context)
                 val results = RemoteInput.getResultsFromIntent(intent)
                 val code = results?.getCharSequence(PairingNotificationHelper.KEY_PAIRING_CODE)?.toString()?.trim()
 
                 if (code.isNullOrBlank() || !code.all { it.isDigit() } || code.length != 6) {
                     PairingNotificationHelper.showPairingNotification(
                         context,
-                        intent.getIntExtra("pairing_port", -1).takeIf { it > 0 },
+                        adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 },
                         "⚠️ 숫자 6자리 페어링 코드를 정확히 입력해 주세요."
                     )
                     return
@@ -38,25 +39,26 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                 // 입력 직후 알림이 사라지지 않도록 즉시 '적용 중' 고정 상태로 업데이트
                 PairingNotificationHelper.showProgressNotification(context)
 
-                val adbManager = StandaloneAdbManager.getInstance(context)
                 val pendingResult = goAsync()
 
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         val timedResult = kotlinx.coroutines.withTimeoutOrNull(25_000) {
-                            var port = intent.getIntExtra("pairing_port", -1).takeIf { it > 0 }
-                                ?: adbManager.lastDiscoveredPairingPort
+                            // RemoteInput requires a mutable PendingIntent, so never trust endpoint
+                            // data from the delivered Intent. Resolve the pairing port only from the
+                            // app-owned mDNS discovery state.
+                            var port = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
 
                             // mDNS가 아직 포트를 해석 중인 경우 최대 3초간 대기
-                            if (port == null || port <= 0) {
+                            if (port == null) {
                                 for (i in 0 until 15) {
                                     delay(200)
-                                    port = adbManager.lastDiscoveredPairingPort
-                                    if (port != null && port > 0) break
+                                    port = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
+                                    if (port != null) break
                                 }
                             }
 
-                            if (port == null || port <= 0) {
+                            if (port == null) {
                                 PairingNotificationHelper.showPairingNotification(
                                     context,
                                     null,
@@ -67,7 +69,7 @@ class PairingNotificationReceiver : BroadcastReceiver() {
 
                             // 유효한 포트를 확보했으므로 재탐색·알림 재생성을 중단하고 페어링을 시작한다.
                             adbManager.stopPairingDiscovery()
-                            Log.i(TAG, "Attempting pairing via notification with port $port")
+                            Log.i(TAG, "Attempting pairing via notification with discovered port $port")
                             val pairResult = adbManager.pairLocal(port, code)
 
                             if (pairResult.isSuccess) {
