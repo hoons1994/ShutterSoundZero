@@ -56,12 +56,27 @@ PREVIOUS_APK="${PREVIOUS_APKS[0]}"
 extract_signer_digest() {
   local apk="$1"
   local certificate_output
+  local digest
+
   certificate_output="$("$APKSIGNER" verify --verbose --print-certs "$apk")"
-  printf '%s\n' "$certificate_output" \
-    | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
-    | sed -n '1p' \
-    | tr '[:upper:]' '[:lower:]' \
-    | tr -d '[:space:]'
+
+  # Build Tools 36 and older commonly emit:
+  #   Signer #1 certificate SHA-256 digest: <digest>
+  # Build Tools 37 may emit a scheme-qualified prefix instead:
+  #   V3.0 Signer: certificate SHA-256 digest: <digest>
+  # Match the stable field label rather than the version-specific prefix.
+  digest="$(
+    printf '%s\n' "$certificate_output" \
+      | awk -F'certificate SHA-256 digest: ' 'NF > 1 { print $2; exit }' \
+      | tr '[:upper:]' '[:lower:]' \
+      | tr -d '[:space:]'
+  )"
+
+  if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+    return 0
+  fi
+
+  printf '%s\n' "$digest"
 }
 
 CURRENT_DIGEST="$(extract_signer_digest "$CURRENT_APK")"
