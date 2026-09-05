@@ -1,0 +1,42 @@
+name: Refresh Historical Release Notes
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/refresh-historical-release-notes.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update v1.0.0 release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: |
+            ShutterSoundZero의 첫 공식 릴리즈입니다.
+            삼성 갤럭시의 CSC 설정을 이용한 카메라 셔터음 제어, 기기 단독 무선 디버깅 페어링, 빠른 설정 타일과 재부팅·소프트웨어 업데이트 후 상태 복원 기능을 제공합니다.
+            PC나 별도 외부 앱 없이 1회 권한 연동 후 사용할 수 있도록 기본 사용 흐름을 구성했습니다.
+        run: gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/379312983" -f body="$BODY"
+
+      - name: Update v1.1.0 release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: |
+            권한 설정 과정의 안내 UX를 개선했습니다.
+            개발자 옵션과 무선 디버깅 설정으로 이동할 때 상단바 알림을 활용하도록 안내 방식을 개선하고, 필요한 안내가 더 오래 유지되도록 다듬었습니다.
+            초기 페어링 과정에서 다음 단계를 놓치지 않도록 가독성과 사용 편의성을 높였습니다.
+        run: gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/379602250" -f body="$BODY"
+
+      - name: Update v1.2.0 release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: |
+            무선 디버깅 페어링 과정을 더 직관적이고 안정적으로 개선했습니다.
+            갤럭시 설정 화면의 관련 항목 하이라이트와 페어링 알림 흐름을 다듬고, Android 17 지원과 최신 Android API 호환성을 강화했습니다.
+            권한 연동 과정의 안정성과 전반적인 사용성을 개선했습니다.
+        run: gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/380411480" -f body="$BODY"
