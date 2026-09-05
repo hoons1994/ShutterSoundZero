@@ -16,6 +16,9 @@
     <!-- 소프트웨어 업데이트 감지 결과 및 복원 안내 알림 권한 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 페어링 중 삼성 설정 화면을 유지한 채 6자리 입력창만 표시하기 위한 특별 권한 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- 로컬 무선 디버깅 소켓, Wi-Fi 연결 확인, mDNS 수신 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -51,14 +54,13 @@
             </intent-filter>
         </activity>
 
-        <!-- 간략 알림을 탭하면 시스템 설정 화면 위에 작은 6자리 코드 입력창만 표시 -->
+        <!-- 실제 페어링 전에만 간편 입력용 오버레이 권한을 안내 -->
         <activity
-            android:name=".ui.pairing.PairingCodeActivity"
+            android:name=".ui.pairing.PairingOverlayPermissionActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:finishOnTaskLaunch="true"
             android:launchMode="singleTop"
-            android:noHistory="true"
             android:taskAffinity=""
             android:theme="@style/Theme.ShutterSoundZero.PairingDialogHost" />
 

@@ -15,7 +15,6 @@ import com.charmingcolor.shuttersoundzero.MainActivity
 import com.charmingcolor.shuttersoundzero.R
 import com.charmingcolor.shuttersoundzero.receiver.PairingNotificationReceiver
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
-import com.charmingcolor.shuttersoundzero.ui.pairing.PairingCodeActivity
 
 object PairingNotificationHelper {
     const val CHANNEL_ID = "adb_pairing_private_v2"
@@ -60,7 +59,7 @@ object PairingNotificationHelper {
 
     /**
      * 페어링 코드가 입력되어 성공할 때까지 꺼지지 않는 상단바 알림 표시.
-     * 포트가 감지된 뒤에는 알림 자체를 탭해 작은 코드 입력창을 바로 열 수 있다.
+     * 알림 자체를 눌러도 Activity를 전환하지 않고 실행 중인 서비스에 입력창 표시를 요청한다.
      */
     fun buildPairingNotification(
         context: Context,
@@ -107,22 +106,16 @@ object PairingNotificationHelper {
             cancelPendingIntent
         ).build()
 
-        // 포트가 감지된 상태에서는 간략 알림 자체를 탭해 바로 코드 입력창을 연다.
-        // 그 전 단계에서는 기존처럼 앱 메인 화면으로 돌아간다.
-        val contentIntent = if (pairingPort != null) {
-            Intent(context, PairingCodeActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            }
-        } else {
-            Intent(context, MainActivity::class.java)
-        }
-        val contentPendingIntent = PendingIntent.getActivity(
+        // 간략 알림을 눌렀을 때 Activity를 띄우면 삼성의 페어링 코드 모드가 닫힐 수 있다.
+        // 서비스 PendingIntent로 처리해 현재 설정 화면을 그대로 유지한다.
+        val contentPendingIntent = PendingIntent.getService(
             context,
-            if (pairingPort != null) 10 else 0,
-            contentIntent,
+            10,
+            PairingForegroundService.showCodeInputIntent(context),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val canUseOverlay = Settings.canDrawOverlays(context)
         val title = when {
             statusMessage != null -> statusMessage
             isDevOptionsOff -> "개발자 옵션 활성화"
@@ -132,15 +125,18 @@ object PairingNotificationHelper {
         val summaryText = when {
             statusDetail != null -> statusDetail
             isDevOptionsOff -> "강조된 [소프트웨어 정보]를 누른 후 [빌드번호]를 7번 누르세요"
-            pairingPort != null -> "알림을 눌러 화면의 6자리 코드를 바로 입력하세요"
+            pairingPort != null && canUseOverlay -> "알림을 눌러 6자리 코드 입력창을 여세요"
+            pairingPort != null -> "알림을 펼쳐 [코드 입력]으로 6자리 코드를 입력하세요"
             else -> "[무선 디버깅] → [페어링 코드로 기기 페어링]을 누르세요"
         }
         val bigText = when {
             statusDetail != null -> statusDetail
-            statusMessage != null && pairingPort != null -> "$statusMessage\n알림을 누르거나 아래 [코드 입력]을 눌러 화면의 6자리 코드를 입력해 주세요."
+            statusMessage != null && pairingPort != null && canUseOverlay -> "$statusMessage\n이 알림을 누르면 설정 화면을 닫지 않고 6자리 코드 입력창이 표시됩니다."
+            statusMessage != null && pairingPort != null -> "$statusMessage\n알림을 펼친 뒤 [코드 입력]을 눌러 6자리 코드를 입력해 주세요."
             statusMessage != null -> "$statusMessage\n화면의 안내에 따라 페어링을 계속해 주세요."
             isDevOptionsOff -> "휴대전화 정보 화면에서 강조된 [소프트웨어 정보]를 누르세요."
-            pairingPort != null -> "무선 페어링 서비스가 감지되었습니다.\n이 알림을 누르면 6자리 코드 입력창이 바로 열립니다. 알림을 펼친 경우에는 아래 [코드 입력]도 사용할 수 있습니다."
+            pairingPort != null && canUseOverlay -> "무선 페어링 서비스가 감지되었습니다.\n이 알림을 누르면 삼성 설정 화면을 그대로 둔 채 6자리 입력창만 표시됩니다. 알림을 펼친 경우에는 아래 [코드 입력]도 사용할 수 있습니다."
+            pairingPort != null -> "무선 페어링 서비스가 감지되었습니다.\n알림을 펼친 뒤 아래 [코드 입력]을 눌러 화면의 6자리 코드를 입력해 주세요."
             else -> "개발자 옵션의 [무선 디버깅] → [페어링 코드로 기기 페어링]을 눌러 6자리 코드 화면을 띄워 주세요."
         }
 
@@ -264,7 +260,7 @@ object PairingNotificationHelper {
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(if (completed) "ShutterSoundZero 알림" else "무선 디버깅 페어링 진행 중")
-            .setContentText(if (completed) "앱을 열어 결과를 확인하세요." else "알림을 눌러 페어링을 계속하세요.")
+            .setContentText(if (completed) "앱을 열어 결과를 확인하세요." else "페어링을 계속하려면 기기를 잠금 해제하세요.")
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(!completed)
