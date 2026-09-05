@@ -93,8 +93,8 @@ object AdbKeyHelper {
                 CertificateFactory.getInstance("X.509").generateCertificate(it)
             }
 
-            if (!AdbIdentityValidator.keysMatch(privateKey, cert.publicKey)) {
-                Log.w(TAG, "ADB private key does not match the persisted certificate")
+            if (!AdbIdentityValidator.isValid(privateKey, cert)) {
+                Log.w(TAG, "Persisted ADB identity failed cryptographic validation")
                 return null
             }
 
