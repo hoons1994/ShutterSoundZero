@@ -248,6 +248,9 @@ fun MainScreen(
                             requestPairingNotification()
                         }
                     },
+                    onOpenNotificationSettings = {
+                        PairingNotificationHelper.openNotificationSettings(context)
+                    },
                     onResetPermission = { viewModel.resetPermission() }
                 )
             }
@@ -560,6 +563,7 @@ private fun InfoRow(title: String, subtitle: String) {
 private fun PermissionSetupSection(
     hasPermission: Boolean,
     onStartNotificationPairing: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     onResetPermission: () -> Unit
 ) {
     StatusRow(
@@ -589,7 +593,21 @@ private fun PermissionSetupSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 19.sp
             )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "알림 팝업이 간략하게 보이나요? [자세한 팝업]으로 바꾸면 [코드 입력] 버튼을 바로 사용할 수 있습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 19.sp
+            )
         }
+
+        RowDivider()
+
+        ActionRow(
+            title = "앱 알림 설정 열기",
+            onClick = onOpenNotificationSettings
+        )
 
         RowDivider()
 
