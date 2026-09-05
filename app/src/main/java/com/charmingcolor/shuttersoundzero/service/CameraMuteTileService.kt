@@ -51,10 +51,10 @@ class CameraMuteTileService : TileService() {
             return
         }
 
-        if (!CscMuteManager.hasWritePermission(context)) {
+        if (prefs.isPermissionRevokedByUser || !CscMuteManager.hasWritePermission(context)) {
             Toast.makeText(
                 context,
-                "권한이 필요합니다. 앱을 실행하여 권한 설정을 완료해 주세요.",
+                "권한 연동이 해제되어 있습니다. 앱을 열어 다시 연동해 주세요.",
                 Toast.LENGTH_LONG
             ).show()
             updateTileState()
@@ -85,14 +85,21 @@ class CameraMuteTileService : TileService() {
                 }
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             } else {
-                // 직접 쓰기 시도(폴백)
-                val directResult = CscMuteManager.setCscShutterSoundMuted(context, targetMuted)
+                // ADB 시도 중 사용자가 권한 연동을 해제했을 수 있으므로 직접 쓰기 전 다시 검증한다.
+                val canDirectWrite = !prefs.isPermissionRevokedByUser &&
+                    CscMuteManager.hasWritePermission(context)
+                val directResult = if (canDirectWrite) {
+                    CscMuteManager.setCscShutterSoundMuted(context, targetMuted)
+                } else {
+                    Result.failure(SecurityException("Permission unavailable"))
+                }
+
                 if (directResult.isSuccess) {
                     prefs.shouldMuteOnBoot = targetMuted
                     Toast.makeText(context, "카메라 셔터음 설정이 변경되었습니다.", Toast.LENGTH_SHORT).show()
                 } else {
                     prefs.shouldMuteOnBoot = currentMuted
-                    Log.w(TAG, "Tile toggle failed via ADB and direct write: ${result.exceptionOrNull()?.message}")
+                    Log.w(TAG, "Tile toggle failed via ADB and direct write")
                     Toast.makeText(context, "설정 변경 실패: Wi-Fi 및 무선 디버깅을 확인해 주세요.", Toast.LENGTH_LONG).show()
                 }
             }
@@ -103,14 +110,20 @@ class CameraMuteTileService : TileService() {
     private fun updateTileState() {
         val tile = qsTile ?: return
         val context = applicationContext
-        val isMuted = CscMuteManager.isCscShutterSoundMuted(context)
+        val prefs = PreferencesRepository.getInstance(context)
+        val hasUsablePermission = !prefs.isPermissionRevokedByUser &&
+            CscMuteManager.hasWritePermission(context)
+        val isMuted = hasUsablePermission && CscMuteManager.isCscShutterSoundMuted(context)
 
         // Refresh the icon explicitly so existing tiles do not remain stuck on a cached launcher icon.
         tile.icon = Icon.createWithResource(this, R.drawable.ic_qs_camera_mute)
         tile.state = if (isMuted) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         tile.label = getString(R.string.tile_name)
-        tile.subtitle = if (isMuted) getString(R.string.tile_muted) else getString(R.string.tile_unmuted)
+        tile.subtitle = when {
+            !hasUsablePermission -> getString(R.string.tile_permission_required)
+            isMuted -> getString(R.string.tile_muted)
+            else -> getString(R.string.tile_unmuted)
+        }
         tile.updateTile()
     }
 }
-
