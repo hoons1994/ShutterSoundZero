@@ -51,6 +51,13 @@ class PreferencesRepository(context: Context) {
         get() = prefs.getBoolean(KEY_APP_LOCK_ENABLED, false)
         set(value) = prefs.edit { putBoolean(KEY_APP_LOCK_ENABLED, value) }
 
+    /**
+     * 최초 무선 페어링 전에 One UI의 앱별 "자세한 팝업" 설정을 한 번 안내했는지 여부.
+     */
+    var hasShownPairingPopupStyleGuide: Boolean
+        get() = prefs.getBoolean(KEY_PAIRING_POPUP_STYLE_GUIDE_SHOWN, false)
+        set(value) = prefs.edit { putBoolean(KEY_PAIRING_POPUP_STYLE_GUIDE_SHOWN, value) }
+
     companion object {
         private const val PREF_NAME = "galaxy_camera_mute_prefs"
         private const val KEY_SHOULD_MUTE_ON_BOOT = "should_mute_on_boot"
@@ -62,6 +69,7 @@ class PreferencesRepository(context: Context) {
         private const val KEY_LAST_CONNECT_PORT = "last_connect_port"
         private const val KEY_PERMISSION_REVOKED_BY_USER = "permission_revoked_by_user"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
+        private const val KEY_PAIRING_POPUP_STYLE_GUIDE_SHOWN = "pairing_popup_style_guide_shown"
 
         @Volatile
         private var INSTANCE: PreferencesRepository? = null
