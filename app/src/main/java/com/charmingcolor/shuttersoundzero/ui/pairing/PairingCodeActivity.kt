@@ -37,7 +37,6 @@ class PairingCodeActivity : Activity() {
             textSize = 24f
             isSingleLine = true
             hint = "6자리 코드"
-            importantForAutofill = IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         }
 
         val container = FrameLayout(this).apply {
