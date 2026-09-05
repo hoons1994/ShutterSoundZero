@@ -25,41 +25,36 @@ jobs:
 
           service = Path("app/src/main/java/com/charmingcolor/shuttersoundzero/service/PairingForegroundService.kt")
           text = service.read_text()
-          old = '''            } catch (e: Exception) {
-                logFailure("Pairing error", e)
-                PairingNotificationHelper.showPairingNotification(
-                    this@PairingForegroundService,
-                    null,
-                    "❌ 페어링 중 오류가 발생했습니다. 무선 디버깅 상태를 확인하고 다시 시도해 주세요."
-                )
-            } finally {'''
-          new = '''            } catch (e: java.util.concurrent.CancellationException) {
+          needle = '} catch (e: Exception) {\n                logFailure("Pairing error", e)'
+          replacement = '''} catch (e: java.util.concurrent.CancellationException) {
                 // Successful completion stops the foreground service, which cancels its coroutine
                 // scope. Cancellation during that shutdown is expected and must not overwrite the
                 // success notification with a false pairing-error notification.
                 Log.i(TAG, "Pairing workflow cancelled during service shutdown")
                 throw e
             } catch (e: Exception) {
-                logFailure("Pairing error", e)
-                PairingNotificationHelper.showPairingNotification(
-                    this@PairingForegroundService,
-                    null,
-                    "❌ 페어링 중 오류가 발생했습니다. 무선 디버깅 상태를 확인하고 다시 시도해 주세요."
-                )
-            } finally {'''
-          if old not in text:
+                logFailure("Pairing error", e)'''
+          if needle not in text:
               raise SystemExit("Pairing service target block not found")
-          service.write_text(text.replace(old, new, 1))
+          service.write_text(text.replace(needle, replacement, 1))
 
           helper = Path("app/src/main/java/com/charmingcolor/shuttersoundzero/ui/notification/PairingNotificationHelper.kt")
           text = helper.read_text()
-          old = '''            statusMessage != null && pairingPort != null -> "$statusMessage\\n알림의 [코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요."
-            statusMessage != null -> "$statusMessage\\n화면의 안내에 따라 페어링을 계속해 주세요."'''
-          new = '''            statusMessage != null && pairingPort != null -> "알림의 [코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요."
-            statusMessage != null -> "화면의 안내에 따라 페어링을 계속해 주세요."'''
-          if old not in text:
+          first = 'statusMessage != null && pairingPort != null -> "$statusMessage\\n알림의 [코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요."'
+          second = 'statusMessage != null -> "$statusMessage\\n화면의 안내에 따라 페어링을 계속해 주세요."'
+          if first not in text or second not in text:
               raise SystemExit("Notification helper target block not found")
-          helper.write_text(text.replace(old, new, 1))
+          text = text.replace(
+              first,
+              'statusMessage != null && pairingPort != null -> "알림의 [코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요."',
+              1,
+          )
+          text = text.replace(
+              second,
+              'statusMessage != null -> "화면의 안내에 따라 페어링을 계속해 주세요."',
+              1,
+          )
+          helper.write_text(text)
 
       - name: Remove one-shot workflow and push fix
         run: |
