@@ -8,12 +8,16 @@ Shutter Sound Zero는 `vX.Y.Z` 형식의 Git 태그가 `main` 브랜치의 커�
 2. 변경 사항을 PR로 병합하고 Android CI가 통과했는지 확인합니다.
 3. 병합된 `main` 커밋에 `vX.Y.Z` 형식의 태그를 생성합니다.
 4. `Android Release` workflow가 태그와 `versionName`의 일치 여부를 확인합니다.
-5. Release keystore를 GitHub Actions Secret에서 복원합니다.
-6. `assembleRelease`로 서명된 APK를 빌드합니다.
-7. `apksigner`로 APK 서명을 검증합니다.
-8. APK와 SHA-256 체크섬을 GitHub Release에 업로드합니다.
+5. Release keystore를 GitHub Actions Secret에서 제한된 파일 권한으로 복원합니다.
+6. `assembleRelease`로 서명된 APK를 빌드한 뒤 임시 keystore 파일을 삭제합니다.
+7. `apksigner`로 APK 자체의 서명 유효성을 검증합니다.
+8. 직전 안정 GitHub Release의 APK를 내려받아 서명 인증서 SHA-256 지문이 동일한지 확인합니다.
+9. APK provenance attestation을 생성하고 다시 검증합니다.
+10. APK, SHA-256 체크섬, Sigstore attestation bundle을 GitHub Release에 업로드합니다.
 
-태그가 `main`에 포함되지 않은 커밋을 가리키거나, 태그 버전과 앱의 `versionName`이 다르면 릴리즈는 중단됩니다.
+태그가 `main`에 포함되지 않은 커밋을 가리키거나, 태그 버전과 앱의 `versionName`이 다르거나, 새 APK의 서명 인증서가 직전 공식 안정 릴리스와 다르면 릴리즈는 중단됩니다.
+
+수동 Signed Release Preflight도 `main`에서만 실행되며 같은 서명 인증서 연속성 검사를 수행합니다. 따라서 잘못된 keystore가 등록되었거나 서명 키가 의도치 않게 바뀐 경우 실제 GitHub Release를 만들기 전에 탐지할 수 있습니다.
 
 ---
 
@@ -85,9 +89,20 @@ git push origin v1.3.0
 ```text
 ShutterSoundZero-v1.3.0.apk
 ShutterSoundZero-v1.3.0.apk.sha256
+ShutterSoundZero-v1.3.0.apk.sigstore.json
 ```
 
 Release notes는 GitHub가 자동 생성합니다.
+
+---
+
+## 서명 인증서 연속성 검사
+
+`verify-release-signer.sh`는 GitHub API에서 가장 최근의 draft/prerelease가 아닌 안정 릴리스를 찾고 해당 릴리스의 APK를 내려받습니다. 새로 빌드한 APK와 직전 공식 APK 각각에서 `apksigner --print-certs`로 첫 번째 signer의 SHA-256 인증서 지문을 추출한 뒤 두 값을 비교합니다.
+
+현재 릴리스 태그를 다시 실행하는 경우에는 자기 자신을 비교 대상으로 사용하지 않고 그 이전 안정 릴리스를 선택합니다. 직전 릴리스에서 APK를 찾을 수 없거나 APK가 둘 이상이어서 기준 파일이 모호하거나 인증서 지문을 추출할 수 없거나 지문이 다르면 fail-closed 방식으로 릴리스를 중단합니다.
+
+이 검사는 keystore 비밀번호나 개인키를 외부에 공개하지 않습니다. 비교되는 인증서 SHA-256 지문은 APK에 포함된 공개 인증서에서 계산되는 값입니다.
 
 ---
 
@@ -95,8 +110,9 @@ Release notes는 GitHub가 자동 생성합니다.
 
 - GitHub Actions Secret 4개가 모두 등록되어 있는지
 - `release.jks`가 기존 배포 APK와 동일한 서명 키인지
+- 직전 안정 GitHub Release에 공식 APK가 정확히 1개 존재하는지
 - Git 태그 `vX.Y.Z`와 `versionName`이 일치하는지
 - 태그가 `main`에 포함된 커밋을 가리키는지
 - Android SDK 또는 Gradle 빌드가 정상인지
 
-기존에 배포한 앱을 업데이트하려면 반드시 기존 APK와 동일한 signing key를 사용해야 합니다.
+기존에 배포한 앱을 업데이트하려면 반드시 기존 APK와 동일한 signing key를 사용해야 합니다. 이 저장소의 Release workflow는 이제 그 연속성을 자동으로 검증합니다.

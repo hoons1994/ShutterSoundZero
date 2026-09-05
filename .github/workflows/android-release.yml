@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/android-release.yml'
+      - '.github/scripts/verify-release-signer.sh'
   push:
     tags:
       - 'v*.*.*'
@@ -130,6 +131,12 @@ jobs:
           "$APKSIGNER" verify --verbose --print-certs "$APK_PATH"
           echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
+      - name: Verify release signing certificate continuity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/verify-release-signer.sh "$APK_PATH" "$ANDROID_HOME/build-tools/37.0.0/apksigner"
+
       - name: Prepare preflight asset
         shell: bash
         run: |
@@ -182,6 +189,7 @@ jobs:
             echo
             echo "- Commit: \`$GITHUB_SHA\`"
             echo '- APK signature: verified with apksigner'
+            echo '- Signing certificate continuity: verified against the previous stable release'
             echo '- Provenance: generated and verified'
             echo '- GitHub Release: not created'
             echo '- Signed APK: not uploaded as a workflow artifact'
@@ -315,6 +323,12 @@ jobs:
 
           "$APKSIGNER" verify --verbose --print-certs "$APK_PATH"
           echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
+
+      - name: Verify release signing certificate continuity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/verify-release-signer.sh "$APK_PATH" "$ANDROID_HOME/build-tools/37.0.0/apksigner" "$GITHUB_REF_NAME"
 
       - name: Prepare release assets
         shell: bash
