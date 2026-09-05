@@ -7,6 +7,9 @@
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- 앱 잠금의 지문/생체인증 사용 권한 -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
     <!-- 기기 재부팅 시 CSC 무음 설정 자동 유지 권한 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -37,8 +40,6 @@
         android:supportsRtl="true"
         android:windowSoftInputMode="adjustResize"
         android:theme="@style/Theme.ShutterSoundZero">
-
-
 
         <activity
             android:name=".MainActivity"
