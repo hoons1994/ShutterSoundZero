@@ -3,6 +3,7 @@ package com.charmingcolor.shuttersoundzero.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.util.Log
 import androidx.core.app.RemoteInput
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
@@ -16,6 +17,15 @@ import kotlinx.coroutines.launch
 class PairingNotificationReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "PairingNotificationReceiver"
+    }
+
+    private fun logFailure(context: Context, summary: String, error: Throwable) {
+        val isDebuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (isDebuggable) {
+            Log.w(TAG, "$summary: ${error.message}", error)
+        } else {
+            Log.w(TAG, "$summary (${error.javaClass.simpleName})")
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -69,17 +79,17 @@ class PairingNotificationReceiver : BroadcastReceiver() {
 
                             // 유효한 포트를 확보했으므로 재탐색·알림 재생성을 중단하고 페어링을 시작한다.
                             adbManager.stopPairingDiscovery()
-                            Log.i(TAG, "Attempting pairing via notification with discovered port $port")
+                            Log.i(TAG, "Attempting pairing via notification using discovered endpoint")
                             val pairResult = adbManager.pairLocal(port, code)
 
                             if (pairResult.isSuccess) {
-                                Log.i(TAG, "Pairing successful! Applying camera mute & permissions via ADB...")
+                                Log.i(TAG, "Pairing successful; applying camera mute and permissions")
                                 delay(300)
 
                                 val muteResult = adbManager.applyCameraMuteViaAdb()
 
                                 if (muteResult.isSuccess) {
-                                    Log.i(TAG, "All completed successfully!")
+                                    Log.i(TAG, "Pairing workflow completed successfully")
                                     // 1. 상단바 완료 알림
                                     PairingForegroundService.complete(context)
 
@@ -99,11 +109,12 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                                         }
                                         context.startActivity(launchIntent)
                                     } catch (e: Exception) {
-                                        Log.w(TAG, "Background activity launch restricted: ${e.message}")
+                                        logFailure(context, "Background activity launch restricted", e)
                                     }
                                 } else {
-                                    val errorMsg = muteResult.exceptionOrNull()?.message ?: "unknown"
-                                    Log.w(TAG, "Mute apply failed after pairing: $errorMsg")
+                                    muteResult.exceptionOrNull()?.let {
+                                        logFailure(context, "Mute apply failed after pairing", it)
+                                    } ?: Log.w(TAG, "Mute apply failed after pairing")
                                     PairingNotificationHelper.showPairingNotification(
                                         context,
                                         null,
@@ -111,8 +122,9 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                                     )
                                 }
                             } else {
-                                val errorMsg = pairResult.exceptionOrNull()?.message ?: "unknown"
-                                Log.w(TAG, "Pairing failed from notification: $errorMsg")
+                                pairResult.exceptionOrNull()?.let {
+                                    logFailure(context, "Pairing failed from notification", it)
+                                } ?: Log.w(TAG, "Pairing failed from notification")
                                 PairingNotificationHelper.showPairingNotification(
                                     context,
                                     port,
@@ -131,7 +143,7 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                             )
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Notification pairing error: ${e.message}", e)
+                        logFailure(context, "Notification pairing error", e)
                         PairingNotificationHelper.showPairingNotification(
                             context,
                             null,

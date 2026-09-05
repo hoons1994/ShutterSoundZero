@@ -2,9 +2,9 @@ package com.charmingcolor.shuttersoundzero.core.adb
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.os.SystemClock
 import android.util.Log
-import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
 import io.github.muntashirakon.adb.android.AdbMdns
@@ -48,12 +48,27 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         }
     }
 
+    private val isDebuggable: Boolean
+        get() = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    private inline fun logSensitive(message: () -> String) {
+        if (isDebuggable) Log.d(TAG, message())
+    }
+
+    private fun logFailure(summary: String, error: Throwable) {
+        if (isDebuggable) {
+            Log.w(TAG, "$summary: ${error.message}", error)
+        } else {
+            Log.w(TAG, "$summary (${error.javaClass.simpleName})")
+        }
+    }
+
     init {
         try {
             java.security.Security.insertProviderAt(org.conscrypt.Conscrypt.newProvider(), 1)
             Log.i(TAG, "Conscrypt security provider registered at position 1")
         } catch (e: Throwable) {
-            Log.w(TAG, "Failed to register Conscrypt provider: ${e.message}")
+            logFailure("Failed to register Conscrypt provider", e)
         }
     }
 
@@ -110,7 +125,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
             pairingMdns?.stop()
             pairingConnectMdns?.stop()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to stop pairing discovery: ${e.message}")
+            logFailure("Failed to stop pairing discovery", e)
         }
         pairingMdns = null
         pairingConnectMdns = null
@@ -127,8 +142,9 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         acquireMulticastLock()
         val mdns = AdbMdns(context, serviceType) { address, port ->
             if (address != null) {
-                if (LocalAdbEndpointPolicy.isLocalDeviceAddress(address)) {
-                    Log.i(TAG, "Local mDNS service discovered: $address:$port for $serviceType")
+                if (LocalAdbEndpointPolicy.isLocalDeviceAddress(address) && port in 1..65535) {
+                    Log.i(TAG, "Local mDNS service discovered")
+                    logSensitive { "Local mDNS endpoint: $address:$port for $serviceType" }
                     if (serviceType == AdbMdns.SERVICE_TYPE_TLS_PAIRING) {
                         lastDiscoveredPairingPort = port
                     } else if (serviceType == AdbMdns.SERVICE_TYPE_TLS_CONNECT) {
@@ -136,7 +152,8 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                     }
                     onDiscovered(address, port)
                 } else {
-                    Log.w(TAG, "Ignoring non-local mDNS service: $address:$port for $serviceType")
+                    Log.w(TAG, "Ignoring invalid or non-local mDNS service")
+                    logSensitive { "Rejected mDNS endpoint: $address:$port for $serviceType" }
                 }
             }
         }
@@ -155,7 +172,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 Log.d(TAG, "Acquired WifiManager MulticastLock for mDNS discovery")
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to acquire MulticastLock: ${e.message}")
+            logFailure("Failed to acquire MulticastLock", e)
         }
     }
 
@@ -173,20 +190,25 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
      * 6자리 페어링 코드로 로컬 기기와 페어링 수행
      */
     suspend fun pairLocal(port: Int, pairingCode: String): Result<Unit> = withContext(Dispatchers.IO) {
+        if (port !in 1..65535) {
+            return@withContext Result.failure(IOException("유효한 페어링 포트를 찾지 못했습니다."))
+        }
+
         acquireMulticastLock()
         try {
             val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
-            Log.i(TAG, "Attempting pairing with $host:$port")
+            Log.i(TAG, "Attempting local ADB pairing")
+            logSensitive { "Pairing endpoint: $host:$port" }
             val success = pair(host, port, pairingCode)
             if (success) {
-                Log.i(TAG, "Pairing successful!")
+                Log.i(TAG, "Pairing successful")
                 Result.success(Unit)
             } else {
-                Result.failure(Exception("페어링에 실패했습니다. 페어링 코드를 다시 확인해 주세요."))
+                Result.failure(IOException("페어링에 실패했습니다. 페어링 코드를 다시 확인해 주세요."))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Pairing error: ${e.message}", e)
-            Result.failure(e)
+            logFailure("Pairing failed", e)
+            Result.failure(IOException("페어링 중 오류가 발생했습니다. 무선 디버깅 상태와 코드를 확인해 주세요."))
         } finally {
             releaseMulticastLock()
         }
@@ -200,47 +222,52 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         try {
             val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
             val prefs = PreferencesRepository.getInstance(context)
-            Log.i(TAG, "Connecting to ADB daemon at $host...")
+            Log.i(TAG, "Connecting to local ADB daemon")
+            logSensitive { "Local ADB host: $host" }
 
             var connected = false
 
             // 1. 지정된 connectPort가 있다면 직접 연결 시도
-            if (connectPort != null && connectPort > 0) {
+            val requestedPort = connectPort?.takeIf { it in 1..65535 }
+            if (requestedPort != null) {
                 try {
-                    Log.i(TAG, "Attempting direct connect to port $connectPort")
-                    connected = connect(host, connectPort)
+                    Log.i(TAG, "Attempting direct ADB connect")
+                    logSensitive { "Direct connect port: $requestedPort" }
+                    connected = connect(host, requestedPort)
                 } catch (e: Exception) {
-                    Log.w(TAG, "Direct connect to $connectPort failed: ${e.message}")
+                    logFailure("Direct ADB connect failed", e)
                 }
             }
 
             // 2. 이미 캐시된 connectPort가 있다면 시도
-            val cachedPort = lastDiscoveredConnectPort ?: if (prefs.lastConnectPort > 0) prefs.lastConnectPort else null
-            if (!connected && cachedPort != null && cachedPort > 0) {
+            val cachedPort = (lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 })
+                ?.takeIf { it in 1..65535 }
+            if (!connected && cachedPort != null) {
                 try {
-                    Log.i(TAG, "Attempting connect to cached port $cachedPort")
+                    Log.i(TAG, "Attempting cached ADB connect")
+                    logSensitive { "Cached connect port: $cachedPort" }
                     connected = connect(host, cachedPort)
                 } catch (e: Exception) {
-                    Log.w(TAG, "Connect to cached port $cachedPort failed: ${e.message}")
+                    logFailure("Cached ADB connect failed", e)
                 }
             }
 
             // 3. 현재 기기가 게시한 adb-tls-connect 서비스만 탐색하여 연결
             if (!connected) {
                 try {
-                    Log.i(TAG, "Attempting local-only TLS discovery with 7s timeout...")
+                    Log.i(TAG, "Attempting local-only TLS discovery with 7s timeout")
                     connected = connectLocalTls(7000)
                 } catch (e: Exception) {
-                    Log.w(TAG, "Local-only TLS discovery failed: ${e.message}")
+                    logFailure("Local-only TLS discovery failed", e)
                 }
             }
 
             if (!connected && !isConnected) {
-                return@withContext Result.failure(Exception("ADB 연결 실패: 무선 디버깅이 활성화되어 있는지 확인해 주세요."))
+                return@withContext Result.failure(IOException("ADB 연결 실패: 무선 디버깅이 활성화되어 있는지 확인해 주세요."))
             }
 
             saveConnectedPort()
-            Log.i(TAG, "ADB session established! Granting WRITE_SECURE_SETTINGS & enabling camera mute...")
+            Log.i(TAG, "ADB session established; applying permission and camera setting")
 
             // 1) WRITE_SECURE_SETTINGS 권한 부여 (영구 권한)
             executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
@@ -248,7 +275,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
             // 2) CSC 셔터음 키 무음화 설정 (0) - 권한 부여 시 켜짐 상태 적용
             executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 0")
 
-            Log.i(TAG, "WRITE_SECURE_SETTINGS granted & camera mute enabled successfully via standalone ADB!")
+            Log.i(TAG, "ADB permission and camera setting applied successfully")
 
             // 3) 설정 저장
             prefs.shouldMuteOnBoot = true
@@ -256,9 +283,9 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
 
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to grant permission via ADB: ${e.message}", e)
+            logFailure("Failed to apply permission via ADB", e)
             try { disconnect() } catch (_: Exception) {}
-            Result.failure(e)
+            Result.failure(IOException("ADB 권한 적용 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
         } finally {
             releaseMulticastLock()
         }
@@ -272,13 +299,16 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         try {
             val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
             val prefs = PreferencesRepository.getInstance(context)
-            val savedPort = lastDiscoveredConnectPort ?: if (prefs.lastConnectPort > 0) prefs.lastConnectPort else null
+            val savedPort = (lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 })
+                ?.takeIf { it in 1..65535 }
 
             var connected = isConnected
-            if (!connected && savedPort != null && savedPort > 0) {
+            if (!connected && savedPort != null) {
                 try {
                     connected = connect(host, savedPort)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    logFailure("Saved-port reconnect for permission revoke failed", e)
+                }
             }
 
             if (!connected) {
@@ -286,13 +316,13 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                     connected = connectLocalTls(4000)
                     if (connected) saveConnectedPort()
                 } catch (e: Exception) {
-                    Log.w(TAG, "Local-only TLS reconnect for permission revoke failed: ${e.message}")
+                    logFailure("Local-only TLS reconnect for permission revoke failed", e)
                 }
             }
 
             if (!connected) {
                 return@withContext Result.failure(
-                    Exception("ADB 연결 실패: 무선 디버깅을 켠 뒤 다시 시도해 주세요.")
+                    IOException("ADB 연결 실패: 무선 디버깅을 켠 뒤 다시 시도해 주세요.")
                 )
             }
 
@@ -303,7 +333,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
             try {
                 disconnect()
             } catch (e: Exception) {
-                Log.w(TAG, "ADB disconnect after permission revoke failed: ${e.message}")
+                logFailure("ADB disconnect after permission revoke failed", e)
             }
 
             prefs.shouldMuteOnBoot = false
@@ -311,8 +341,8 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
             prefs.isPermissionRevokedByUser = true
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to revoke permission via ADB: ${e.message}", e)
-            Result.failure(e)
+            logFailure("Failed to revoke permission via ADB", e)
+            Result.failure(IOException("권한 연동 해제 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
         } finally {
             releaseMulticastLock()
         }
@@ -333,51 +363,53 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 try {
                     executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
                     prefs.shouldMuteOnBoot = enableMute
-                    Log.i(TAG, "Reused active ADB session to set CSC key to $targetVal")
+                    Log.i(TAG, "Reused active ADB session for camera setting")
                     return@withContext Result.success(Unit)
                 } catch (e: Exception) {
-                    Log.w(TAG, "Active session failed, will reconnect: ${e.message}")
+                    logFailure("Active ADB session failed; reconnecting", e)
                     try { disconnect() } catch (_: Exception) {}
                 }
             }
 
             var connected = false
-            val savedPort = lastDiscoveredConnectPort ?: if (prefs.lastConnectPort > 0) prefs.lastConnectPort else null
+            val savedPort = (lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 })
+                ?.takeIf { it in 1..65535 }
 
             // 2. 저장된 포트로 초고속 직접 연결 시도
-            if (savedPort != null && savedPort > 0) {
+            if (savedPort != null) {
                 try {
-                    Log.i(TAG, "Attempting fast reconnect to saved port $savedPort")
+                    Log.i(TAG, "Attempting fast ADB reconnect")
+                    logSensitive { "Saved reconnect port: $savedPort" }
                     connected = connect(host, savedPort)
                     if (connected) saveConnectedPort()
                 } catch (e: Exception) {
-                    Log.w(TAG, "Fast connect to saved port $savedPort failed: ${e.message}")
+                    logFailure("Fast ADB reconnect failed", e)
                 }
             }
 
             // 3. 현재 기기의 mDNS 서비스만 탐색하여 TLS 연결
             if (!connected) {
                 try {
-                    Log.i(TAG, "Attempting local-only TLS discovery with 4s timeout...")
+                    Log.i(TAG, "Attempting local-only TLS discovery with 4s timeout")
                     connected = connectLocalTls(4000)
                     if (connected) saveConnectedPort()
                 } catch (e: Exception) {
-                    Log.w(TAG, "Local-only TLS discovery failed: ${e.message}")
+                    logFailure("Local-only TLS discovery failed", e)
                 }
             }
 
             if (!connected && !isConnected) {
-                return@withContext Result.failure(Exception("무선 디버깅에 연결할 수 없습니다."))
+                return@withContext Result.failure(IOException("무선 디버깅에 연결할 수 없습니다."))
             }
 
             executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
             prefs.shouldMuteOnBoot = enableMute
-            Log.i(TAG, "Successfully set csc_pref_camera_forced_shuttersound_key to $targetVal via ADB")
+            Log.i(TAG, "Camera setting updated successfully via ADB")
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to set camera mute via ADB: ${e.message}", e)
+            logFailure("Failed to update camera setting via ADB", e)
             try { disconnect() } catch (_: Exception) {}
-            Result.failure(e)
+            Result.failure(IOException("셔터음 설정 변경 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
         } finally {
             releaseMulticastLock()
         }
@@ -388,13 +420,14 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
             val adbConn = adbConnection ?: return
             val portField = adbConn.javaClass.getDeclaredField("mPort").apply { isAccessible = true }
             val port = portField.getInt(adbConn)
-            if (port > 0) {
+            if (port in 1..65535) {
                 lastDiscoveredConnectPort = port
                 PreferencesRepository.getInstance(context).lastConnectPort = port
-                Log.i(TAG, "Saved active ADB connect port: $port")
+                Log.i(TAG, "Saved active ADB connect endpoint")
+                logSensitive { "Saved active ADB connect port: $port" }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Could not extract connect port: ${e.message}")
+            logFailure("Could not extract connect port", e)
         }
     }
 
@@ -413,7 +446,9 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 false
             } else {
                 val (address, port) = endpoint.get() ?: return false
-                Log.i(TAG, "Connecting only to local TLS ADB service at $address:$port")
+                if (port !in 1..65535) return false
+                Log.i(TAG, "Connecting to discovered local TLS ADB service")
+                logSensitive { "Discovered TLS endpoint: $address:$port" }
                 val hostAddress = address.hostAddress ?: return false
                 connect(hostAddress, port)
             }
@@ -424,7 +459,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
 
     private fun executeShellCommand(cmd: String): String {
         val marker = "__SSZ_EXIT_${SystemClock.elapsedRealtimeNanos()}_${shellCommandSequence.incrementAndGet()}__"
-        val wrappedCommand = "$cmd; printf '\\n$marker:%d\\n' \$?"
+        val wrappedCommand = "$cmd; printf '\n$marker:%d\n' \$?"
         val output = ByteArrayOutputStream()
         var commandResult: AdbShellCommandResult? = null
         val deadline = SystemClock.elapsedRealtime() + SHELL_COMMAND_TIMEOUT_MS
@@ -469,16 +504,20 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         val result = commandResult
             ?: throw IOException("ADB 명령의 완료 상태를 확인할 수 없습니다.")
         if (result.exitCode != 0) {
-            val errorOutput = result.output
-                .lineSequence()
-                .joinToString(" ")
-                .trim()
-                .take(512)
-                .ifBlank { "출력 없음" }
-            throw IOException("ADB 명령이 종료 코드 ${result.exitCode}로 실패했습니다: $errorOutput")
+            if (isDebuggable) {
+                val errorOutput = result.output
+                    .lineSequence()
+                    .joinToString(" ")
+                    .trim()
+                    .take(512)
+                    .ifBlank { "출력 없음" }
+                Log.w(TAG, "ADB shell command failed with exit code ${result.exitCode}: $errorOutput")
+            } else {
+                Log.w(TAG, "ADB shell command failed with exit code ${result.exitCode}")
+            }
+            throw IOException("ADB 명령이 종료 코드 ${result.exitCode}로 실패했습니다.")
         }
 
         return result.output
     }
 }
-
