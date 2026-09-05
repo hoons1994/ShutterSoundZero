@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var prefs: PreferencesRepository
     private var isAppUnlocked by mutableStateOf(true)
     private var authenticationInProgress = false
+    private var autoPromptPending = false
     private var unlockErrorMessage by mutableStateOf<String?>(null)
 
     private val requestNotificationPermissionLauncher =
@@ -39,6 +40,7 @@ class MainActivity : ComponentActivity() {
 
         prefs = PreferencesRepository.getInstance(this)
         isAppUnlocked = !prefs.isAppLockEnabled || AppLockSession.isUnlocked
+        autoPromptPending = prefs.isAppLockEnabled && !isAppUnlocked
 
         // 삼성 갤럭시 기기 여부 확인 - 갤럭시가 아닌 기기일 경우 안내 토스트 표시
         if (!com.charmingcolor.shuttersoundzero.core.CscMuteManager.isSamsungDevice()) {
@@ -76,8 +78,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::prefs.isInitialized && prefs.isAppLockEnabled && !isAppUnlocked && !authenticationInProgress) {
-            window.decorView.post { requestAppUnlock() }
+        if (
+            ::prefs.isInitialized &&
+            autoPromptPending &&
+            prefs.isAppLockEnabled &&
+            !isAppUnlocked &&
+            !authenticationInProgress
+        ) {
+            autoPromptPending = false
+            window.decorView.post {
+                if (!isFinishing && prefs.isAppLockEnabled && !isAppUnlocked) {
+                    requestAppUnlock()
+                }
+            }
         }
     }
 
@@ -90,6 +103,7 @@ class MainActivity : ComponentActivity() {
         ) {
             AppLockSession.lock()
             isAppUnlocked = false
+            autoPromptPending = true
             unlockErrorMessage = null
         }
         super.onStop()
