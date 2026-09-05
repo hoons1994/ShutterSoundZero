@@ -47,7 +47,8 @@ jobs:
               raise SystemExit('preflight condition not found')
           text = text.replace(old_preflight, new_preflight, 1)
 
-          dispatch_job = """
+          token_expr = '${' + '{ github.token }}'
+          dispatch_job = f"""
             dispatch-tag-release:
               name: Dispatch Tagged Release
               if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -59,9 +60,8 @@ jobs:
                 - name: Dispatch release on main
                   shell: bash
                   env:
-                    GH_TOKEN: ${{ github.token }}
-                    RELEASE_TAG: ${{ github.ref_name }}
-                  run: gh workflow run android-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f release_tag="$RELEASE_TAG"
+                    GH_TOKEN: {token_expr}
+                  run: gh workflow run android-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f release_tag="$GITHUB_REF_NAME"
 
           """
           marker = "  preflight:\n"
@@ -77,34 +77,13 @@ jobs:
               raise SystemExit('release condition not found')
           release = release.replace(old_release_if, new_release_if, 1)
 
-          old_checkout = """      - name: Checkout source
-                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-                with:
-                  fetch-depth: 0
-
-              - name: Verify tag belongs to main
+          verify_marker = "      - name: Verify tag belongs to main\n"
+          if verify_marker not in release:
+              raise SystemExit('tag verification step marker not found')
+          resolve_step = """      - name: Resolve release tag
                 shell: bash
                 run: |
-                  git fetch origin main
-                  if ! git merge-base --is-ancestor \"$GITHUB_SHA\" \"origin/main\"; then
-                    echo \"Release tags must point to a commit contained in main.\"
-                    exit 1
-                  fi
-          """
-          # Build the exact block with normal YAML indentation.
-          old_checkout = old_checkout.replace('              ', '      ', 1)
-          old_checkout = old_checkout.replace('                ', '        ')
-          new_checkout = """      - name: Checkout source
-                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-                with:
-                  fetch-depth: 0
-
-              - name: Resolve release tag
-                shell: bash
-                env:
-                  DISPATCH_RELEASE_TAG: ${{ inputs.release_tag }}
-                run: |
-                  RELEASE_TAG="$DISPATCH_RELEASE_TAG"
+                  RELEASE_TAG="$(jq -r '.inputs.release_tag // empty' "$GITHUB_EVENT_PATH")"
                   if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
                     echo "Invalid release tag: $RELEASE_TAG"
                     exit 1
@@ -115,27 +94,29 @@ jobs:
                   echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
                   echo "RELEASE_SOURCE_SHA=$RELEASE_SOURCE_SHA" >> "$GITHUB_ENV"
 
-              - name: Verify tag belongs to main
-                shell: bash
-                run: |
-                  git fetch origin main
-                  if ! git merge-base --is-ancestor "$RELEASE_SOURCE_SHA" "origin/main"; then
-                    echo "Release tags must point to a commit contained in main."
-                    exit 1
-                  fi
           """
-          new_checkout = new_checkout.replace('              ', '      ', 1)
-          new_checkout = new_checkout.replace('                ', '        ')
-          if old_checkout not in release:
-              raise SystemExit('release checkout/ancestry block not found')
-          release = release.replace(old_checkout, new_checkout, 1)
+          resolve_step = resolve_step.replace('              ', '      ', 1)
+          resolve_step = resolve_step.replace('                ', '        ')
+          release = release.replace(verify_marker, resolve_step + verify_marker, 1)
+
+          old_ancestry = 'if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/main"; then'
+          new_ancestry = 'if ! git merge-base --is-ancestor "$RELEASE_SOURCE_SHA" "origin/main"; then'
+          if old_ancestry not in release:
+              raise SystemExit('ancestry check not found')
+          release = release.replace(old_ancestry, new_ancestry, 1)
 
           replacements = {
               'TAG_VERSION="${GITHUB_REF_NAME#v}"': 'TAG_VERSION="${RELEASE_TAG#v}"',
-              '"$GITHUB_REF_NAME"': '"$RELEASE_TAG"',
-              'ShutterSoundZero-${GITHUB_REF_NAME}.apk': 'ShutterSoundZero-${RELEASE_TAG}.apk',
+              'bash .github/scripts/verify-release-signer.sh "$APK_PATH" "$ANDROID_HOME/build-tools/37.0.0/apksigner" "$GITHUB_REF_NAME"': 'bash .github/scripts/verify-release-signer.sh "$APK_PATH" "$ANDROID_HOME/build-tools/37.0.0/apksigner" "$RELEASE_TAG"',
+              'RELEASE_APK="dist/ShutterSoundZero-${GITHUB_REF_NAME}.apk"': 'RELEASE_APK="dist/ShutterSoundZero-${RELEASE_TAG}.apk"',
+              'gh release view "$GITHUB_REF_NAME"': 'gh release view "$RELEASE_TAG"',
+              'gh release upload "$GITHUB_REF_NAME"': 'gh release upload "$RELEASE_TAG"',
+              'gh release create "$GITHUB_REF_NAME"': 'gh release create "$RELEASE_TAG"',
+              '--title "$GITHUB_REF_NAME"': '--title "$RELEASE_TAG"',
           }
           for old, new in replacements.items():
+              if old not in release:
+                  raise SystemExit(f'expected release token not found: {old}')
               release = release.replace(old, new)
 
           path.write_text(head + "  release:\n" + release)
