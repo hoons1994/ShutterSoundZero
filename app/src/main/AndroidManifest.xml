@@ -51,6 +51,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 최초 페어링 전에 앱별 자세한 알림 팝업 설정을 한 번 안내 -->
+        <activity
+            android:name=".ui.pairing.PairingPopupStyleGuideActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.ShutterSoundZero.PairingGuide" />
+
         <!-- 상단바 빠른 설정(Quick Settings) 타일 -->
         <service
             android:name=".service.CameraMuteTileService"
