@@ -34,6 +34,10 @@ class PreferencesRepository(context: Context) {
         get() = prefs.getBoolean(KEY_PERMISSION_REVOKED_BY_USER, false)
         set(value) = prefs.edit { putBoolean(KEY_PERMISSION_REVOKED_BY_USER, value) }
 
+    var isAppLockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_APP_LOCK_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(KEY_APP_LOCK_ENABLED, value) }
+
     companion object {
         private const val PREF_NAME = "galaxy_camera_mute_prefs"
         private const val KEY_AUTO_RESTORE_BOOT = "auto_restore_boot"
@@ -42,6 +46,7 @@ class PreferencesRepository(context: Context) {
         private const val KEY_LAST_FIRMWARE_FINGERPRINT = "last_firmware_fingerprint"
         private const val KEY_LAST_CONNECT_PORT = "last_connect_port"
         private const val KEY_PERMISSION_REVOKED_BY_USER = "permission_revoked_by_user"
+        private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
 
         @Volatile
         private var INSTANCE: PreferencesRepository? = null
@@ -53,4 +58,3 @@ class PreferencesRepository(context: Context) {
         }
     }
 }
-
