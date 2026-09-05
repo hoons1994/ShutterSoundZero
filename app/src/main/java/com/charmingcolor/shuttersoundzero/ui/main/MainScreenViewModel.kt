@@ -2,12 +2,14 @@ package com.charmingcolor.shuttersoundzero.ui.main
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
+import com.charmingcolor.shuttersoundzero.ui.pairing.PairingPopupStyleGuideActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,12 +77,22 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun startNotificationPairing(context: Context) {
         prefs.isPermissionRevokedByUser = false
+
+        if (!prefs.hasShownPairingPopupStyleGuide) {
+            context.startActivity(Intent(context, PairingPopupStyleGuideActivity::class.java))
+            return
+        }
+
+        startPairingNow(context)
+    }
+
+    private fun startPairingNow(context: Context) {
         val devOptionsOff = !CscMuteManager.isDeveloperOptionsEnabled(context)
         PairingForegroundService.start(context, devOptionsOff)
         CscMuteManager.openPairingSetupScreen(context)
         _uiState.update {
             it.copy(
-                infoMessage = "[페어링 코드로 기기 페어링] 화면에서 간략 알림의 ▼를 눌러 펼친 뒤 [6자리 코드 입력]을 눌러 주세요."
+                infoMessage = "[페어링 코드로 기기 페어링] 화면에서 알림의 [코드 입력]을 사용해 6자리 코드를 입력해 주세요."
             )
         }
     }
