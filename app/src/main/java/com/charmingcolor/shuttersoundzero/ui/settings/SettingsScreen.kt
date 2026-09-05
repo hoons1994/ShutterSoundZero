@@ -67,8 +67,10 @@ fun SettingsScreen(
     val context = LocalContext.current
     val prefs = remember { PreferencesRepository.getInstance(context) }
     val versionName = remember(context) { currentVersionName(context) }
-    var isAutoRestore by remember { mutableStateOf(prefs.isAutoRestoreOnBootEnabled) }
-    var isFirmwareCheck by remember { mutableStateOf(prefs.isFirmwareUpdateCheckEnabled) }
+
+    var isSoftwareUpdateCheck by remember {
+        mutableStateOf(prefs.isSoftwareUpdateCheckEnabled)
+    }
     var isAppLockEnabled by remember { mutableStateOf(prefs.isAppLockEnabled) }
     var isLockSetupInProgress by remember { mutableStateOf(false) }
     var lockErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -177,22 +179,16 @@ fun SettingsScreen(
             GroupLabel("자동화")
             SettingsCard {
                 SwitchRow(
-                    title = "재부팅 후 자동 유지",
-                    subtitle = "기기가 꺼졌다 켜져도 무음 상태 자동 복원",
-                    checked = isAutoRestore,
-                    onCheckedChange = {
-                        isAutoRestore = it
-                        prefs.isAutoRestoreOnBootEnabled = it
-                    }
-                )
-                RowDivider()
-                SwitchRow(
-                    title = "펌웨어 업데이트 자동 감지",
-                    subtitle = "시스템 업데이트로 설정 초기화 시 자동 복원 및 알림",
-                    checked = isFirmwareCheck,
-                    onCheckedChange = {
-                        isFirmwareCheck = it
-                        prefs.isFirmwareUpdateCheckEnabled = it
+                    title = "소프트웨어 업데이트 자동 감지",
+                    subtitle = "업데이트 후 카메라 무음 설정 상태를 확인하고 필요한 경우 자동 복원",
+                    checked = isSoftwareUpdateCheck,
+                    onCheckedChange = { enabled ->
+                        isSoftwareUpdateCheck = enabled
+                        prefs.isSoftwareUpdateCheckEnabled = enabled
+                        if (enabled) {
+                            // 켜는 시점의 현재 빌드를 기준으로 저장해 다음 업데이트부터 정확히 감지한다.
+                            prefs.lastSoftwareFingerprint = Build.FINGERPRINT
+                        }
                     }
                 )
                 RowDivider()

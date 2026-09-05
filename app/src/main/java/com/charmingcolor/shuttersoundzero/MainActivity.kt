@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         prefs = PreferencesRepository.getInstance(this)
+        prefs.ensureSoftwareUpdateBaseline(Build.FINGERPRINT)
         isAppUnlocked = !prefs.isAppLockEnabled || AppLockSession.isUnlocked
         autoPromptPending = prefs.isAppLockEnabled && !isAppUnlocked
 
