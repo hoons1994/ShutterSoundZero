@@ -127,8 +127,8 @@ object PairingNotificationHelper {
         }
         val bigText = when {
             statusDetail != null -> statusDetail
-            statusMessage != null && pairingPort != null -> "$statusMessage\n알림의 [코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요."
-            statusMessage != null -> "$statusMessage\n화면의 안내에 따라 페어링을 계속해 주세요."
+            statusMessage != null && pairingPort != null -> "알림의 [코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요."
+            statusMessage != null -> "화면의 안내에 따라 페어링을 계속해 주세요."
             isDevOptionsOff -> "휴대전화 정보 화면에서 강조된 [소프트웨어 정보]를 누르세요."
             pairingPort != null -> "무선 페어링 서비스가 감지되었습니다 (포트: $pairingPort)!\n화면에 뜬 6자리 페어링 코드를 아래 [코드 입력]에 입력해 주세요."
             else -> "개발자 옵션의 [무선 디버깅] → [페어링 코드로 기기 페어링] 화면을 띄운 상태에서 상단바를 내려 아래 [코드 입력]을 터치해 주세요."
