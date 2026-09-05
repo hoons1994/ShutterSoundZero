@@ -59,8 +59,8 @@ object PairingNotificationHelper {
 
     /**
      * 페어링 코드가 입력되어 성공할 때까지 유지되는 상단바 알림.
-     * 삼성의 페어링 코드 화면을 건드리지 않기 위해 Activity나 오버레이를 열지 않고
-     * 알림 RemoteInput만 사용한다.
+     * 하나의 표준 알림을 사용해 One UI 자세히 보기에서는 기존처럼 액션을 바로 노출하고,
+     * 간략히 보기에서는 시스템이 접은 알림을 펼쳐 같은 RemoteInput 액션을 사용한다.
      */
     fun buildPairingNotification(
         context: Context,
@@ -72,7 +72,7 @@ object PairingNotificationHelper {
         createNotificationChannel(context)
 
         val remoteInput = RemoteInput.Builder(KEY_PAIRING_CODE)
-            .setLabel("화면의 6자리 코드 입력")
+            .setLabel("6자리 코드 (예: 123456)")
             .setAllowFreeFormInput(true)
             .build()
 
@@ -90,17 +90,15 @@ object PairingNotificationHelper {
                 (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
         )
 
+        // Keep this action deliberately close to the original notification implementation.
+        // Detailed pop-up users can interact with it directly while brief pop-up users can expand
+        // the notification and use the exact same RemoteInput path.
         val replyAction = NotificationCompat.Action.Builder(
             R.mipmap.ic_launcher,
-            "6자리 코드 입력",
+            "코드 입력",
             submitPendingIntent
         )
             .addRemoteInput(remoteInput)
-            .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
-            .setAllowGeneratedReplies(false)
-            .setShowsUserInterface(false)
-            .setEmphasisHint(NotificationCompat.Action.EMPHASIS_PRIMARY)
-            .setStyleHint(NotificationCompat.Action.STYLE_TEXT_ONLY)
             .build()
 
         val cancelPendingIntent = PendingIntent.getService(
@@ -111,32 +109,28 @@ object PairingNotificationHelper {
         )
         val cancelAction = NotificationCompat.Action.Builder(
             R.mipmap.ic_launcher,
-            "페어링 취소",
+            "취소",
             cancelPendingIntent
-        )
-            .setShowsUserInterface(false)
-            .setEmphasisHint(NotificationCompat.Action.EMPHASIS_SECONDARY)
-            .setStyleHint(NotificationCompat.Action.STYLE_TEXT_ONLY)
-            .build()
+        ).build()
 
         val title = when {
             statusMessage != null -> statusMessage
             isDevOptionsOff -> "개발자 옵션 활성화"
-            pairingPort != null -> "6자리 페어링 코드 입력"
+            pairingPort != null -> "페어링 코드 입력"
             else -> "무선 디버깅 페어링"
         }
         val summaryText = when {
             statusDetail != null -> statusDetail
             isDevOptionsOff -> "강조된 [소프트웨어 정보]를 누른 후 [빌드번호]를 7번 누르세요"
-            pairingPort != null -> "간략 알림의 ▼를 눌러 [6자리 코드 입력]을 선택하세요"
+            pairingPort != null -> "▼로 펼치거나 [코드 입력]을 눌러 6자리 코드를 입력하세요"
             else -> "[무선 디버깅] → [페어링 코드로 기기 페어링]을 누르세요"
         }
         val bigText = when {
             statusDetail != null -> statusDetail
-            statusMessage != null && pairingPort != null -> "$statusMessage\n알림의 [6자리 코드 입력]을 눌러 화면에 표시된 코드를 입력해 주세요."
+            statusMessage != null && pairingPort != null -> "$statusMessage\n알림의 [코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요."
             statusMessage != null -> "$statusMessage\n화면의 안내에 따라 페어링을 계속해 주세요."
             isDevOptionsOff -> "휴대전화 정보 화면에서 강조된 [소프트웨어 정보]를 누르세요."
-            pairingPort != null -> "무선 페어링 서비스가 감지되었습니다.\n간략 알림 오른쪽의 ▼를 눌러 펼친 뒤 [6자리 코드 입력]을 누르면 알림 안에서 바로 입력할 수 있습니다."
+            pairingPort != null -> "무선 페어링 서비스가 감지되었습니다.\n알림의 [코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요. 간략 알림에서는 ▼로 펼치면 같은 버튼을 사용할 수 있습니다."
             else -> "개발자 옵션의 [무선 디버깅] → [페어링 코드로 기기 페어링]을 눌러 6자리 코드 화면을 띄워 주세요."
         }
 
@@ -153,18 +147,15 @@ object PairingNotificationHelper {
             .setAutoCancel(false)
             .setOnlyAlertOnce(false)
 
-        if (statusMessage != null || pairingPort != null) {
+        // Plain pairing notifications intentionally stay on the standard template. This lets
+        // One UI Detailed pop-up render the action buttons the way it did before. BigTextStyle is
+        // reserved for actual status/error messages that benefit from the extra explanation.
+        if (statusMessage != null) {
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
         }
 
-        if (pairingPort != null) {
-            // Keep the input action first and visually primary. This is the shortest safe path on
-            // One UI while preserving Samsung's pairing-code screen in the foreground.
-            builder.addAction(replyAction)
-            builder.addAction(cancelAction)
-        } else {
-            builder.addAction(cancelAction)
-        }
+        if (pairingPort != null) builder.addAction(replyAction)
+        builder.addAction(cancelAction)
 
         val notification = builder.build()
         notification.flags = notification.flags or
