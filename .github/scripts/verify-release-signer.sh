@@ -59,6 +59,7 @@ extract_signer_digest() {
   certificate_output="$("$APKSIGNER" verify --verbose --print-certs "$apk")"
   printf '%s\n' "$certificate_output" \
     | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+    | sed -n '1p' \
     | tr '[:upper:]' '[:lower:]' \
     | tr -d '[:space:]'
 }
