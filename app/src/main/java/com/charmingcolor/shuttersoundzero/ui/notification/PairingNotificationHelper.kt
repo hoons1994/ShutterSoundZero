@@ -43,7 +43,7 @@ object PairingNotificationHelper {
             "무선 페어링 알림",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "무선 디버깅 6자리 페어링 코드를 빠르게 입력할 수 있도록 안내합니다."
+            description = "무선 디버깅 6자리 페어링 코드를 알림에서 바로 입력할 수 있도록 안내합니다."
             setShowBadge(true)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 200, 100, 200)
@@ -58,8 +58,9 @@ object PairingNotificationHelper {
     }
 
     /**
-     * 페어링 코드가 입력되어 성공할 때까지 꺼지지 않는 상단바 알림 표시.
-     * 알림 자체를 눌러도 Activity를 전환하지 않고 실행 중인 서비스에 입력창 표시를 요청한다.
+     * 페어링 코드가 입력되어 성공할 때까지 유지되는 상단바 알림.
+     * 삼성의 페어링 코드 화면을 건드리지 않기 위해 Activity나 오버레이를 열지 않고
+     * 알림 RemoteInput만 사용한다.
      */
     fun buildPairingNotification(
         context: Context,
@@ -71,7 +72,8 @@ object PairingNotificationHelper {
         createNotificationChannel(context)
 
         val remoteInput = RemoteInput.Builder(KEY_PAIRING_CODE)
-            .setLabel("6자리 코드 (예: 123456)")
+            .setLabel("화면의 6자리 코드 입력")
+            .setAllowFreeFormInput(true)
             .build()
 
         // RemoteInput requires a mutable PendingIntent on modern Android. Keep the authoritative
@@ -90,9 +92,16 @@ object PairingNotificationHelper {
 
         val replyAction = NotificationCompat.Action.Builder(
             R.mipmap.ic_launcher,
-            "코드 입력",
+            "6자리 코드 입력",
             submitPendingIntent
-        ).addRemoteInput(remoteInput).build()
+        )
+            .addRemoteInput(remoteInput)
+            .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
+            .setAllowGeneratedReplies(false)
+            .setShowsUserInterface(false)
+            .setEmphasisHint(NotificationCompat.Action.EMPHASIS_PRIMARY)
+            .setStyleHint(NotificationCompat.Action.STYLE_TEXT_ONLY)
+            .build()
 
         val cancelPendingIntent = PendingIntent.getService(
             context,
@@ -102,41 +111,32 @@ object PairingNotificationHelper {
         )
         val cancelAction = NotificationCompat.Action.Builder(
             R.mipmap.ic_launcher,
-            "취소",
+            "페어링 취소",
             cancelPendingIntent
-        ).build()
-
-        // 간략 알림을 눌렀을 때 Activity를 띄우면 삼성의 페어링 코드 모드가 닫힐 수 있다.
-        // 서비스 PendingIntent로 처리해 현재 설정 화면을 그대로 유지한다.
-        val contentPendingIntent = PendingIntent.getService(
-            context,
-            10,
-            PairingForegroundService.showCodeInputIntent(context),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+            .setShowsUserInterface(false)
+            .setEmphasisHint(NotificationCompat.Action.EMPHASIS_SECONDARY)
+            .setStyleHint(NotificationCompat.Action.STYLE_TEXT_ONLY)
+            .build()
 
-        val canUseOverlay = Settings.canDrawOverlays(context)
         val title = when {
             statusMessage != null -> statusMessage
             isDevOptionsOff -> "개발자 옵션 활성화"
-            pairingPort != null -> "페어링 코드 입력"
+            pairingPort != null -> "6자리 페어링 코드 입력"
             else -> "무선 디버깅 페어링"
         }
         val summaryText = when {
             statusDetail != null -> statusDetail
             isDevOptionsOff -> "강조된 [소프트웨어 정보]를 누른 후 [빌드번호]를 7번 누르세요"
-            pairingPort != null && canUseOverlay -> "알림을 눌러 6자리 코드 입력창을 여세요"
-            pairingPort != null -> "알림을 펼쳐 [코드 입력]으로 6자리 코드를 입력하세요"
+            pairingPort != null -> "간략 알림의 ▼를 눌러 [6자리 코드 입력]을 선택하세요"
             else -> "[무선 디버깅] → [페어링 코드로 기기 페어링]을 누르세요"
         }
         val bigText = when {
             statusDetail != null -> statusDetail
-            statusMessage != null && pairingPort != null && canUseOverlay -> "$statusMessage\n이 알림을 누르면 설정 화면을 닫지 않고 6자리 코드 입력창이 표시됩니다."
-            statusMessage != null && pairingPort != null -> "$statusMessage\n알림을 펼친 뒤 [코드 입력]을 눌러 6자리 코드를 입력해 주세요."
+            statusMessage != null && pairingPort != null -> "$statusMessage\n알림의 [6자리 코드 입력]을 눌러 화면에 표시된 코드를 입력해 주세요."
             statusMessage != null -> "$statusMessage\n화면의 안내에 따라 페어링을 계속해 주세요."
             isDevOptionsOff -> "휴대전화 정보 화면에서 강조된 [소프트웨어 정보]를 누르세요."
-            pairingPort != null && canUseOverlay -> "무선 페어링 서비스가 감지되었습니다.\n이 알림을 누르면 삼성 설정 화면을 그대로 둔 채 6자리 입력창만 표시됩니다. 알림을 펼친 경우에는 아래 [코드 입력]도 사용할 수 있습니다."
-            pairingPort != null -> "무선 페어링 서비스가 감지되었습니다.\n알림을 펼친 뒤 아래 [코드 입력]을 눌러 화면의 6자리 코드를 입력해 주세요."
+            pairingPort != null -> "무선 페어링 서비스가 감지되었습니다.\n간략 알림 오른쪽의 ▼를 눌러 펼친 뒤 [6자리 코드 입력]을 누르면 알림 안에서 바로 입력할 수 있습니다."
             else -> "개발자 옵션의 [무선 디버깅] → [페어링 코드로 기기 페어링]을 눌러 6자리 코드 화면을 띄워 주세요."
         }
 
@@ -151,14 +151,20 @@ object PairingNotificationHelper {
             .setPublicVersion(buildRedactedPublicVersion(context, completed = false))
             .setOngoing(true)
             .setAutoCancel(false)
-            .setContentIntent(contentPendingIntent)
+            .setOnlyAlertOnce(false)
 
         if (statusMessage != null || pairingPort != null) {
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
         }
 
-        if (pairingPort != null) builder.addAction(replyAction)
-        builder.addAction(cancelAction)
+        if (pairingPort != null) {
+            // Keep the input action first and visually primary. This is the shortest safe path on
+            // One UI while preserving Samsung's pairing-code screen in the foreground.
+            builder.addAction(replyAction)
+            builder.addAction(cancelAction)
+        } else {
+            builder.addAction(cancelAction)
+        }
 
         val notification = builder.build()
         notification.flags = notification.flags or
