@@ -74,11 +74,11 @@ object PairingNotificationHelper {
             .setLabel("6자리 코드 (예: 123456)")
             .build()
 
+        // RemoteInput requires a mutable PendingIntent on modern Android. Keep the authoritative
+        // ADB endpoint out of that mutable intent; the receiver resolves the current port only
+        // from app-owned mDNS discovery state.
         val submitIntent = Intent(context, PairingNotificationReceiver::class.java).apply {
             action = ACTION_SUBMIT_PAIRING_CODE
-            if (pairingPort != null) {
-                putExtra("pairing_port", pairingPort)
-            }
         }
         val submitPendingIntent = PendingIntent.getBroadcast(
             context,
