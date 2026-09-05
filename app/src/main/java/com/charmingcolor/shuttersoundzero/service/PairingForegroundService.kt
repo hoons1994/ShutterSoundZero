@@ -252,13 +252,13 @@ class PairingForegroundService : Service() {
                     )
                 }
             } catch (e: java.util.concurrent.CancellationException) {
-      // Successful completion stops the foreground service, which cancels its coroutine
-      // scope. Cancellation during that shutdown is expected and must not overwrite the
-      // success notification with a false pairing-error notification.
-      Log.i(TAG, "Pairing workflow cancelled during service shutdown")
-      throw e
-  } catch (e: Exception) {
-      logFailure("Pairing error", e)
+                // Successful completion stops the foreground service, which cancels its coroutine
+                // scope. Cancellation during that shutdown is expected and must not overwrite the
+                // success notification with a false pairing-error notification.
+                Log.i(TAG, "Pairing workflow cancelled during service shutdown")
+                throw e
+            } catch (e: Exception) {
+                logFailure("Pairing error", e)
                 PairingNotificationHelper.showPairingNotification(
                     this@PairingForegroundService,
                     null,
