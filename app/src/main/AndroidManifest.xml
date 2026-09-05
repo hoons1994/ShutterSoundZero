@@ -51,6 +51,17 @@
             </intent-filter>
         </activity>
 
+        <!-- 간략 알림을 탭하면 시스템 설정 화면 위에 작은 6자리 코드 입력창만 표시 -->
+        <activity
+            android:name=".ui.pairing.PairingCodeActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:finishOnTaskLaunch="true"
+            android:launchMode="singleTop"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.ShutterSoundZero.PairingDialogHost" />
+
         <!-- 상단바 빠른 설정(Quick Settings) 타일 -->
         <service
             android:name=".service.CameraMuteTileService"
