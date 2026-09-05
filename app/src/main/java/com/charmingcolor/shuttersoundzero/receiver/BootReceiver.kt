@@ -29,7 +29,7 @@ class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
-        Log.i(TAG, "Received broadcast intent: $action")
+        Log.i(TAG, "Received supported boot/update broadcast")
 
         if (action == Intent.ACTION_BOOT_COMPLETED ||
             action == Intent.ACTION_MY_PACKAGE_REPLACED ||
@@ -49,44 +49,57 @@ class BootReceiver : BroadcastReceiver() {
             prefs.lastFirmwareFingerprint = currentFingerprint
 
             if (isFirmwareUpdated) {
-                Log.i(TAG, "Firmware update detected! Old: $lastFingerprint -> New: $currentFingerprint")
+                Log.i(TAG, "Firmware update detected")
             }
 
-            if (prefs.isAutoRestoreOnBootEnabled && prefs.shouldMuteOnBoot) {
-                // 이미 기기 설정이 0(무음)으로 유지되어 있다면 불필요한 설정 쓰기 생략
-                val alreadyMuted = CscMuteManager.isCscShutterSoundMuted(context)
-                if (alreadyMuted) {
-                    Log.i(TAG, "CSC camera mute is already active (0) after reboot. No action required.")
-                    return
-                }
+            if (!prefs.isAutoRestoreOnBootEnabled || !prefs.shouldMuteOnBoot) return
 
-                if (CscMuteManager.hasWritePermission(context)) {
-                    val result = CscMuteManager.setCscShutterSoundMuted(context, true)
-                    result.onSuccess {
-                        Log.i(TAG, "Successfully restored CSC camera mute after boot/update")
-                        if (isFirmwareUpdated) {
-                            showNotification(
-                                context,
-                                "시스템 펌웨어 업데이트가 감지되어 셔터음 무음 설정을 자동으로 복원했습니다."
-                            )
-                        }
-                    }.onFailure { error ->
-                        Log.w(TAG, "Direct restore on boot failed: ${error.message}")
-                        if (isFirmwareUpdated) {
-                            showNotification(
-                                context,
-                                "시스템 업데이트로 셔터음 설정이 초기화되었습니다. 앱을 열어 복원해 주세요."
-                            )
-                        }
-                    }
-                } else {
-                    Log.w(TAG, "Cannot restore CSC mute on boot: Missing permission")
+            // 사용자가 앱에서 권한 연동을 명시적으로 해제했다면, 실제 시스템 권한 상태와 무관하게
+            // 자동 복원을 재개하지 않는다. 다시 페어링하면 이 플래그가 해제된다.
+            if (prefs.isPermissionRevokedByUser) {
+                Log.i(TAG, "Skipping automatic restore because permission linkage was revoked by user")
+                if (isFirmwareUpdated) {
+                    showNotification(
+                        context,
+                        "시스템 업데이트가 감지되었습니다. 권한 연동이 해제되어 있어 자동 복원을 건너뛰었습니다."
+                    )
+                }
+                return
+            }
+
+            // 이미 기기 설정이 0(무음)으로 유지되어 있다면 불필요한 설정 쓰기 생략
+            val alreadyMuted = CscMuteManager.isCscShutterSoundMuted(context)
+            if (alreadyMuted) {
+                Log.i(TAG, "CSC camera mute is already active after reboot")
+                return
+            }
+
+            if (CscMuteManager.hasWritePermission(context)) {
+                val result = CscMuteManager.setCscShutterSoundMuted(context, true)
+                result.onSuccess {
+                    Log.i(TAG, "Successfully restored CSC camera mute after boot/update")
                     if (isFirmwareUpdated) {
                         showNotification(
                             context,
-                            "시스템 업데이트가 감지되었습니다. 셔터음 무음 유지를 위해 앱을 열어 상태를 확인해 주세요."
+                            "시스템 펌웨어 업데이트가 감지되어 셔터음 무음 설정을 자동으로 복원했습니다."
                         )
                     }
+                }.onFailure { error ->
+                    Log.w(TAG, "Direct restore on boot failed (${error.javaClass.simpleName})")
+                    if (isFirmwareUpdated) {
+                        showNotification(
+                            context,
+                            "시스템 업데이트로 셔터음 설정이 초기화되었습니다. 앱을 열어 복원해 주세요."
+                        )
+                    }
+                }
+            } else {
+                Log.w(TAG, "Cannot restore CSC mute on boot: missing permission")
+                if (isFirmwareUpdated) {
+                    showNotification(
+                        context,
+                        "시스템 업데이트가 감지되었습니다. 셔터음 무음 유지를 위해 앱을 열어 상태를 확인해 주세요."
+                    )
                 }
             }
         }
@@ -107,7 +120,7 @@ class BootReceiver : BroadcastReceiver() {
             )
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_qs_camera_mute)
                 .setContentTitle("셔터음 제로")
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
@@ -126,7 +139,7 @@ class BootReceiver : BroadcastReceiver() {
                 manager.notify(NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to post notification: ${e.message}")
+            Log.w(TAG, "Failed to post restore notification (${e.javaClass.simpleName})")
         }
     }
 
@@ -142,4 +155,3 @@ class BootReceiver : BroadcastReceiver() {
         manager?.createNotificationChannel(channel)
     }
 }
-
