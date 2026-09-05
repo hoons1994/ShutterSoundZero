@@ -114,9 +114,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             val pairResult = adbManager.pairLocal(port, pairingCode)
             if (pairResult.isFailure) {
-                val errorMsg = pairResult.exceptionOrNull()?.message ?: "페어링에 실패했습니다."
                 _uiState.update {
-                    it.copy(isWirelessPairingInProgress = false, wirelessPairingError = errorMsg)
+                    it.copy(
+                        isWirelessPairingInProgress = false,
+                        wirelessPairingError = "페어링에 실패했습니다. 무선 디버깅 상태와 6자리 코드를 확인해 다시 시도해 주세요."
+                    )
                 }
                 onComplete(false)
                 return@launch
