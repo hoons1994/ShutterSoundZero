@@ -2,12 +2,14 @@ package com.charmingcolor.shuttersoundzero.ui.main
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
+import com.charmingcolor.shuttersoundzero.ui.pairing.PairingOverlayPermissionActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,12 +77,27 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun startNotificationPairing(context: Context) {
         prefs.isPermissionRevokedByUser = false
+
+        if (!android.provider.Settings.canDrawOverlays(context)) {
+            context.startActivity(Intent(context, PairingOverlayPermissionActivity::class.java))
+            _uiState.update {
+                it.copy(
+                    infoMessage = "간편 코드 입력 사용 여부를 선택한 뒤 무선 페어링을 계속합니다."
+                )
+            }
+            return
+        }
+
+        startPairingNow(context)
+    }
+
+    private fun startPairingNow(context: Context) {
         val devOptionsOff = !CscMuteManager.isDeveloperOptionsEnabled(context)
         PairingForegroundService.start(context, devOptionsOff)
         CscMuteManager.openPairingSetupScreen(context)
         _uiState.update {
             it.copy(
-                infoMessage = "상단바에 페어링 알림이 등록되었습니다! [페어링 코드로 기기 페어링] 화면을 띄운 뒤 상단바를 내려 6자리 코드를 입력해 주세요."
+                infoMessage = "[페어링 코드로 기기 페어링] 화면에서 간략 알림을 누르면 6자리 코드 입력창을 바로 열 수 있습니다."
             )
         }
     }
