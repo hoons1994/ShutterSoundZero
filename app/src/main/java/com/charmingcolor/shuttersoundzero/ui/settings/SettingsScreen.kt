@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.security.AppLockAuthenticator
+import com.charmingcolor.shuttersoundzero.security.AppLockSession
 
 private val CardRadius = 20.dp
 private val CardPaddingH = 20.dp
@@ -138,6 +139,7 @@ fun SettingsScreen(
                             subtitle = "지문 또는 화면 잠금으로 본인 확인해 주세요.",
                             onSuccess = {
                                 isLockSetupInProgress = false
+                                AppLockSession.unlock()
                                 prefs.isAppLockEnabled = true
                                 isAppLockEnabled = true
                             },
