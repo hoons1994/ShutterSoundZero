@@ -6,7 +6,6 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.RemoteInput
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
-import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -101,20 +100,21 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                                         Log.w(TAG, "Background activity launch restricted: ${e.message}")
                                     }
                                 } else {
-                                    val errorMsg = muteResult.exceptionOrNull()?.message ?: "무음 설정 적용 실패"
+                                    val errorMsg = muteResult.exceptionOrNull()?.message ?: "unknown"
                                     Log.w(TAG, "Mute apply failed after pairing: $errorMsg")
                                     PairingNotificationHelper.showPairingNotification(
                                         context,
                                         null,
-                                        "⚠️ 페어링 완료됨: 무선 디버깅 연결 실패 ($errorMsg)"
+                                        "⚠️ 페어링은 완료됐지만 무음 설정 적용에 실패했습니다. 무선 디버깅 상태를 확인한 뒤 다시 시도해 주세요."
                                     )
                                 }
                             } else {
-                                val errorMsg = pairResult.exceptionOrNull()?.message ?: "페어링 실패"
+                                val errorMsg = pairResult.exceptionOrNull()?.message ?: "unknown"
+                                Log.w(TAG, "Pairing failed from notification: $errorMsg")
                                 PairingNotificationHelper.showPairingNotification(
                                     context,
                                     port,
-                                    "❌ $errorMsg: 코드를 다시 입력해 주세요."
+                                    "❌ 페어링에 실패했습니다. 화면의 6자리 코드를 확인해 다시 입력해 주세요."
                                 )
                             }
                             true
@@ -133,7 +133,7 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                         PairingNotificationHelper.showPairingNotification(
                             context,
                             null,
-                            "❌ 오류 발생: ${e.message}"
+                            "❌ 페어링 중 오류가 발생했습니다. 무선 디버깅 상태를 확인하고 다시 시도해 주세요."
                         )
                     } finally {
                         pendingResult.finish()
