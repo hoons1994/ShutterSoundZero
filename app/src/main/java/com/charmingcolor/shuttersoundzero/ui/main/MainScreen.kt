@@ -294,39 +294,18 @@ fun MainScreen(
     }
 
     if (showWifiRequiredDialog) {
-        AlertDialog(
-            onDismissRequest = { showWifiRequiredDialog = false },
-            shape = RoundedCornerShape(24.dp),
-            title = {
-                Text(
-                    text = "Wi-Fi 연결 필요",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
+        com.charmingcolor.shuttersoundzero.ui.components.ModernPromptDialog(
+            eyebrow = "연결 확인",
+            title = "Wi-Fi 연결이 필요해요",
+            message = "무선 디버깅 권한을 연동하려면 기기가 Wi-Fi 네트워크에 연결되어 있어야 합니다.\n\nWi-Fi 설정에서 네트워크에 연결한 뒤 다시 권한 요청을 진행해 주세요.",
+            primaryLabel = "Wi-Fi 설정 열기",
+            onPrimary = {
+                showWifiRequiredDialog = false
+                com.charmingcolor.shuttersoundzero.core.CscMuteManager.openWifiSettings(context)
             },
-            text = {
-                Text(
-                    text = "무선 디버깅 권한 연동을 진행하려면 기기가 Wi-Fi 네트워크에 연결되어 있어야 합니다.\n\nWi-Fi를 켠 후 다시 시도해 주세요.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showWifiRequiredDialog = false
-                        com.charmingcolor.shuttersoundzero.core.CscMuteManager.openWifiSettings(context)
-                    },
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("Wi-Fi 설정 열기")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showWifiRequiredDialog = false }) {
-                    Text("닫기")
-                }
-            }
+            secondaryLabel = "닫기",
+            onSecondary = { showWifiRequiredDialog = false },
+            onDismissRequest = { showWifiRequiredDialog = false }
         )
     }
 
