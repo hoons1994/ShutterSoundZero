@@ -9,6 +9,11 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+  inputs:
+    release_tag:
+      description: 'Release tag to publish (leave empty for signed preflight)'
+      required: false
+      type: string
 
 permissions:
   contents: read
@@ -26,9 +31,24 @@ jobs:
       - name: Confirm release workflow is loadable
         run: echo 'Android Release workflow loaded successfully.'
 
+
+  dispatch-tag-release:
+    name: Dispatch Tagged Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch release on main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run android-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f release_tag="$GITHUB_REF_NAME"
+
   preflight:
     name: Validate Signed Release Preflight
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag == ''
     runs-on: ubuntu-latest
     environment: release-signing
     timeout-minutes: 25
@@ -198,7 +218,7 @@ jobs:
 
   release:
     name: Build Signed Release APK
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag != ''
     runs-on: ubuntu-latest
     environment: release-signing
     timeout-minutes: 25
@@ -213,11 +233,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve release tag
+      shell: bash
+      run: |
+        RELEASE_TAG="$(jq -r '.inputs.release_tag // empty' "$GITHUB_EVENT_PATH")"
+        if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Invalid release tag: $RELEASE_TAG"
+          exit 1
+        fi
+        git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+        RELEASE_SOURCE_SHA="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+        git checkout --detach "$RELEASE_SOURCE_SHA"
+        echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+        echo "RELEASE_SOURCE_SHA=$RELEASE_SOURCE_SHA" >> "$GITHUB_ENV"
+
       - name: Verify tag belongs to main
         shell: bash
         run: |
           git fetch origin main
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/main"; then
+          if ! git merge-base --is-ancestor "$RELEASE_SOURCE_SHA" "origin/main"; then
             echo "Release tags must point to a commit contained in main."
             exit 1
           fi
@@ -225,7 +259,7 @@ jobs:
       - name: Verify tag matches app version
         shell: bash
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG_VERSION="${RELEASE_TAG#v}"
           APP_VERSION="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
 
           if [ -z "$APP_VERSION" ]; then
@@ -330,13 +364,13 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash .github/scripts/verify-release-signer.sh "$APK_PATH" "$ANDROID_HOME/build-tools/37.0.0/apksigner" "$GITHUB_REF_NAME"
+        run: bash .github/scripts/verify-release-signer.sh "$APK_PATH" "$ANDROID_HOME/build-tools/37.0.0/apksigner" "$RELEASE_TAG"
 
       - name: Prepare release assets
         shell: bash
         run: |
           mkdir -p dist
-          RELEASE_APK="dist/ShutterSoundZero-${GITHUB_REF_NAME}.apk"
+          RELEASE_APK="dist/ShutterSoundZero-${RELEASE_TAG}.apk"
           cp "$APK_PATH" "$RELEASE_APK"
           sha256sum "$RELEASE_APK" > "${RELEASE_APK}.sha256"
           echo "RELEASE_APK=$RELEASE_APK" >> "$GITHUB_ENV"
@@ -375,18 +409,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" \
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
               "$RELEASE_APK" \
               "${RELEASE_APK}.sha256" \
               "${RELEASE_APK}.sigstore.json" \
               --clobber
           else
-            gh release create "$GITHUB_REF_NAME" \
+            gh release create "$RELEASE_TAG" \
               "$RELEASE_APK" \
               "${RELEASE_APK}.sha256" \
               "${RELEASE_APK}.sigstore.json" \
               --verify-tag \
               --generate-notes \
-              --title "$GITHUB_REF_NAME"
+              --title "$RELEASE_TAG"
           fi
