@@ -27,63 +27,34 @@ jobs:
           from pathlib import Path
 
           path = Path('.github/workflows/android-release.yml')
-          text = path.read_text()
+          lines = path.read_text().splitlines()
 
-          old_top = """  workflow_dispatch:
-          inputs:
-            release_tag:
-              description: 'Release tag to publish (leave empty for signed preflight)'
-              required: false
-              type: string
-          """
-          # Normalize indentation introduced by the previous generated patch.
-          old_top = old_top.replace('          inputs:', '  inputs:').replace('            release_tag:', '    release_tag:').replace("              description:", "      description:").replace('              required:', '      required:').replace('              type:', '      type:')
-          new_top = """  workflow_dispatch:
-            inputs:
-              release_tag:
-                description: 'Release tag to publish (leave empty for signed preflight)'
-                required: false
-                type: string
-          """
-          if old_top not in text:
-              raise SystemExit('malformed workflow_dispatch block not found')
-          text = text.replace(old_top, new_top, 1)
+          try:
+              i = lines.index('  workflow_dispatch:')
+          except ValueError:
+              raise SystemExit('workflow_dispatch marker not found')
+          expected = [
+              '  inputs:',
+              '    release_tag:',
+              "      description: 'Release tag to publish (leave empty for signed preflight)'",
+              '      required: false',
+              '      type: string',
+          ]
+          if lines[i + 1:i + 6] != expected:
+              raise SystemExit(f'unexpected workflow_dispatch block: {lines[i + 1:i + 6]}')
+          for j in range(i + 1, i + 6):
+              lines[j] = '  ' + lines[j]
 
-          old_resolve = """      - name: Resolve release tag
-          shell: bash
-          run: |
-            RELEASE_TAG=\"$(jq -r '.inputs.release_tag // empty' \"$GITHUB_EVENT_PATH\")\"
-            if ! [[ \"$RELEASE_TAG\" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
-              echo \"Invalid release tag: $RELEASE_TAG\"
-              exit 1
-            fi
-            git fetch --force origin \"refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG\"
-            RELEASE_SOURCE_SHA=\"$(git rev-parse \"refs/tags/$RELEASE_TAG^{commit}\")\"
-            git checkout --detach \"$RELEASE_SOURCE_SHA\"
-            echo \"RELEASE_TAG=$RELEASE_TAG\" >> \"$GITHUB_ENV\"
-            echo \"RELEASE_SOURCE_SHA=$RELEASE_SOURCE_SHA\" >> \"$GITHUB_ENV\"
-          """
-          old_resolve = old_resolve.replace('          shell: bash', '      shell: bash').replace('          run: |', '      run: |').replace('            RELEASE_TAG=', '        RELEASE_TAG=').replace('            if ! [[', '        if ! [[').replace('              echo', '          echo').replace('              exit 1', '          exit 1').replace('            fi', '        fi').replace('            git fetch', '        git fetch').replace('            RELEASE_SOURCE_SHA=', '        RELEASE_SOURCE_SHA=').replace('            git checkout', '        git checkout').replace('            echo \"RELEASE_TAG=', '        echo \"RELEASE_TAG=').replace('            echo \"RELEASE_SOURCE_SHA=', '        echo \"RELEASE_SOURCE_SHA=')
-          new_resolve = """      - name: Resolve release tag
-                shell: bash
-                run: |
-                  RELEASE_TAG=\"$(jq -r '.inputs.release_tag // empty' \"$GITHUB_EVENT_PATH\")\"
-                  if ! [[ \"$RELEASE_TAG\" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
-                    echo \"Invalid release tag: $RELEASE_TAG\"
-                    exit 1
-                  fi
-                  git fetch --force origin \"refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG\"
-                  RELEASE_SOURCE_SHA=\"$(git rev-parse \"refs/tags/$RELEASE_TAG^{commit}\")\"
-                  git checkout --detach \"$RELEASE_SOURCE_SHA\"
-                  echo \"RELEASE_TAG=$RELEASE_TAG\" >> \"$GITHUB_ENV\"
-                  echo \"RELEASE_SOURCE_SHA=$RELEASE_SOURCE_SHA\" >> \"$GITHUB_ENV\"
-          """
-          new_resolve = new_resolve.replace('                shell: bash', '        shell: bash').replace('                run: |', '        run: |').replace('                  RELEASE_TAG=', '          RELEASE_TAG=').replace('                  if ! [[', '          if ! [[').replace('                    echo', '            echo').replace('                    exit 1', '            exit 1').replace('                  fi', '          fi').replace('                  git fetch', '          git fetch').replace('                  RELEASE_SOURCE_SHA=', '          RELEASE_SOURCE_SHA=').replace('                  git checkout', '          git checkout').replace('                  echo \"RELEASE_TAG=', '          echo \"RELEASE_TAG=').replace('                  echo \"RELEASE_SOURCE_SHA=', '          echo \"RELEASE_SOURCE_SHA=')
-          if old_resolve not in text:
-              raise SystemExit('malformed resolve step not found')
-          text = text.replace(old_resolve, new_resolve, 1)
+          try:
+              start = lines.index('      - name: Resolve release tag')
+              end = lines.index('      - name: Verify tag belongs to main', start + 1)
+          except ValueError:
+              raise SystemExit('resolve/verify step markers not found')
+          for j in range(start + 1, end):
+              if lines[j]:
+                  lines[j] = '  ' + lines[j]
 
-          path.write_text(text)
+          path.write_text('\n'.join(lines) + '\n')
           PY
 
           git rm .github/workflows/fix-release-yaml-indent.yml
