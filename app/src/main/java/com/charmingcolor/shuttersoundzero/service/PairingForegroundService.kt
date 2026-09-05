@@ -251,6 +251,12 @@ class PairingForegroundService : Service() {
                         "⏱️ 시간 초과: 코드를 다시 입력해 주세요."
                     )
                 }
+            } catch (e: java.util.concurrent.CancellationException) {
+                // Successful completion stops the foreground service, which cancels its coroutine
+                // scope. Cancellation during that shutdown is expected and must not overwrite the
+                // success notification with a false pairing-error notification.
+                Log.i(TAG, "Pairing workflow cancelled during service shutdown")
+                throw e
             } catch (e: Exception) {
                 logFailure("Pairing error", e)
                 PairingNotificationHelper.showPairingNotification(
