@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.security.AppLockAuthenticator
+import com.charmingcolor.shuttersoundzero.security.AppLockSession
 import com.charmingcolor.shuttersoundzero.theme.ShutterSoundZeroTheme
 import com.charmingcolor.shuttersoundzero.ui.lock.AppLockScreen
 
@@ -37,7 +38,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         prefs = PreferencesRepository.getInstance(this)
-        isAppUnlocked = !prefs.isAppLockEnabled
+        isAppUnlocked = !prefs.isAppLockEnabled || AppLockSession.isUnlocked
 
         // 삼성 갤럭시 기기 여부 확인 - 갤럭시가 아닌 기기일 경우 안내 토스트 표시
         if (!com.charmingcolor.shuttersoundzero.core.CscMuteManager.isSamsungDevice()) {
@@ -87,6 +88,7 @@ class MainActivity : ComponentActivity() {
             !authenticationInProgress &&
             !isChangingConfigurations
         ) {
+            AppLockSession.lock()
             isAppUnlocked = false
             unlockErrorMessage = null
         }
@@ -95,6 +97,7 @@ class MainActivity : ComponentActivity() {
 
     private fun requestAppUnlock() {
         if (!prefs.isAppLockEnabled) {
+            AppLockSession.unlock()
             isAppUnlocked = true
             return
         }
@@ -114,6 +117,7 @@ class MainActivity : ComponentActivity() {
             onSuccess = {
                 authenticationInProgress = false
                 unlockErrorMessage = null
+                AppLockSession.unlock()
                 isAppUnlocked = true
                 requestNotificationPermissionIfNeeded()
             },
