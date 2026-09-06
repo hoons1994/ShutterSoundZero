@@ -252,8 +252,9 @@ fun MainScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
+            GroupLabel("페어링 알림")
             SettingsCard {
                 NotificationPopupGuideCard(
                     onOpenNotificationSettings = {
