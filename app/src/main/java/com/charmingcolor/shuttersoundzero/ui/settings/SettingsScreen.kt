@@ -125,12 +125,6 @@ fun SettingsScreen(
                     onCheckedChange = { enabled ->
                         if (isLockSetupInProgress) return@SwitchRow
 
-                        if (!enabled) {
-                            isAppLockEnabled = false
-                            prefs.isAppLockEnabled = false
-                            return@SwitchRow
-                        }
-
                         val activity = context.findActivity()
                         if (activity == null || !AppLockAuthenticator.canAuthenticate(context)) {
                             lockErrorMessage =
@@ -141,13 +135,22 @@ fun SettingsScreen(
                         isLockSetupInProgress = true
                         AppLockAuthenticator.authenticate(
                             activity = activity,
-                            title = "앱 잠금 설정",
-                            subtitle = "지문 또는 화면 잠금으로 본인 확인해 주세요.",
+                            title = if (enabled) "앱 잠금 설정" else "앱 잠금 해제",
+                            subtitle = if (enabled) {
+                                "지문 또는 화면 잠금으로 본인 확인해 주세요."
+                            } else {
+                                "앱 잠금을 해제하려면 지문 또는 화면 잠금으로 본인 확인해 주세요."
+                            },
                             onSuccess = {
                                 isLockSetupInProgress = false
-                                AppLockSession.unlock()
-                                prefs.isAppLockEnabled = true
-                                isAppLockEnabled = true
+                                if (enabled) {
+                                    AppLockSession.unlock()
+                                    prefs.isAppLockEnabled = true
+                                    isAppLockEnabled = true
+                                } else {
+                                    prefs.isAppLockEnabled = false
+                                    isAppLockEnabled = false
+                                }
                             },
                             onCancelled = {
                                 isLockSetupInProgress = false
