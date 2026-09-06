@@ -33,7 +33,7 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Update GitHub Release notes
+      - name: Update GitHub Release title and notes
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -53,8 +53,9 @@ jobs:
             if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               gh release edit "$release_tag" \
                 --repo "$GITHUB_REPOSITORY" \
+                --title "$release_tag" \
                 --notes-file "$notes_file"
-              echo "Updated release notes for $release_tag"
+              echo "Updated release title and notes for $release_tag"
               updated=$((updated + 1))
             else
               echo "Release $release_tag does not exist yet; skipping."
