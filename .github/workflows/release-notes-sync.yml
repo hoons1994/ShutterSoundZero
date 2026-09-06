@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*.*.*'
     paths:
       - '.github/release-notes/**'
       - '.github/workflows/release-notes-sync.yml'
@@ -32,6 +34,25 @@ jobs:
         with:
           ref: main
           fetch-depth: 1
+
+      - name: Wait for tagged release to be published
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in $(seq 1 36); do
+            if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "Release $GITHUB_REF_NAME is available."
+              exit 0
+            fi
+
+            echo "Waiting for release $GITHUB_REF_NAME ($attempt/36)..."
+            sleep 10
+          done
+
+          echo "Release $GITHUB_REF_NAME was not published within 6 minutes."
+          exit 1
 
       - name: Update GitHub Release title and notes
         shell: bash
