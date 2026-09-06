@@ -47,7 +47,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private fun createInitialState(): MainUiState {
         val app = getApplication<Application>()
         val hasPermission = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
-        val isMuted = if (!hasPermission) false else prefs.shouldMuteOnBoot
+        val isMuted = CscMuteManager.isCscShutterSoundMuted(app)
         return MainUiState(
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
@@ -60,7 +60,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun refreshState() {
         val app = getApplication<Application>()
         val perm = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
-        val isMuted = if (!perm) false else prefs.shouldMuteOnBoot
+        val isMuted = CscMuteManager.isCscShutterSoundMuted(app)
 
         _uiState.update { current ->
             current.copy(
@@ -167,13 +167,19 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
-        // 스위치 UI 즉시 반응 (낙관적 업데이트)
+        val previousDesiredMute = prefs.shouldMuteOnBoot
+
+        // 사용자가 누른 즉시 반응하되, 작업 완료 후에는 반드시 실제 CSC 값을 다시 읽어 확정한다.
         prefs.shouldMuteOnBoot = enableMute
-        refreshState()
+        _uiState.update { it.copy(isCscMuted = enableMute) }
 
         viewModelScope.launch {
             val adbResult = adbManager.setCameraMute(enableMute)
-            if (adbResult.isSuccess) {
+            refreshState()
+
+            val actualStateMatchesRequest = _uiState.value.isCscMuted == enableMute
+            if (adbResult.isSuccess && actualStateMatchesRequest) {
+                prefs.shouldMuteOnBoot = enableMute
                 _uiState.update {
                     it.copy(
                         infoMessage = if (enableMute) "카메라 셔터음 무음화가 활성화되었습니다. (진동/무음 시 무음)"
@@ -182,9 +188,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     )
                 }
             } else {
-                // 실패 시 스위치 원복 및 무선 디버깅 친절 안내 다이얼로그 플래그 활성화
-                prefs.shouldMuteOnBoot = !enableMute
-                refreshState()
+                // 실패 시 사용자의 기존 자동 복원 의도는 보존하고, UI는 실제 CSC 값 그대로 유지한다.
+                prefs.shouldMuteOnBoot = previousDesiredMute
                 _uiState.update {
                     it.copy(
                         showSwitchFailureHelp = true,
