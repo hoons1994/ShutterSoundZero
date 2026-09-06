@@ -1,0 +1,64 @@
+name: Sync Release Notes
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/release-notes/**'
+      - '.github/workflows/release-notes-sync.yml'
+  workflow_run:
+    workflows:
+      - Android Release
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-notes-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync Curated Release Notes
+    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Update GitHub Release notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(.github/release-notes/v*.md)
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo 'No curated release notes found.'
+            exit 0
+          fi
+
+          updated=0
+          for notes_file in "${files[@]}"; do
+            release_tag="$(basename "$notes_file" .md)"
+
+            if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release edit "$release_tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --notes-file "$notes_file"
+              echo "Updated release notes for $release_tag"
+              updated=$((updated + 1))
+            else
+              echo "Release $release_tag does not exist yet; skipping."
+            fi
+          done
+
+          echo "Updated $updated release(s)."
