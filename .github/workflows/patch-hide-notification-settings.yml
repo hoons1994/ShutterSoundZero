@@ -21,8 +21,9 @@ jobs:
           fetch-depth: 0
 
       - name: Hide notification settings after permission pairing
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path('app/src/main/java/com/charmingcolor/shuttersoundzero/ui/main/MainScreen.kt')
@@ -58,6 +59,7 @@ jobs:
           if old not in text:
               raise SystemExit('Target block not found; refusing to modify file.')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
 
       - name: Commit patch
         shell: bash
