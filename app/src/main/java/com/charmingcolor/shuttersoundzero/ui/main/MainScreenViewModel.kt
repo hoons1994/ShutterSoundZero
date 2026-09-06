@@ -2,14 +2,12 @@ package com.charmingcolor.shuttersoundzero.ui.main
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
-import com.charmingcolor.shuttersoundzero.ui.pairing.PairingPopupStyleGuideActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -77,12 +75,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun startNotificationPairing(context: Context) {
         prefs.isPermissionRevokedByUser = false
-
-        if (!prefs.hasShownPairingPopupStyleGuide) {
-            context.startActivity(Intent(context, PairingPopupStyleGuideActivity::class.java))
-            return
-        }
-
         startPairingNow(context)
     }
 
