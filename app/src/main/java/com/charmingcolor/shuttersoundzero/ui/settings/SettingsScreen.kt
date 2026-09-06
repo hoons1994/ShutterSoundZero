@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +54,8 @@ import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.security.AppLockAuthenticator
 import com.charmingcolor.shuttersoundzero.security.AppLockSession
+import com.charmingcolor.shuttersoundzero.update.AppUpdateManager
+import kotlinx.coroutines.launch
 
 private val CardRadius = 20.dp
 private val CardPaddingH = 20.dp
@@ -67,6 +70,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val prefs = remember { PreferencesRepository.getInstance(context) }
     val versionName = remember(context) { currentVersionName(context) }
+    val coroutineScope = rememberCoroutineScope()
 
     var isSoftwareUpdateCheck by remember {
         mutableStateOf(prefs.isSoftwareUpdateCheckEnabled)
@@ -78,6 +82,65 @@ fun SettingsScreen(
     var showDeveloperOptionsFallback by remember { mutableStateOf(false) }
     var developerOptionsResultMessage by remember { mutableStateOf<String?>(null) }
     var showLicenseDialog by remember { mutableStateOf(false) }
+
+    var isUpdateChecking by remember { mutableStateOf(false) }
+    var updateInfo by remember { mutableStateOf<AppUpdateManager.UpdateInfo?>(null) }
+    var verifiedUpdate by remember { mutableStateOf<AppUpdateManager.VerifiedUpdate?>(null) }
+    var isUpdateDownloading by remember { mutableStateOf(false) }
+    var updateDownloadProgress by remember { mutableStateOf(0) }
+    var updateStatusMessage by remember { mutableStateOf<String?>(null) }
+    var updateErrorMessage by remember { mutableStateOf<String?>(null) }
+    var installPermissionHint by remember { mutableStateOf(false) }
+
+    fun checkForAppUpdate() {
+        if (isUpdateChecking || isUpdateDownloading) return
+        coroutineScope.launch {
+            isUpdateChecking = true
+            updateErrorMessage = null
+            installPermissionHint = false
+            try {
+                when (val result = AppUpdateManager.checkForUpdate(context)) {
+                    is AppUpdateManager.UpdateCheckResult.UpToDate -> {
+                        updateInfo = null
+                        verifiedUpdate = null
+                        updateStatusMessage =
+                            "현재 최신 버전을 사용하고 있습니다.\n\nv$versionName"
+                    }
+                    is AppUpdateManager.UpdateCheckResult.Available -> {
+                        updateInfo = result.update
+                        verifiedUpdate = null
+                        updateDownloadProgress = 0
+                    }
+                }
+            } catch (error: Throwable) {
+                updateErrorMessage = friendlyUpdateError(error)
+            } finally {
+                isUpdateChecking = false
+            }
+        }
+    }
+
+    fun downloadUpdate(update: AppUpdateManager.UpdateInfo) {
+        if (isUpdateDownloading) return
+        coroutineScope.launch {
+            isUpdateDownloading = true
+            updateDownloadProgress = 0
+            updateErrorMessage = null
+            installPermissionHint = false
+            try {
+                verifiedUpdate = AppUpdateManager.downloadAndVerify(
+                    context = context,
+                    update = update,
+                    onProgress = { progress -> updateDownloadProgress = progress }
+                )
+            } catch (error: Throwable) {
+                verifiedUpdate = null
+                updateErrorMessage = friendlyUpdateError(error)
+            } finally {
+                isUpdateDownloading = false
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -210,6 +273,23 @@ fun SettingsScreen(
                     subtitle = versionName
                 )
                 RowDivider()
+                ClickableRow(
+                    title = "앱 업데이트",
+                    subtitle = when {
+                        isUpdateChecking -> "GitHub Releases에서 최신 버전 확인 중…"
+                        updateInfo != null -> "v${updateInfo?.versionName} 사용 가능"
+                        else -> "사용자가 확인할 때만 GitHub Releases에 연결"
+                    },
+                    onClick = {
+                        val available = updateInfo
+                        if (available != null) {
+                            updateInfo = available
+                        } else {
+                            checkForAppUpdate()
+                        }
+                    }
+                )
+                RowDivider()
                 InfoRow(
                     title = "개발자",
                     subtitle = "charmingcolor"
@@ -233,6 +313,151 @@ fun SettingsScreen(
                 confirmButton = {
                     TextButton(onClick = { lockErrorMessage = null }) {
                         Text("확인")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
+        updateStatusMessage?.let { message ->
+            AlertDialog(
+                onDismissRequest = { updateStatusMessage = null },
+                title = { Text("앱 업데이트") },
+                text = { Text(message) },
+                confirmButton = {
+                    TextButton(onClick = { updateStatusMessage = null }) {
+                        Text("확인")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
+        updateErrorMessage?.let { message ->
+            AlertDialog(
+                onDismissRequest = { updateErrorMessage = null },
+                title = { Text("업데이트 확인") },
+                text = { Text(message) },
+                confirmButton = {
+                    TextButton(onClick = { updateErrorMessage = null }) {
+                        Text("확인")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
+        updateInfo?.let { update ->
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isUpdateDownloading) {
+                        updateInfo = null
+                        verifiedUpdate = null
+                        installPermissionHint = false
+                    }
+                },
+                title = { Text("새 버전 v${update.versionName}") },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "현재 v$versionName → v${update.versionName}",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = update.releaseNotes,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 19.sp
+                        )
+
+                        if (isUpdateDownloading) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                            Text(
+                                text = "APK 다운로드 및 검증 중 · $updateDownloadProgress%",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        verifiedUpdate?.let { verified ->
+                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                            Text(
+                                text = "✓ SHA-256 검증 완료\n✓ 패키지 및 버전 검증 완료\n✓ 앱 서명 인증서 일치 확인",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.primary,
+                                lineHeight = 19.sp
+                            )
+                            Text(
+                                text = "검증된 버전: v${verified.versionName} (${verified.versionCode})",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        if (installPermissionHint) {
+                            Text(
+                                text = "Android의 [이 출처 허용]을 켠 뒤 이 화면으로 돌아와 [설치]를 다시 눌러 주세요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    when {
+                        isUpdateDownloading -> {
+                            TextButton(onClick = {}, enabled = false) {
+                                Text("$updateDownloadProgress%")
+                            }
+                        }
+                        verifiedUpdate == null -> {
+                            TextButton(onClick = { downloadUpdate(update) }) {
+                                Text("업데이트 다운로드")
+                            }
+                        }
+                        else -> {
+                            TextButton(
+                                onClick = {
+                                    val verified = verifiedUpdate ?: return@TextButton
+                                    if (!AppUpdateManager.canRequestPackageInstalls(context)) {
+                                        installPermissionHint = true
+                                        try {
+                                            AppUpdateManager.openInstallPermissionSettings(context)
+                                        } catch (error: Throwable) {
+                                            updateErrorMessage = friendlyUpdateError(error)
+                                        }
+                                    } else if (!AppUpdateManager.launchInstaller(context, verified)) {
+                                        updateErrorMessage =
+                                            "Android 설치 화면을 열 수 없습니다. 기기의 설치 권한 설정을 확인해 주세요."
+                                    }
+                                }
+                            ) {
+                                Text("설치")
+                            }
+                        }
+                    }
+                },
+                dismissButton = {
+                    if (!isUpdateDownloading) {
+                        TextButton(
+                            onClick = {
+                                updateInfo = null
+                                verifiedUpdate = null
+                                installPermissionHint = false
+                            }
+                        ) {
+                            Text("나중에")
+                        }
                     }
                 },
                 shape = RoundedCornerShape(20.dp),
@@ -391,6 +616,15 @@ private fun currentVersionName(context: Context): String {
         context.packageManager.getPackageInfo(context.packageName, 0)
     }
     return packageInfo.versionName ?: "-"
+}
+
+private fun friendlyUpdateError(error: Throwable): String {
+    val message = error.message?.trim().orEmpty()
+    return if (message.isBlank()) {
+        "업데이트를 확인하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요."
+    } else {
+        message
+    }
 }
 
 private fun Context.findActivity(): Activity? {
