@@ -1,0 +1,127 @@
+name: Update Flow Device Test
+
+on:
+  push:
+    branches:
+      - feature/in-app-update-v1.4.0
+    paths:
+      - 'app/src/debug/**'
+      - 'app/src/main/java/com/charmingcolor/shuttersoundzero/update/**'
+      - 'app/src/main/AndroidManifest.xml'
+      - 'app/src/main/res/xml/update_file_paths.xml'
+      - 'app/build.gradle.kts'
+      - '.github/workflows/update-flow-device-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-flow-device-test
+  cancel-in-progress: true
+
+jobs:
+  build-test-pair:
+    name: Build update test APK pair
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: ''
+
+      - name: Install Android 17 SDK
+        shell: bash
+        run: |
+          sdkmanager --list --channel=3 > sdk-packages.txt
+          if grep -q 'platforms;android-CinnamonBun' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-CinnamonBun'
+          elif grep -q 'platforms;android-37.0' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-37.0'
+          elif grep -q 'platforms;android-37 ' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-37'
+          else
+            echo 'Android 17 SDK platform package was not found.'
+            exit 1
+          fi
+          sdkmanager --channel=3 "$PLATFORM_PACKAGE" 'build-tools;37.0.0' platform-tools
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Create one-time shared debug signing key
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.android"
+          rm -f "$HOME/.android/debug.keystore"
+          keytool -genkeypair \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname 'CN=Android Debug,O=Android,C=US'
+
+      - name: Build v1.4.0 base test APK
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/ShutterSoundZero_v1.4.0_debug.apk \
+            dist/ShutterSoundZero-v1.4.0-update-test-base.apk
+
+      - name: Build v1.4.1 candidate with the same signer
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/build.gradle.kts')
+          text = path.read_text()
+          text = text.replace('versionCode = 140', 'versionCode = 141', 1)
+          text = text.replace('versionName = "1.4.0"', 'versionName = "1.4.1"', 1)
+          path.write_text(text)
+          PY
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/ShutterSoundZero_v1.4.1_debug.apk \
+            dist/ShutterSoundZero-v1.4.1-test.apk
+          sha256sum dist/ShutterSoundZero-v1.4.1-test.apk > \
+            dist/ShutterSoundZero-v1.4.1-test.apk.sha256
+
+      - name: Publish dedicated prerelease candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TEST_TAG='update-flow-test-v1.4.1'
+          gh release delete "$TEST_TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create "$TEST_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title 'Update Flow Device Test v1.4.1' \
+            --notes '테스트 전용 프리릴리즈입니다. v1.4.0 Debug base에서 앱 내부 다운로드 → SHA-256/패키지/버전/서명 검증 → Android 패키지 설치 화면 → v1.4.1 교체 흐름을 검증하기 위한 APK입니다. 일반 사용자는 설치하지 마세요.' \
+            dist/ShutterSoundZero-v1.4.1-test.apk \
+            dist/ShutterSoundZero-v1.4.1-test.apk.sha256
+
+      - name: Upload install-first base APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ShutterSoundZero-v1.4.0-update-flow-test-base
+          path: dist/ShutterSoundZero-v1.4.0-update-test-base.apk
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
