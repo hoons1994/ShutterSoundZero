@@ -252,15 +252,17 @@ fun MainScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            if (!hasEffectivePermission) {
+                Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("알림 설정 변경")
-            SettingsCard {
-                NotificationSettingsChangeContent(
-                    onOpenNotificationSettings = {
-                        PairingNotificationHelper.openNotificationSettings(context)
-                    }
-                )
+                GroupLabel("알림 설정 변경")
+                SettingsCard {
+                    NotificationSettingsChangeContent(
+                        onOpenNotificationSettings = {
+                            PairingNotificationHelper.openNotificationSettings(context)
+                        }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
