@@ -102,7 +102,11 @@ object AppUpdateManager {
 
         val apkFile = File(updateDir, "ShutterSoundZero-v${update.versionName}.apk")
         try {
-            downloadFile(update.apkUrl, apkFile, onProgress)
+            downloadFile(update.apkUrl, apkFile) { progress ->
+                withContext(Dispatchers.Main.immediate) {
+                    onProgress(progress)
+                }
+            }
 
             val expectedSha = parseSha256(readUrl(update.sha256Url, acceptJson = false))
                 ?: error("SHA-256 검증값을 읽을 수 없습니다.")
@@ -133,7 +137,9 @@ object AppUpdateManager {
                 error("다운로드한 APK의 버전 정보가 GitHub 릴리즈와 일치하지 않습니다.")
             }
 
-            onProgress(100)
+            withContext(Dispatchers.Main.immediate) {
+                onProgress(100)
+            }
             VerifiedUpdate(
                 file = apkFile,
                 versionName = archiveVersion,
@@ -316,13 +322,11 @@ object AppUpdateManager {
             connection.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
         }
         connection.connect()
-        if (connection.responseCode !in 200..299) {
-            val message = connection.errorStream
-                ?.bufferedReader()
-                ?.use { it.readText().take(500) }
-                .orEmpty()
+        val responseCode = connection.responseCode
+        if (responseCode !in 200..299) {
+            connection.errorStream?.close()
             connection.disconnect()
-            error("업데이트 서버 응답 오류 (${connection.responseCode})${if (message.isBlank()) "" else ": $message"}")
+            error("업데이트 서버 응답 오류 ($responseCode). 잠시 후 다시 시도해 주세요.")
         }
         return connection
     }
