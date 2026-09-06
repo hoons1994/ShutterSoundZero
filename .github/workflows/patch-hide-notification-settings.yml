@@ -1,0 +1,73 @@
+name: Patch Notification Settings Visibility
+
+on:
+  push:
+    branches:
+      - fix/hide-notification-settings-after-pairing-v2
+    paths:
+      - '.github/workflows/patch-hide-notification-settings.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: fix/hide-notification-settings-after-pairing-v2
+          fetch-depth: 0
+
+      - name: Hide notification settings after permission pairing
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('app/src/main/java/com/charmingcolor/shuttersoundzero/ui/main/MainScreen.kt')
+          text = path.read_text(encoding='utf-8')
+          old = '''            Spacer(modifier = Modifier.height(24.dp))
+
+            GroupLabel("알림 설정 변경")
+            SettingsCard {
+                NotificationSettingsChangeContent(
+                    onOpenNotificationSettings = {
+                        PairingNotificationHelper.openNotificationSettings(context)
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+'''
+          new = '''            if (!hasEffectivePermission) {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                GroupLabel("알림 설정 변경")
+                SettingsCard {
+                    NotificationSettingsChangeContent(
+                        onOpenNotificationSettings = {
+                            PairingNotificationHelper.openNotificationSettings(context)
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+'''
+          if old not in text:
+              raise SystemExit('Target block not found; refusing to modify file.')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/charmingcolor/shuttersoundzero/ui/main/MainScreen.kt
+          git commit -m 'fix: hide notification settings after permission pairing'
+          git push origin HEAD:fix/hide-notification-settings-after-pairing-v2
