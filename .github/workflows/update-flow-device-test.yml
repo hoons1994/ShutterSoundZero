@@ -75,6 +75,20 @@ jobs:
             -validity 10000 \
             -dname 'CN=Android Debug,O=Android,C=US'
 
+      - name: Isolate test package from the installed production app
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/build.gradle.kts')
+          text = path.read_text()
+          marker = '    buildTypes {\n        release {'
+          replacement = '    buildTypes {\n        debug {\n            applicationIdSuffix = ".updatetest"\n        }\n        release {'
+          if marker not in text:
+              raise SystemExit('Could not locate buildTypes release block')
+          path.write_text(text.replace(marker, replacement, 1))
+          PY
+
       - name: Build v1.4.0 base test APK
         shell: bash
         run: |
@@ -113,7 +127,7 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title 'Update Flow Device Test v1.4.1' \
-            --notes '테스트 전용 프리릴리즈입니다. v1.4.0 Debug base에서 앱 내부 다운로드 → SHA-256/패키지/버전/서명 검증 → Android 패키지 설치 화면 → v1.4.1 교체 흐름을 검증하기 위한 APK입니다. 일반 사용자는 설치하지 마세요.' \
+            --notes '테스트 전용 프리릴리즈입니다. 별도 테스트 패키지에서 앱 내부 다운로드 → SHA-256/패키지/버전/서명 검증 → Android 패키지 설치 화면 → v1.4.1 교체 흐름을 검증하기 위한 APK입니다. 기존 ShutterSoundZero 정식/디버그 설치본과 충돌하지 않습니다. 일반 사용자는 설치하지 마세요.' \
             dist/ShutterSoundZero-v1.4.1-test.apk \
             dist/ShutterSoundZero-v1.4.1-test.apk.sha256
 
