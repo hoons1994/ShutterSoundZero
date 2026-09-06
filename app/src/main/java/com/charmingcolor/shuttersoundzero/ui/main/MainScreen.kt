@@ -254,11 +254,14 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            NotificationPopupGuideCard(
-                onOpenNotificationSettings = {
-                    PairingNotificationHelper.openNotificationSettings(context)
-                }
-            )
+            GroupLabel("알림 설정 변경")
+            SettingsCard {
+                NotificationSettingsChangeContent(
+                    onOpenNotificationSettings = {
+                        PairingNotificationHelper.openNotificationSettings(context)
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -563,56 +566,38 @@ private fun InfoRow(title: String, subtitle: String) {
 }
 
 @Composable
-private fun NotificationPopupGuideCard(
+private fun NotificationSettingsChangeContent(
     onOpenNotificationSettings: () -> Unit
 ) {
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = CardPaddingH),
-        shape = RoundedCornerShape(CardRadius),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .padding(horizontal = CardPaddingH, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = CardPaddingH, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Text(
+            text = "알림 팝업이 간략하게 보이나요?",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "ShutterSoundZero를 [자세한 팝업]으로 설정하면 페어링 알림에서 [코드 입력] 버튼을 바로 사용할 수 있습니다.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 19.sp
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Button(
+            onClick = onOpenNotificationSettings,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
         ) {
             Text(
-                text = "페어링 알림",
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.SemiBold
-                ),
-                color = MaterialTheme.colorScheme.primary
+                text = "앱 알림 설정 열기",
+                fontWeight = FontWeight.Bold,
+                color = Color.White
             )
-            Text(
-                text = "알림 팝업이 간략하게 보이나요?",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "ShutterSoundZero를 [자세한 팝업]으로 설정하면 페어링 알림에서 [코드 입력] 버튼을 바로 사용할 수 있습니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 19.sp
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Button(
-                onClick = onOpenNotificationSettings,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
-            ) {
-                Text(
-                    text = "앱 알림 설정 열기",
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
         }
     }
 }
