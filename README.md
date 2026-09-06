@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.3.3-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.4.0-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터음 제로 안내 인포그래픽" width="720" />
@@ -57,7 +57,13 @@
    * 최초 권한 설정을 마친 뒤 개발자 옵션과 USB·무선 디버깅을 끄는 과정을 앱 설정에서 도와줍니다.
    * 이미 부여된 `WRITE_SECURE_SETTINGS` 권한은 개발자 옵션을 꺼도 유지됩니다.
 
-8. **🔋 상주 감시 서비스 없음**
+8. **⬆️ 안전한 앱 업데이트 확인·설치**
+   * 설정의 [앱 업데이트]를 사용자가 직접 눌렀을 때만 GitHub Releases에서 최신 정식 버전을 확인합니다.
+   * 새 버전이 있으면 릴리즈 노트를 보여주고 APK를 직접 다운로드할 수 있습니다.
+   * 설치 전에 **SHA-256, 패키지명, versionCode/versionName, 현재 설치 앱과의 서명 인증서 일치 여부**를 모두 검증합니다.
+   * 모든 검증을 통과한 APK만 Android 패키지 설치 화면으로 전달합니다.
+
+9. **🔋 상주 감시 서비스 없음**
    * 화면이나 카메라 동작을 계속 감시하는 접근성 기반 상주 서비스를 사용하지 않습니다.
    * 카메라 권한 없이 시스템 설정값을 제어하는 방식으로 동작합니다.
 
@@ -85,6 +91,23 @@
 
 ---
 
+## ⬆️ 앱 업데이트
+
+설정 화면의 **[앱 업데이트]**를 누르면 GitHub의 최신 정식 Release를 확인합니다. 앱 실행 시 또는 백그라운드에서 자동으로 업데이트 서버에 접속하지 않습니다.
+
+새 버전이 발견되면 다음 순서로 처리합니다.
+
+1. 최신 정식 Release의 버전과 릴리즈 노트 확인
+2. 사용자가 [업데이트 다운로드]를 선택한 경우에만 APK 다운로드
+3. GitHub Release의 `.sha256` 파일과 실제 APK SHA-256 비교
+4. APK의 패키지명과 `versionCode` / `versionName` 확인
+5. 현재 설치된 ShutterSoundZero와 APK의 서명 인증서 일치 여부 확인
+6. 모든 검증을 통과한 경우에만 Android 설치 화면 실행
+
+Android의 보안 정책에 따라 최초 1회 **[이 출처 허용]** 설정을 요구할 수 있습니다. 이 권한은 사용자가 직접 Android 설정에서 허용하며, 앱이 백그라운드에서 자동 설치를 수행하지 않습니다.
+
+---
+
 ## 🔐 앱 잠금
 
 설정 화면의 **[앱 잠금]**을 켜면 다음 앱 실행부터 기기의 보안 인증을 요구합니다.
@@ -99,6 +122,8 @@
 ## 🛡️ 안전성 및 보안
 
 * **On-Device 중심 동작**: 무선 ADB 페어링과 시스템 설정 변경은 사용자 기기 내부에서 처리합니다.
+* **명시적 업데이트 통신**: GitHub Releases 네트워크 연결은 사용자가 [앱 업데이트]를 눌렀을 때만 발생하며 자동·주기적 업데이트 확인은 하지 않습니다.
+* **검증된 업데이트 APK**: 다운로드한 APK는 SHA-256뿐 아니라 현재 설치 앱과의 서명 인증서 일치까지 확인한 뒤 설치 화면으로 전달합니다.
 * **카메라 권한 없음**: 앱은 `android.permission.CAMERA` 권한을 요청하지 않으며 사진이나 카메라 영상에 접근하지 않습니다.
 * **독립 암호화 키**: 무선 디버깅에 사용하는 키는 각 기기의 앱 전용 저장 영역에서 생성·보관합니다.
 * **실제 시스템 상태 확인**: 앱 화면의 무음 상태는 실제 CSC 값을 기준으로 표시해 저장된 선호값과 시스템 상태가 어긋나는 문제를 줄였습니다.
