@@ -1,0 +1,98 @@
+name: Apply v1.4.1 Permission Notice Patch
+
+on:
+  push:
+    branches:
+      - release/v1.4.1-software-update-permission-note
+    paths:
+      - '.github/workflows/apply-v1.4.1-permission-note.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: release/v1.4.1-software-update-permission-note
+
+      - name: Apply v1.4.1 changes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          main = Path('app/src/main/java/com/charmingcolor/shuttersoundzero/ui/main/MainScreen.kt')
+          text = main.read_text()
+          marker = '''    StatusRow(
+              title = "시스템 보안 설정 권한",
+              valueText = if (hasPermission) "연동 완료" else "1회 설정 필요",
+              valueColor = if (hasPermission) StatusGreen else BrandBlueLight,
+              onClick = if (!hasPermission) onStartNotificationPairing else null
+          )
+
+          RowDivider()
+          '''
+          replacement = '''    StatusRow(
+              title = "시스템 보안 설정 권한",
+              valueText = if (hasPermission) "연동 완료" else "1회 설정 필요",
+              valueColor = if (hasPermission) StatusGreen else BrandBlueLight,
+              onClick = if (!hasPermission) onStartNotificationPairing else null
+          )
+
+          RowDivider()
+
+          InfoRow(
+              title = "소프트웨어 업데이트 후 권한 확인",
+              subtitle = "기기 소프트웨어 업데이트 후에는 시스템 보안 설정 권한이 해제될 수 있습니다. 업데이트 후 [1회 설정 필요]로 표시되면 [권한 요청]을 다시 진행해 주세요."
+          )
+
+          RowDivider()
+          '''
+          if marker not in text:
+              raise SystemExit('PermissionSetupSection marker not found')
+          main.write_text(text.replace(marker, replacement, 1))
+
+          gradle = Path('app/build.gradle.kts')
+          text = gradle.read_text()
+          if 'versionCode = 140' not in text or 'versionName = "1.4.0"' not in text:
+              raise SystemExit('Expected v1.4.0 version not found')
+          text = text.replace('versionCode = 140', 'versionCode = 141', 1)
+          text = text.replace('versionName = "1.4.0"', 'versionName = "1.4.1"', 1)
+          gradle.write_text(text)
+
+          readme = Path('README.md')
+          text = readme.read_text()
+          text = text.replace('Version-1.4.0-orange.svg', 'Version-1.4.1-orange.svg', 1)
+          needle = '''5. **🔄 재부팅 및 소프트웨어 업데이트 상태 확인·복원**
+   * 재부팅이나 소프트웨어 업데이트 이후 CSC 상태를 확인하고 필요한 경우 사용자가 설정한 무음 상태를 복원합니다.
+   * 소프트웨어 업데이트 자동 감지는 앱 설정에서 켜거나 끌 수 있습니다.
+'''
+          replacement_readme = '''5. **🔄 재부팅 및 소프트웨어 업데이트 상태 확인·복원**
+   * 재부팅이나 소프트웨어 업데이트 이후 CSC 상태를 확인하고 필요한 경우 사용자가 설정한 무음 상태를 복원합니다.
+   * 소프트웨어 업데이트 후 시스템 보안 설정 권한이 해제된 경우 메인 화면에서 [권한 요청]을 다시 진행해야 합니다.
+   * 소프트웨어 업데이트 자동 감지는 앱 설정에서 켜거나 끌 수 있습니다.
+'''
+          if needle not in text:
+              raise SystemExit('README software update section not found')
+          readme.write_text(text.replace(needle, replacement_readme, 1))
+
+          notes = Path('.github/release-notes/v1.4.1.md')
+          notes.parent.mkdir(parents=True, exist_ok=True)
+          notes.write_text('''소프트웨어 업데이트 후 권한 상태를 더 쉽게 확인할 수 있도록 안내를 보강했습니다.\n\n• 메인 화면의 권한 설정 영역에 소프트웨어 업데이트 후 권한 확인 안내를 추가했습니다.\n• 업데이트 후 시스템 보안 설정 권한이 해제된 경우 [권한 요청]을 다시 진행해야 한다는 내용을 바로 확인할 수 있습니다.\n''')
+          PY
+
+      - name: Remove temporary patch workflow
+        run: git rm .github/workflows/apply-v1.4.1-permission-note.yml
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md app/build.gradle.kts app/src/main/java/com/charmingcolor/shuttersoundzero/ui/main/MainScreen.kt .github/release-notes/v1.4.1.md
+          git commit -m 'release: prepare v1.4.1 software update permission notice'
+          git push origin HEAD:release/v1.4.1-software-update-permission-note
