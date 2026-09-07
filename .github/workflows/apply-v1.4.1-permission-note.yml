@@ -27,31 +27,8 @@ jobs:
 
           main = Path('app/src/main/java/com/charmingcolor/shuttersoundzero/ui/main/MainScreen.kt')
           text = main.read_text()
-          marker = '''    StatusRow(
-              title = "시스템 보안 설정 권한",
-              valueText = if (hasPermission) "연동 완료" else "1회 설정 필요",
-              valueColor = if (hasPermission) StatusGreen else BrandBlueLight,
-              onClick = if (!hasPermission) onStartNotificationPairing else null
-          )
-
-          RowDivider()
-          '''
-          replacement = '''    StatusRow(
-              title = "시스템 보안 설정 권한",
-              valueText = if (hasPermission) "연동 완료" else "1회 설정 필요",
-              valueColor = if (hasPermission) StatusGreen else BrandBlueLight,
-              onClick = if (!hasPermission) onStartNotificationPairing else null
-          )
-
-          RowDivider()
-
-          InfoRow(
-              title = "소프트웨어 업데이트 후 권한 확인",
-              subtitle = "기기 소프트웨어 업데이트 후에는 시스템 보안 설정 권한이 해제될 수 있습니다. 업데이트 후 [1회 설정 필요]로 표시되면 [권한 요청]을 다시 진행해 주세요."
-          )
-
-          RowDivider()
-          '''
+          marker = '    StatusRow(\n        title = "시스템 보안 설정 권한",\n        valueText = if (hasPermission) "연동 완료" else "1회 설정 필요",\n        valueColor = if (hasPermission) StatusGreen else BrandBlueLight,\n        onClick = if (!hasPermission) onStartNotificationPairing else null\n    )\n\n    RowDivider()\n'
+          replacement = '    StatusRow(\n        title = "시스템 보안 설정 권한",\n        valueText = if (hasPermission) "연동 완료" else "1회 설정 필요",\n        valueColor = if (hasPermission) StatusGreen else BrandBlueLight,\n        onClick = if (!hasPermission) onStartNotificationPairing else null\n    )\n\n    RowDivider()\n\n    InfoRow(\n        title = "소프트웨어 업데이트 후 권한 확인",\n        subtitle = "기기 소프트웨어 업데이트 후에는 시스템 보안 설정 권한이 해제될 수 있습니다. 업데이트 후 [1회 설정 필요]로 표시되면 [권한 요청]을 다시 진행해 주세요."\n    )\n\n    RowDivider()\n'
           if marker not in text:
               raise SystemExit('PermissionSetupSection marker not found')
           main.write_text(text.replace(marker, replacement, 1))
@@ -66,23 +43,19 @@ jobs:
 
           readme = Path('README.md')
           text = readme.read_text()
+          if 'Version-1.4.0-orange.svg' not in text:
+              raise SystemExit('README v1.4.0 badge not found')
           text = text.replace('Version-1.4.0-orange.svg', 'Version-1.4.1-orange.svg', 1)
-          needle = '''5. **🔄 재부팅 및 소프트웨어 업데이트 상태 확인·복원**
-   * 재부팅이나 소프트웨어 업데이트 이후 CSC 상태를 확인하고 필요한 경우 사용자가 설정한 무음 상태를 복원합니다.
-   * 소프트웨어 업데이트 자동 감지는 앱 설정에서 켜거나 끌 수 있습니다.
-'''
-          replacement_readme = '''5. **🔄 재부팅 및 소프트웨어 업데이트 상태 확인·복원**
-   * 재부팅이나 소프트웨어 업데이트 이후 CSC 상태를 확인하고 필요한 경우 사용자가 설정한 무음 상태를 복원합니다.
-   * 소프트웨어 업데이트 후 시스템 보안 설정 권한이 해제된 경우 메인 화면에서 [권한 요청]을 다시 진행해야 합니다.
-   * 소프트웨어 업데이트 자동 감지는 앱 설정에서 켜거나 끌 수 있습니다.
-'''
-          if needle not in text:
-              raise SystemExit('README software update section not found')
-          readme.write_text(text.replace(needle, replacement_readme, 1))
+          update_line = '   * 소프트웨어 업데이트 자동 감지는 앱 설정에서 켜거나 끌 수 있습니다.\n'
+          update_note = '   * 소프트웨어 업데이트 후 시스템 보안 설정 권한이 해제된 경우 메인 화면에서 [권한 요청]을 다시 진행해야 합니다.\n'
+          if update_line not in text:
+              raise SystemExit('README software update line not found')
+          text = text.replace(update_line, update_note + update_line, 1)
+          readme.write_text(text)
 
           notes = Path('.github/release-notes/v1.4.1.md')
           notes.parent.mkdir(parents=True, exist_ok=True)
-          notes.write_text('''소프트웨어 업데이트 후 권한 상태를 더 쉽게 확인할 수 있도록 안내를 보강했습니다.\n\n• 메인 화면의 권한 설정 영역에 소프트웨어 업데이트 후 권한 확인 안내를 추가했습니다.\n• 업데이트 후 시스템 보안 설정 권한이 해제된 경우 [권한 요청]을 다시 진행해야 한다는 내용을 바로 확인할 수 있습니다.\n''')
+          notes.write_text('소프트웨어 업데이트 후 권한 상태를 더 쉽게 확인할 수 있도록 안내를 보강했습니다.\n\n• 메인 화면의 권한 설정 영역에 소프트웨어 업데이트 후 권한 확인 안내를 추가했습니다.\n• 업데이트 후 시스템 보안 설정 권한이 해제된 경우 [권한 요청]을 다시 진행해야 한다는 내용을 바로 확인할 수 있습니다.\n')
           PY
 
       - name: Remove temporary patch workflow
