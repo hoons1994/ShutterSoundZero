@@ -1,0 +1,48 @@
+name: PR 제목 규칙 검사
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-title:
+    name: 한국어 PR 제목 확인
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR 제목 형식 검사
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          title = os.environ.get("PR_TITLE", "").strip()
+          allowed = (
+              "feat", "fix", "refactor", "test", "docs",
+              "chore", "build", "ci", "security", "release",
+          )
+
+          prefix_pattern = re.compile(
+              rf"^({'|'.join(allowed)}):\s+(.+)$"
+          )
+          match = prefix_pattern.match(title)
+
+          if not match:
+              print("::error::PR 제목은 '<유형>: <한국어 제목>' 형식이어야 합니다.")
+              print("허용 유형: " + ", ".join(allowed))
+              print("예: fix: 소프트웨어 업데이트 후 권한 안내 개선")
+              sys.exit(1)
+
+          description = match.group(2)
+          if not re.search(r"[가-힣]", description):
+              print("::error::PR 제목의 설명에는 한국어가 포함되어야 합니다.")
+              print("예: feat: 앱 잠금 기능 추가")
+              sys.exit(1)
+
+          print(f"PR 제목 규칙 확인 완료: {title}")
+          PY
