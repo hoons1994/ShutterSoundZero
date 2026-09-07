@@ -621,6 +621,13 @@ private fun PermissionSetupSection(
 
     RowDivider()
 
+    InfoRow(
+        title = "소프트웨어 업데이트 후 권한 확인",
+        subtitle = "기기 소프트웨어 업데이트 후에는 시스템 보안 설정 권한이 해제될 수 있습니다. 업데이트 후 [1회 설정 필요]로 표시되면 [권한 요청]을 다시 진행해 주세요."
+    )
+
+    RowDivider()
+
     if (!hasPermission) {
         Column(
             modifier = Modifier

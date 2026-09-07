@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.4.0-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.4.1-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터음 제로 안내 인포그래픽" width="720" />
@@ -47,6 +47,7 @@
 
 5. **🔄 재부팅 및 소프트웨어 업데이트 상태 확인·복원**
    * 재부팅이나 소프트웨어 업데이트 이후 CSC 상태를 확인하고 필요한 경우 사용자가 설정한 무음 상태를 복원합니다.
+   * 소프트웨어 업데이트 후 시스템 보안 설정 권한이 해제된 경우 메인 화면에서 [권한 요청]을 다시 진행해야 합니다.
    * 소프트웨어 업데이트 자동 감지는 앱 설정에서 켜거나 끌 수 있습니다.
 
 6. **🔐 앱 잠금**
