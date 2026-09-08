@@ -3,12 +3,8 @@ package com.charmingcolor.shuttersoundzero.ui.main
 import android.content.Intent
 import android.provider.MediaStore
 import android.widget.Toast
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -20,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -52,7 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -183,38 +177,50 @@ fun MainScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             AppHeader(
-                isMuted = uiState.isCscMuted,
                 onSettingsClick = { onItemClick(Settings) }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            GroupLabel("셔터음 제어")
+            GroupLabel("현재 상태")
             SettingsCard {
-                SwitchRow(
-                    title = "카메라 셔터음 끄기",
-                    subtitle = "진동·무음 모드 시 촬영음 완전 차단",
-                    checked = uiState.isCscMuted,
-                    onCheckedChange = { enable ->
-                        if (!com.charmingcolor.shuttersoundzero.core.CscMuteManager.isSamsungDevice()) {
-                            Toast.makeText(
-                                context,
-                                "⚠️ 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            return@SwitchRow
-                        }
-                        if (!hasEffectivePermission) {
-                            Toast.makeText(
-                                context,
-                                "권한이 부여되지 않았습니다. 아래 [권한 설정]을 먼저 진행해 주세요.",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        } else {
-                            viewModel.toggleCscMute(enable)
-                        }
+                StatusRow(
+                    title = "카메라 무음 설정",
+                    valueText = when {
+                        uiState.isCscMuted -> "설정 완료"
+                        hasEffectivePermission -> "재적용 필요"
+                        else -> "1회 설정 필요"
+                    },
+                    valueColor = when {
+                        uiState.isCscMuted -> StatusGreen
+                        hasEffectivePermission -> StatusAmber
+                        else -> BrandBlueLight
+                    },
+                    onClick = null
+                )
+                RowDivider()
+                InfoRow(
+                    title = when {
+                        uiState.isCscMuted -> "이제 앱을 계속 열어둘 필요가 없습니다"
+                        hasEffectivePermission -> "권한은 유지되어 있습니다"
+                        else -> "처음 한 번만 설정하면 됩니다"
+                    },
+                    subtitle = when {
+                        uiState.isCscMuted ->
+                            "진동·무음 모드에서 카메라 셔터음이 나지 않도록 설정되어 있습니다. 평소에는 무선 디버깅을 꺼두는 것이 정상이며, 나중에 설정을 바꿀 때만 잠시 다시 켜면 됩니다."
+                        hasEffectivePermission ->
+                            "현재 카메라 무음 설정이 적용되어 있지 않습니다. 무선 디버깅을 잠시 켠 뒤 [카메라 무음 다시 적용]을 눌러 주세요."
+                        else ->
+                            "[1회 설정 시작]에서 6자리 페어링 코드만 입력하면 권한 연동과 무음 설정을 한 번에 적용하고, 완료 후 무선 디버깅도 자동으로 끕니다."
                     }
                 )
+                if (hasEffectivePermission && !uiState.isCscMuted) {
+                    RowDivider()
+                    ActionRow(
+                        title = "카메라 무음 다시 적용",
+                        onClick = { viewModel.toggleCscMute(true) }
+                    )
+                }
                 RowDivider()
                 ActionRow(
                     title = "카메라 열어서 테스트",
@@ -233,7 +239,7 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("권한 설정")
+            GroupLabel("초기 설정 및 복구")
             SettingsCard {
                 PermissionSetupSection(
                     hasPermission = hasEffectivePermission,
@@ -328,13 +334,13 @@ fun MainScreen(
             shape = RoundedCornerShape(24.dp),
             title = {
                 Text(
-                    text = "💡 설정 변경 안내",
+                    text = "무선 디버깅이 필요합니다",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
             },
             text = {
                 Text(
-                    text = "안드로이드 시스템 보안 정책상 설정을 변경(소리 켜기/끄기)할 때는 일시적으로 [무선 디버깅]이 켜져 있어야 합니다.\n\n※ 이미 적용된 카메라 무음 상태는 평소 무선 디버깅을 꺼두셔도 영구히 유지됩니다.",
+                    text = "카메라 셔터음 설정을 바꾸는 순간에만 [무선 디버깅]이 필요합니다.\n\n[무선 디버깅 켜기]에서 활성화한 뒤 앱으로 돌아와 다시 시도해 주세요. 설정 변경이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다. 이미 적용된 카메라 무음 설정은 무선 디버깅을 꺼도 유지됩니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 20.sp
@@ -358,61 +364,64 @@ fun MainScreen(
             }
         )
     }
+
+    if (uiState.showWirelessDebuggingCleanupHelp) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissWirelessDebuggingCleanupHelp() },
+            shape = RoundedCornerShape(24.dp),
+            title = { Text("무선 디버깅을 꺼 주세요") },
+            text = {
+                Text(
+                    "카메라 무음 설정은 정상적으로 적용됐지만 이 기기에서는 무선 디버깅을 자동으로 끄지 못했습니다.\n\n" +
+                        "무선 디버깅을 계속 켜두면 Wi-Fi 연결 시 허용 여부를 묻는 시스템 알림이 다시 나타날 수 있습니다. 지금 무선 디버깅을 꺼 주세요."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.dismissWirelessDebuggingCleanupHelp()
+                        com.charmingcolor.shuttersoundzero.core.CscMuteManager.openWirelessDebuggingOrDevOptions(context)
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("무선 디버깅 설정 열기")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissWirelessDebuggingCleanupHelp() }) {
+                    Text("나중에")
+                }
+            }
+        )
+    }
 }
 
 // ── 헤더 ──────────────────────────────────────
 
 @Composable
-private fun AppHeader(isMuted: Boolean, onSettingsClick: () -> Unit) {
-    val dotColor by animateColorAsState(
-        targetValue = if (isMuted) StatusGreen else Color(0xFFBCC1CA),
-        animationSpec = tween(400),
-        label = "statusDot"
-    )
-
-    Column(
+private fun AppHeader(onSettingsClick: () -> Unit) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = CardPaddingH)
-            .padding(top = 12.dp, bottom = 8.dp)
+            .padding(top = 12.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "셔터음 제로",
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 30.sp,
-                    letterSpacing = (-0.5).sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            IconButton(onClick = onSettingsClick) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "설정",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(dotColor)
-            )
-            Text(
-                text = if (isMuted) "셔터음 무음 적용 중" else "셔터음 기본 상태",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+        Text(
+            text = "셔터음 제로",
+            style = MaterialTheme.typography.headlineLarge.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 30.sp,
+                letterSpacing = (-0.5).sp
+            ),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        IconButton(onClick = onSettingsClick) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = "설정",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -622,8 +631,8 @@ private fun PermissionSetupSection(
     RowDivider()
 
     InfoRow(
-        title = "소프트웨어 업데이트 후 권한 확인",
-        subtitle = "기기 소프트웨어 업데이트 후에는 시스템 보안 설정 권한이 해제될 수 있습니다. 업데이트 후 [1회 설정 필요]로 표시되면 [권한 요청]을 다시 진행해 주세요."
+        title = "재부팅·소프트웨어 업데이트 후",
+        subtitle = "설정이 그대로면 아무 작업이 필요 없습니다. 셔터음이 다시 들리면 무선 디버깅을 잠시 켜고 [카메라 무음 다시 적용]을 눌러 주세요. [1회 설정 필요]가 표시될 때만 권한 연동을 다시 진행하면 됩니다."
     )
 
     RowDivider()
@@ -636,12 +645,12 @@ private fun PermissionSetupSection(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = "무선 디버깅 권한 요청",
+                text = "1회 설정",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "개발자 옵션의 [페어링 코드로 기기 페어링] 화면에서 상단바를 내려 6자리 숫자만 입력하면 즉시 권한이 연동됩니다.",
+                text = "개발자 옵션의 [페어링 코드로 기기 페어링] 화면에서 상단바를 내려 6자리 숫자만 입력하면 됩니다. 앱이 권한 연동과 무음 설정을 적용한 뒤 무선 디버깅도 자동으로 끕니다.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 19.sp
@@ -662,7 +671,7 @@ private fun PermissionSetupSection(
                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
             ) {
                 Text(
-                    text = "권한 요청",
+                    text = "1회 설정 시작",
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
@@ -676,7 +685,7 @@ private fun PermissionSetupSection(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "보안 설정 권한이 정상 연동되었습니다. 언제든 자유롭게 셔터음을 제어할 수 있습니다.",
+                text = "권한 연동은 완료되어 있습니다. 평소에는 무선 디버깅을 꺼두세요. 카메라 무음 상태를 바꾸거나 다시 적용할 때만 잠시 켜면 됩니다.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp

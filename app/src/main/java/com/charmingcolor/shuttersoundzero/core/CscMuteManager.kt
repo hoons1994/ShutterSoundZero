@@ -54,41 +54,14 @@ object CscMuteManager {
     }
 
     /**
-     * 앱에 WRITE_SECURE_SETTINGS 또는 시스템 설정 쓰기 권한이 있는지 확인
+     * 최초 무선 디버깅 페어링으로 부여한 WRITE_SECURE_SETTINGS 권한이 유지되는지 확인한다.
+     *
+     * 이 권한만으로 비공개 Settings.System 키를 앱 UID에서 직접 변경할 수 있는 것은 아니다.
+     * CSC 값 변경은 shell UID로 실행되는 로컬 ADB `settings put system` 경로를 사용한다.
      */
     fun hasWritePermission(context: Context): Boolean {
-        val secureGranted = context.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == PackageManager.PERMISSION_GRANTED
-        val systemCanWrite = Settings.System.canWrite(context)
-        return secureGranted || systemCanWrite
-    }
-
-    /**
-     * CSC 셔터음 설정 변경 시도
-     * @param mute true이면 0(무음 연동), false이면 1(기본 강제 소리)
-     */
-    fun setCscShutterSoundMuted(context: Context, mute: Boolean): Result<Unit> {
-        val targetValue = if (mute) 0 else 1
-        return try {
-            val success = Settings.System.putInt(context.contentResolver, CSC_KEY, targetValue)
-            if (success) {
-                Log.i(TAG, "Successfully updated $CSC_KEY to $targetValue")
-                Result.success(Unit)
-            } else {
-                // String fallback
-                val strSuccess = Settings.System.putString(context.contentResolver, CSC_KEY, targetValue.toString())
-                if (strSuccess) {
-                    Result.success(Unit)
-                } else {
-                    Result.failure(IllegalStateException("시스템 설정 변경에 실패했습니다. WRITE_SECURE_SETTINGS 권한을 확인해주세요."))
-                }
-            }
-        } catch (e: SecurityException) {
-            Log.e(TAG, "SecurityException while modifying $CSC_KEY", e)
-            Result.failure(e)
-        } catch (e: Exception) {
-            Log.e(TAG, "Unexpected error modifying $CSC_KEY", e)
-            Result.failure(e)
-        }
+        return context.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") ==
+            PackageManager.PERMISSION_GRANTED
     }
 
     /**
