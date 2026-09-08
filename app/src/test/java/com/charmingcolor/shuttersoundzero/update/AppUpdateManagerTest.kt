@@ -42,4 +42,45 @@ class AppUpdateManagerTest {
     fun invalidSha256_isRejected() {
         assertNull(AppUpdateManager.parseSha256("not-a-checksum"))
     }
+
+    @Test
+    fun automaticCheck_disabledIsNeverDue() {
+        assertFalse(
+            AppUpdateManager.isAutomaticCheckDue(
+                enabled = false,
+                lastCheckAtMillis = 0L,
+                nowMillis = 1_000L
+            )
+        )
+    }
+
+    @Test
+    fun automaticCheck_firstRunIsDue() {
+        assertTrue(
+            AppUpdateManager.isAutomaticCheckDue(
+                enabled = true,
+                lastCheckAtMillis = 0L,
+                nowMillis = 1_000L
+            )
+        )
+    }
+
+    @Test
+    fun automaticCheck_waitsForTwentyFourHours() {
+        val last = 10_000L
+        val interval = AppUpdateManager.AUTOMATIC_CHECK_INTERVAL_MILLIS
+        assertFalse(AppUpdateManager.isAutomaticCheckDue(true, last, last + interval - 1L))
+        assertTrue(AppUpdateManager.isAutomaticCheckDue(true, last, last + interval))
+    }
+
+    @Test
+    fun automaticCheck_clockRollbackAllowsFreshBaseline() {
+        assertTrue(
+            AppUpdateManager.isAutomaticCheckDue(
+                enabled = true,
+                lastCheckAtMillis = 20_000L,
+                nowMillis = 10_000L
+            )
+        )
+    }
 }

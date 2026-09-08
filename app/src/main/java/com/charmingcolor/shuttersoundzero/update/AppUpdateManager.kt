@@ -23,6 +23,7 @@ object AppUpdateManager {
     private const val RELEASE_DOWNLOAD_PREFIX =
         "/hoons1994/ShutterSoundZero/releases/download/"
     private const val USER_AGENT = "ShutterSoundZero-UpdateChecker"
+    internal const val AUTOMATIC_CHECK_INTERVAL_MILLIS = 24L * 60L * 60L * 1000L
 
     sealed interface UpdateCheckResult {
         data class UpToDate(val latestVersion: String) : UpdateCheckResult
@@ -189,6 +190,19 @@ object AppUpdateManager {
             false
         }
     }
+
+    internal fun isAutomaticCheckDue(
+        enabled: Boolean,
+        lastCheckAtMillis: Long,
+        nowMillis: Long
+    ): Boolean {
+        if (!enabled) return false
+        if (lastCheckAtMillis <= 0L) return true
+        if (nowMillis < lastCheckAtMillis) return true
+        return nowMillis - lastCheckAtMillis >= AUTOMATIC_CHECK_INTERVAL_MILLIS
+    }
+
+    internal fun installedVersionName(context: Context): String = currentVersionName(context)
 
     internal fun isNewerVersion(candidate: String, current: String): Boolean {
         val candidateParts = semanticVersionParts(candidate) ?: return false

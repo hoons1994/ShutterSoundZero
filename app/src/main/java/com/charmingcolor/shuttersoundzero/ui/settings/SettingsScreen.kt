@@ -77,6 +77,9 @@ fun SettingsScreen(
     var isSoftwareUpdateCheck by remember {
         mutableStateOf(prefs.isSoftwareUpdateCheckEnabled)
     }
+    var isAppUpdateAutoCheck by remember {
+        mutableStateOf(prefs.isAppUpdateAutoCheckEnabled)
+    }
     var isAppLockEnabled by remember { mutableStateOf(prefs.isAppLockEnabled) }
     var isLockSetupInProgress by remember { mutableStateOf(false) }
     var lockErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -109,12 +112,16 @@ fun SettingsScreen(
             try {
                 when (val result = AppUpdateManager.checkForUpdate(context)) {
                     is AppUpdateManager.UpdateCheckResult.UpToDate -> {
+                        prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
+                        prefs.knownAvailableAppUpdateVersion = null
                         updateInfo = null
                         verifiedUpdate = null
                         updateStatusMessage =
                             "현재 최신 버전을 사용하고 있습니다.\n\nv$versionName"
                     }
                     is AppUpdateManager.UpdateCheckResult.Available -> {
+                        prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
+                        prefs.knownAvailableAppUpdateVersion = result.update.versionName
                         updateInfo = result.update
                         verifiedUpdate = null
                         updateDownloadProgress = 0
@@ -130,17 +137,31 @@ fun SettingsScreen(
 
     fun downloadUpdate(update: AppUpdateManager.UpdateInfo) {
         if (isUpdateDownloading) return
+        if (!AppUpdateManager.canRequestPackageInstalls(context)) {
+            installPermissionHint = true
+            try {
+                AppUpdateManager.openInstallPermissionSettings(context)
+            } catch (error: Throwable) {
+                updateErrorMessage = friendlyUpdateError(error)
+            }
+            return
+        }
         coroutineScope.launch {
             isUpdateDownloading = true
             updateDownloadProgress = 0
             updateErrorMessage = null
             installPermissionHint = false
             try {
-                verifiedUpdate = AppUpdateManager.downloadAndVerify(
+                val verified = AppUpdateManager.downloadAndVerify(
                     context = context,
                     update = update,
                     onProgress = { progress -> updateDownloadProgress = progress }
                 )
+                verifiedUpdate = verified
+                if (!AppUpdateManager.launchInstaller(context, verified)) {
+                    updateErrorMessage =
+                        "Android 설치 화면을 열 수 없습니다. 기기의 설치 권한 설정을 확인해 주세요."
+                }
             } catch (error: Throwable) {
                 verifiedUpdate = null
                 updateErrorMessage = friendlyUpdateError(error)
@@ -337,12 +358,27 @@ fun SettingsScreen(
                     subtitle = versionName
                 )
                 RowDivider()
+                SwitchRow(
+                    title = "앱 업데이트 자동 확인",
+                    subtitle = "앱을 열 때 하루 한 번 이하로 최신 정식 버전만 확인 · APK는 자동 다운로드하지 않음",
+                    checked = isAppUpdateAutoCheck,
+                    onCheckedChange = { enabled ->
+                        isAppUpdateAutoCheck = enabled
+                        prefs.isAppUpdateAutoCheckEnabled = enabled
+                        if (enabled) {
+                            // 다음 홈 화면 진입 시 즉시 한 번 확인한 뒤 24시간 간격을 적용한다.
+                            prefs.lastAppUpdateCheckAtMillis = 0L
+                        }
+                    }
+                )
+                RowDivider()
                 ClickableRow(
                     title = "앱 업데이트",
                     subtitle = when {
                         isUpdateChecking -> "GitHub Releases에서 최신 버전 확인 중…"
-                        updateInfo != null -> "v${updateInfo?.versionName} 사용 가능"
-                        else -> "사용자가 확인할 때만 GitHub Releases에 연결"
+                        updateInfo != null -> "v${updateInfo?.versionName} 사용 가능 · 눌러 변경사항 확인"
+                        isAppUpdateAutoCheck -> "자동 확인 켜짐 · 눌러 지금 확인"
+                        else -> "자동 확인 꺼짐 · 눌러 지금 확인"
                     },
                     onClick = {
                         val available = updateInfo
@@ -597,7 +633,7 @@ fun SettingsScreen(
 
                         if (installPermissionHint) {
                             Text(
-                                text = "Android의 [이 출처 허용]을 켠 뒤 이 화면으로 돌아와 [설치]를 다시 눌러 주세요.",
+                                text = "Android의 [이 출처 허용]을 켠 뒤 이 화면으로 돌아와 [업데이트]를 다시 눌러 주세요.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 18.sp
@@ -614,7 +650,7 @@ fun SettingsScreen(
                         }
                         verifiedUpdate == null -> {
                             TextButton(onClick = { downloadUpdate(update) }) {
-                                Text("업데이트 다운로드")
+                                Text("업데이트")
                             }
                         }
                         else -> {

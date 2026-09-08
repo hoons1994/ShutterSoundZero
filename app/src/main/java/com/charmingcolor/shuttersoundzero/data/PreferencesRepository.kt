@@ -51,6 +51,25 @@ class PreferencesRepository(context: Context) {
         get() = prefs.getBoolean(KEY_APP_LOCK_ENABLED, false)
         set(value) = prefs.edit { putBoolean(KEY_APP_LOCK_ENABLED, value) }
 
+    /**
+     * 앱을 열었을 때 최신 정식 버전을 조용히 확인할지 여부.
+     * APK 다운로드와 설치는 항상 사용자가 [업데이트]를 누른 뒤에만 시작한다.
+     */
+    var isAppUpdateAutoCheckEnabled: Boolean
+        get() = prefs.getBoolean(KEY_APP_UPDATE_AUTO_CHECK, true)
+        set(value) = prefs.edit { putBoolean(KEY_APP_UPDATE_AUTO_CHECK, value) }
+
+    var lastAppUpdateCheckAtMillis: Long
+        get() = prefs.getLong(KEY_LAST_APP_UPDATE_CHECK_AT, 0L)
+        set(value) = prefs.edit { putLong(KEY_LAST_APP_UPDATE_CHECK_AT, value) }
+
+    var knownAvailableAppUpdateVersion: String?
+        get() = prefs.getString(KEY_KNOWN_AVAILABLE_APP_UPDATE_VERSION, null)
+        set(value) = prefs.edit {
+            if (value == null) remove(KEY_KNOWN_AVAILABLE_APP_UPDATE_VERSION)
+            else putString(KEY_KNOWN_AVAILABLE_APP_UPDATE_VERSION, value)
+        }
+
     companion object {
         private const val PREF_NAME = "galaxy_camera_mute_prefs"
         private const val KEY_SHOULD_MUTE_ON_BOOT = "should_mute_on_boot"
@@ -62,6 +81,9 @@ class PreferencesRepository(context: Context) {
         private const val KEY_LAST_CONNECT_PORT = "last_connect_port"
         private const val KEY_PERMISSION_REVOKED_BY_USER = "permission_revoked_by_user"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
+        private const val KEY_APP_UPDATE_AUTO_CHECK = "app_update_auto_check"
+        private const val KEY_LAST_APP_UPDATE_CHECK_AT = "last_app_update_check_at"
+        private const val KEY_KNOWN_AVAILABLE_APP_UPDATE_VERSION = "known_available_app_update_version"
 
         @Volatile
         private var INSTANCE: PreferencesRepository? = null
