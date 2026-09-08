@@ -1,0 +1,37 @@
+name: v1.4.2 실제 동작 기준 정리
+
+on:
+  push:
+    branches:
+      - fix/direct-csc-control-v1.4.2
+    paths:
+      - .github/workflows/v142-cleanup-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+        with:
+          ref: fix/direct-csc-control-v1.4.2
+          fetch-depth: 0
+
+      - name: 실제 동작 기준 수정 적용
+        run: python3 .github/scripts/apply_v142_behavior_cleanup.py
+
+      - name: 임시 적용 파일 제거
+        run: |
+          rm -f .github/scripts/apply_v142_behavior_cleanup.py
+          rm -f .github/workflows/v142-cleanup-apply.yml
+
+      - name: 변경사항 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: 소프트웨어 업데이트 후 재적용 안내 정확화"
+          git push origin HEAD:fix/direct-csc-control-v1.4.2
