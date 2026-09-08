@@ -72,10 +72,7 @@ class BootReceiver : BroadcastReceiver() {
         prefs: PreferencesRepository
     ) {
         if (!prefs.shouldMuteOnBoot) {
-            showNotification(
-                context,
-                "소프트웨어 업데이트가 감지되었습니다. 카메라 무음 기능은 현재 사용 중이 아닙니다."
-            )
+            Log.i(TAG, "Software update detected; camera mute is not in use")
             return
         }
 
@@ -89,11 +86,7 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         if (CscMuteManager.isCscShutterSoundMuted(context)) {
-            Log.i(TAG, "CSC camera mute remained active after software update")
-            showNotification(
-                context,
-                "소프트웨어 업데이트가 감지되었습니다. 카메라 무음 설정은 정상적으로 유지되고 있습니다."
-            )
+            Log.i(TAG, "CSC camera mute remained active after software update; no action needed")
             return
         }
 
@@ -184,7 +177,7 @@ class BootReceiver : BroadcastReceiver() {
             "소프트웨어 업데이트 알림",
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "재부팅·소프트웨어 업데이트 후 카메라 무음 상태 및 재적용 안내"
+            description = "재부팅·소프트웨어 업데이트 후 카메라 무음 상태 확인 및 재적용 안내"
         }
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         manager?.createNotificationChannel(channel)

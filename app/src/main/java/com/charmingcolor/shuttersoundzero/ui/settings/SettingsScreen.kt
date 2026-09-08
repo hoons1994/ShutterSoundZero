@@ -228,8 +228,8 @@ fun SettingsScreen(
                 )
                 RowDivider()
                 ClickableRow(
-                    title = "개발자 옵션 끄기",
-                    subtitle = "설정 완료 후 개발자 옵션과 USB·무선 디버깅 종료",
+                    title = "개발자 옵션 전체 끄기",
+                    subtitle = "선택 사항 · 앱은 설정 완료 후 무선 디버깅만 자동으로 종료",
                     onClick = {
                         if (DeveloperOptionsManager.canDisableDirectly(context)) {
                             showDeveloperOptionsConfirm = true
@@ -242,11 +242,11 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("자동화")
+            GroupLabel("상태 확인")
             SettingsCard {
                 SwitchRow(
-                    title = "소프트웨어 업데이트 자동 감지",
-                    subtitle = "업데이트를 감지해 셔터음 상태를 확인하고 재적용이 필요하면 알림으로 안내",
+                    title = "소프트웨어 업데이트 후 상태 확인",
+                    subtitle = "업데이트 후 실제 셔터음 상태를 확인하고, 다시 설정이 필요할 때만 알림",
                     checked = isSoftwareUpdateCheck,
                     onCheckedChange = { enabled ->
                         isSoftwareUpdateCheck = enabled
@@ -260,7 +260,7 @@ fun SettingsScreen(
                 RowDivider()
                 InfoRow(
                     title = "빠른 설정 타일",
-                    subtitle = "알림창 하단 [편집]에서 '카메라 무음' 타일 추가 가능"
+                    subtitle = "상태를 바꿀 때만 무선 디버깅이 필요하며, 변경 후 앱이 다시 끄려고 시도합니다."
                 )
             }
 
@@ -471,10 +471,9 @@ fun SettingsScreen(
                 title = { Text("개발자 옵션 끄기") },
                 text = {
                     Text(
-                        "개발자 옵션과 USB·무선 디버깅을 모두 끕니다.\n\n" +
-                            "무선 디버깅 연결은 즉시 종료됩니다. 이미 ShutterSoundZero에 부여된 " +
-                            "WRITE_SECURE_SETTINGS 권한은 이 작업에서 취소하지 않습니다.\n\n" +
-                            "카메라 무음 권한 설정을 완료한 뒤 진행하는 것을 권장합니다."
+                        "앱은 카메라 무음 설정을 적용한 뒤 무선 디버깅만 자동으로 끄려고 시도합니다.\n\n" +
+                            "이 메뉴는 개발자 옵션 자체와 USB 디버깅까지 모두 끄고 싶은 경우에만 사용하세요. " +
+                            "이미 ShutterSoundZero에 부여된 WRITE_SECURE_SETTINGS 권한과 적용된 카메라 무음 설정은 이 작업에서 취소하지 않습니다."
                     )
                 },
                 confirmButton = {

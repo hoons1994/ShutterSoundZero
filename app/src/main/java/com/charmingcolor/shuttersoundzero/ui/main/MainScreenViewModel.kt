@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
@@ -29,7 +30,8 @@ data class MainUiState(
 
     val infoMessage: String? = null,
     val errorMessage: String? = null,
-    val showSwitchFailureHelp: Boolean = false
+    val showSwitchFailureHelp: Boolean = false,
+    val showWirelessDebuggingCleanupHelp: Boolean = false
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -124,12 +126,18 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             if (muteResult.isSuccess) {
                 stopMdnsDiscovery()
                 prefs.shouldMuteOnBoot = true
+                val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(getApplication())
                 refreshState()
                 _uiState.update {
                     it.copy(
                         isWirelessPairingInProgress = false,
                         wirelessPairingError = null,
-                        infoMessage = "✨ 자체 무선 페어링 완료! 카메라 셔터음 무음화가 적용되었습니다."
+                        infoMessage = if (wirelessCleanup.isSuccess) {
+                            "✨ 설정 완료! 카메라 무음 설정을 적용하고 무선 디버깅도 껐습니다."
+                        } else {
+                            "✨ 카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요."
+                        },
+                        showWirelessDebuggingCleanupHelp = wirelessCleanup.isFailure
                     )
                 }
                 onComplete(true)
@@ -180,11 +188,21 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             val actualStateMatchesRequest = _uiState.value.isCscMuted == enableMute
             if (adbResult.isSuccess && actualStateMatchesRequest) {
                 prefs.shouldMuteOnBoot = enableMute
+                val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(app)
                 _uiState.update {
                     it.copy(
-                        infoMessage = if (enableMute) "카메라 셔터음 무음화가 활성화되었습니다. (진동/무음 시 무음)"
-                        else "카메라 셔터음이 기본 상태(소리 발생)로 복원되었습니다.",
-                        errorMessage = null
+                        infoMessage = when {
+                            enableMute && wirelessCleanup.isSuccess ->
+                                "카메라 무음 설정을 적용했고 무선 디버깅도 껐습니다."
+                            !enableMute && wirelessCleanup.isSuccess ->
+                                "카메라 셔터음을 기본 상태로 복원했고 무선 디버깅도 껐습니다."
+                            enableMute ->
+                                "카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요."
+                            else ->
+                                "카메라 셔터음은 기본 상태로 복원됐습니다. 무선 디버깅은 직접 꺼 주세요."
+                        },
+                        errorMessage = null,
+                        showWirelessDebuggingCleanupHelp = wirelessCleanup.isFailure
                     )
                 }
             } else {
@@ -203,6 +221,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun dismissSwitchFailureHelp() {
         _uiState.update { it.copy(showSwitchFailureHelp = false) }
+    }
+
+    fun dismissWirelessDebuggingCleanupHelp() {
+        _uiState.update { it.copy(showWirelessDebuggingCleanupHelp = false) }
     }
 
     fun dismissMessages() {

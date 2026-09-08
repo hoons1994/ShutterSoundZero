@@ -7,6 +7,7 @@ import android.util.Log
 import android.widget.Toast
 import com.charmingcolor.shuttersoundzero.R
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import kotlinx.coroutines.CoroutineScope
@@ -78,12 +79,18 @@ class CameraMuteTileService : TileService() {
 
             if (result.isSuccess) {
                 prefs.shouldMuteOnBoot = targetMuted
-                val msg = if (targetMuted) {
-                    "카메라 셔터음 무음화가 활성화되었습니다. (진동/무음 시 무음)"
+                val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
+                val baseMessage = if (targetMuted) {
+                    "카메라 무음 설정이 적용되었습니다."
                 } else {
                     "카메라 셔터음이 기본 상태로 복원되었습니다."
                 }
-                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                val msg = if (wirelessCleanup.isSuccess) {
+                    "$baseMessage 무선 디버깅도 껐습니다."
+                } else {
+                    "$baseMessage 무선 디버깅은 직접 꺼 주세요."
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             } else {
                 prefs.shouldMuteOnBoot = currentMuted
                 Log.w(TAG, "Tile toggle failed via ADB")

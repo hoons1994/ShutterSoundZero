@@ -15,7 +15,7 @@ class PreferencesRepository(context: Context) {
         set(value) = prefs.edit { putBoolean(KEY_SHOULD_MUTE_ON_BOOT, value) }
 
     /**
-     * 사용자 화면에서는 "소프트웨어 업데이트 자동 감지"로 노출한다.
+     * 사용자 화면에서는 "소프트웨어 업데이트 후 상태 확인"으로 노출한다.
      * 기존 설치 사용자의 설정을 보존하기 위해 저장 키 이름은 그대로 유지한다.
      */
     var isSoftwareUpdateCheckEnabled: Boolean
