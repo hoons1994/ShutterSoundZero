@@ -2,7 +2,8 @@ from pathlib import Path
 
 path = Path('app/src/main/java/com/charmingcolor/shuttersoundzero/ui/main/MainScreen.kt')
 text = path.read_text(encoding='utf-8')
-old = '''                RowDivider()
+
+old_status = '''                RowDivider()
                 InfoRow(
                     title = when {
                         uiState.isCscMuted -> "이제 앱을 계속 열어둘 필요가 없습니다"
@@ -33,7 +34,7 @@ old = '''                RowDivider()
                     }
                 )
 '''
-new = '''                RowDivider()
+new_status = '''                RowDivider()
                 ActionRow(
                     title = "카메라 열어서 테스트",
                     onClick = {
@@ -64,6 +65,185 @@ new = '''                RowDivider()
                     }
                 )
 '''
-if old not in text:
-    raise SystemExit('target block not found')
-path.write_text(text.replace(old, new, 1), encoding='utf-8')
+if old_status not in text:
+    raise SystemExit('current status block not found')
+text = text.replace(old_status, new_status, 1)
+
+old_setup = '''@Composable
+private fun PermissionSetupSection(
+    hasPermission: Boolean,
+    onStartNotificationPairing: () -> Unit,
+    onResetPermission: () -> Unit
+) {
+    StatusRow(
+        title = "시스템 보안 설정 권한",
+        valueText = if (hasPermission) "연동 완료" else "1회 설정 필요",
+        valueColor = if (hasPermission) StatusGreen else BrandBlueLight,
+        onClick = if (!hasPermission) onStartNotificationPairing else null
+    )
+
+    RowDivider()
+
+    InfoRow(
+        title = "재부팅·소프트웨어 업데이트 후",
+        subtitle = "설정이 그대로면 아무 작업이 필요 없습니다. 셔터음이 다시 들리면 무선 디버깅을 잠시 켜고 [카메라 무음 다시 적용]을 눌러 주세요. [1회 설정 필요]가 표시될 때만 권한 연동을 다시 진행하면 됩니다."
+    )
+
+    RowDivider()
+
+    if (!hasPermission) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = CardPaddingH, vertical = CardPaddingV),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "1회 설정",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "개발자 옵션의 [페어링 코드로 기기 페어링] 화면에서 상단바를 내려 6자리 숫자만 입력하면 됩니다. 앱이 권한 연동과 무음 설정을 적용한 뒤 무선 디버깅도 자동으로 끕니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 19.sp
+            )
+        }
+
+        RowDivider()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = CardPaddingH, vertical = 12.dp)
+        ) {
+            Button(
+                onClick = onStartNotificationPairing,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
+            ) {
+                Text(
+                    text = "1회 설정 시작",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = CardPaddingH, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "권한 연동은 완료되어 있습니다. 평소에는 무선 디버깅을 꺼두세요. 카메라 무음 상태를 바꾸거나 다시 적용할 때만 잠시 켜면 됩니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            OutlinedButton(
+                onClick = onResetPermission,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text(
+                    text = "권한 재설정 (연동 해제)",
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+'''
+new_setup = '''@Composable
+private fun PermissionSetupSection(
+    hasPermission: Boolean,
+    onStartNotificationPairing: () -> Unit,
+    onResetPermission: () -> Unit
+) {
+    StatusRow(
+        title = "시스템 보안 설정 권한",
+        valueText = if (hasPermission) "연동 완료" else "1회 설정 필요",
+        valueColor = if (hasPermission) StatusGreen else BrandBlueLight,
+        onClick = if (!hasPermission) onStartNotificationPairing else null
+    )
+
+    RowDivider()
+
+    if (!hasPermission) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = CardPaddingH, vertical = 12.dp)
+        ) {
+            Button(
+                onClick = onStartNotificationPairing,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
+            ) {
+                Text(
+                    text = "1회 설정 시작",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+
+        RowDivider()
+
+        InfoRow(
+            title = "1회 설정 안내",
+            subtitle = "개발자 옵션의 [페어링 코드로 기기 페어링] 화면에서 상단바를 내려 6자리 숫자만 입력하면 됩니다. 앱이 권한 연동과 무음 설정을 적용한 뒤 무선 디버깅 자동 종료를 시도합니다."
+        )
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = CardPaddingH, vertical = 12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onResetPermission,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text(
+                    text = "권한 재설정 (연동 해제)",
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+
+        RowDivider()
+
+        InfoRow(
+            title = "평소에는 무선 디버깅을 꺼두세요",
+            subtitle = "권한 연동은 완료되어 있습니다. 카메라 무음 상태를 다시 적용하거나 원래대로 복원할 때만 설정 → 카메라 설정에서 무선 디버깅을 잠시 켜면 됩니다."
+        )
+    }
+
+    RowDivider()
+
+    InfoRow(
+        title = "재부팅·소프트웨어 업데이트 후",
+        subtitle = "설정이 그대로면 아무 작업이 필요 없습니다. 셔터음이 다시 들리면 설정 → 카메라 설정에서 [카메라 무음 다시 적용]을 사용해 주세요. [1회 설정 필요]가 표시될 때만 권한 연동을 다시 진행하면 됩니다."
+    )
+}
+'''
+if old_setup not in text:
+    raise SystemExit('initial setup block not found')
+text = text.replace(old_setup, new_setup, 1)
+
+path.write_text(text, encoding='utf-8')
