@@ -199,8 +199,8 @@ object PairingNotificationHelper {
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("무선 페어링 적용 중 ⏳")
-            .setContentText("기기 페어링 및 카메라 셔터음 무음 설정을 적용하고 있습니다...")
+            .setContentTitle("초기 설정 적용 중 ⏳")
+            .setContentText("권한 연동과 카메라 무음 설정을 적용하고 있습니다...")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -224,7 +224,10 @@ object PairingNotificationHelper {
         }
     }
 
-    fun showSuccessNotification(context: Context) {
+    fun showSuccessNotification(
+        context: Context,
+        wirelessDebuggingDisabled: Boolean = false
+    ) {
         createNotificationChannel(context)
 
         val contentIntent = Intent(context, MainActivity::class.java)
@@ -237,8 +240,14 @@ object PairingNotificationHelper {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("셔터음 제로: 권한 연동 완료 ✨")
-            .setContentText("보안 설정 권한이 연동되었습니다. 앱에서 셔터음 끄기 스위치를 켜보세요.")
+            .setContentTitle("셔터음 제로: 설정 완료 ✨")
+            .setContentText(
+                if (wirelessDebuggingDisabled) {
+                    "카메라 무음 설정을 적용했고 무선 디버깅도 껐습니다. 이제 앱을 계속 열어둘 필요가 없습니다."
+                } else {
+                    "카메라 무음 설정은 완료됐습니다. Wi-Fi 연결 알림을 피하려면 무선 디버깅을 직접 꺼 주세요."
+                }
+            )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(buildRedactedPublicVersion(context, completed = true))

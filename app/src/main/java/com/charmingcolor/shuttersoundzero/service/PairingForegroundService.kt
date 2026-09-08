@@ -15,6 +15,7 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.charmingcolor.shuttersoundzero.MainActivity
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +36,7 @@ class PairingForegroundService : Service() {
         private const val ACTION_SUBMIT_CODE = "com.charmingcolor.shuttersoundzero.action.SUBMIT_PAIRING_CODE"
         private const val EXTRA_DEV_OPTIONS_OFF = "dev_options_off"
         private const val EXTRA_PAIRING_CODE = "pairing_code"
+        private const val EXTRA_WIRELESS_DEBUGGING_DISABLED = "wireless_debugging_disabled"
 
         fun start(context: Context, isDevOptionsOff: Boolean) {
             val intent = Intent(context, PairingForegroundService::class.java).apply {
@@ -65,14 +67,20 @@ class PairingForegroundService : Service() {
             return Intent(context, PairingForegroundService::class.java).setAction(ACTION_STOP)
         }
 
-        fun complete(context: Context) {
+        fun complete(context: Context, wirelessDebuggingDisabled: Boolean) {
             try {
                 context.startService(
-                    Intent(context, PairingForegroundService::class.java).setAction(ACTION_COMPLETE)
+                    Intent(context, PairingForegroundService::class.java).apply {
+                        action = ACTION_COMPLETE
+                        putExtra(EXTRA_WIRELESS_DEBUGGING_DISABLED, wirelessDebuggingDisabled)
+                    }
                 )
             } catch (_: Exception) {
                 PairingNotificationHelper.cancelNotification(context)
-                PairingNotificationHelper.showSuccessNotification(context)
+                PairingNotificationHelper.showSuccessNotification(
+                    context,
+                    wirelessDebuggingDisabled = wirelessDebuggingDisabled
+                )
             }
         }
     }
@@ -100,8 +108,14 @@ class PairingForegroundService : Service() {
         when (intent?.action) {
             ACTION_START -> startPairing(intent.getBooleanExtra(EXTRA_DEV_OPTIONS_OFF, false))
             ACTION_SUBMIT_CODE -> submitPairingCode(intent.getStringExtra(EXTRA_PAIRING_CODE).orEmpty().trim())
-            ACTION_STOP -> stopPairing(showSuccess = false)
-            ACTION_COMPLETE -> stopPairing(showSuccess = true)
+            ACTION_STOP -> stopPairing(showSuccess = false, wirelessDebuggingDisabled = false)
+            ACTION_COMPLETE -> stopPairing(
+                showSuccess = true,
+                wirelessDebuggingDisabled = intent.getBooleanExtra(
+                    EXTRA_WIRELESS_DEBUGGING_DISABLED,
+                    false
+                )
+            )
             else -> stopSelf(startId)
         }
         return START_NOT_STICKY
@@ -194,13 +208,32 @@ class PairingForegroundService : Service() {
 
                         val muteResult = adbManager.applyCameraMuteViaAdb()
                         if (muteResult.isSuccess) {
+                            val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(
+                                this@PairingForegroundService
+                            )
+                            val wirelessDebuggingDisabled = wirelessCleanup.isSuccess
+                            if (wirelessDebuggingDisabled) {
+                                Log.i(TAG, "Wireless debugging disabled after successful setup")
+                            } else {
+                                wirelessCleanup.exceptionOrNull()?.let {
+                                    logFailure("Unable to disable wireless debugging after setup", it)
+                                }
+                            }
+
                             Log.i(TAG, "Pairing workflow completed successfully")
-                            complete(this@PairingForegroundService)
+                            complete(
+                                this@PairingForegroundService,
+                                wirelessDebuggingDisabled = wirelessDebuggingDisabled
+                            )
 
                             Handler(Looper.getMainLooper()).post {
                                 Toast.makeText(
                                     this@PairingForegroundService,
-                                    "✨ 셔터음 제로: 셔터음 무음화 연동이 완료되었습니다!",
+                                    if (wirelessDebuggingDisabled) {
+                                        "✨ 설정 완료! 카메라 무음 설정을 적용하고 무선 디버깅도 껐습니다."
+                                    } else {
+                                        "✨ 카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요."
+                                    },
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -279,13 +312,18 @@ class PairingForegroundService : Service() {
         }
     }
 
-    private fun stopPairing(showSuccess: Boolean) {
+    private fun stopPairing(showSuccess: Boolean, wirelessDebuggingDisabled: Boolean) {
         unregisterDeveloperOptionsObserver()
         pairingJob?.cancel()
         pairingJob = null
         adbManager.stopPairingDiscovery()
         stopForeground(STOP_FOREGROUND_REMOVE)
-        if (showSuccess) PairingNotificationHelper.showSuccessNotification(this)
+        if (showSuccess) {
+            PairingNotificationHelper.showSuccessNotification(
+                this,
+                wirelessDebuggingDisabled = wirelessDebuggingDisabled
+            )
+        }
         stopSelf()
     }
 

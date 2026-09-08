@@ -24,8 +24,42 @@ object DeveloperOptionsManager {
             PackageManager.PERMISSION_GRANTED
     }
 
+    fun isWirelessDebuggingEnabled(context: Context): Boolean {
+        return Settings.Global.getInt(
+            context.contentResolver,
+            ADB_WIFI_ENABLED,
+            0
+        ) != 0
+    }
+
     /**
-     * 개발자 옵션 마스터 스위치와 USB/무선 ADB를 함께 끈다.
+     * 설정 작업이 끝난 뒤 무선 디버깅만 끈다.
+     *
+     * 개발자 옵션 전체나 USB 디버깅은 건드리지 않는다. 이미 부여된
+     * WRITE_SECURE_SETTINGS 권한과 적용된 CSC 값도 유지된다.
+     */
+    fun disableWirelessDebugging(context: Context): Result<Unit> {
+        if (!canDisableDirectly(context)) {
+            return Result.failure(
+                SecurityException("WRITE_SECURE_SETTINGS 권한이 필요합니다.")
+            )
+        }
+
+        return runCatching {
+            val changed = Settings.Global.putInt(
+                context.contentResolver,
+                ADB_WIFI_ENABLED,
+                0
+            )
+            check(changed) { "무선 디버깅 설정을 변경하지 못했습니다." }
+            check(!isWirelessDebuggingEnabled(context)) {
+                "무선 디버깅이 아직 활성화되어 있습니다."
+            }
+        }
+    }
+
+    /**
+     * 사용자가 명시적으로 요청한 경우 개발자 옵션 마스터 스위치와 USB/무선 ADB를 함께 끈다.
      * 이미 앱에 부여된 WRITE_SECURE_SETTINGS 권한 자체는 취소하지 않는다.
      */
     fun disableDeveloperOptions(context: Context): Result<Unit> {

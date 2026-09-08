@@ -7,6 +7,7 @@ import android.util.Log
 import android.widget.Toast
 import com.charmingcolor.shuttersoundzero.R
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import kotlinx.coroutines.CoroutineScope
@@ -61,6 +62,16 @@ class CameraMuteTileService : TileService() {
             return
         }
 
+        if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
+            Toast.makeText(
+                context,
+                "설정을 바꾸려면 무선 디버깅을 잠시 켠 뒤 타일을 다시 눌러 주세요.",
+                Toast.LENGTH_LONG
+            ).show()
+            updateTileState()
+            return
+        }
+
         val currentMuted = CscMuteManager.isCscShutterSoundMuted(context)
         val targetMuted = !currentMuted
 
@@ -78,30 +89,26 @@ class CameraMuteTileService : TileService() {
 
             if (result.isSuccess) {
                 prefs.shouldMuteOnBoot = targetMuted
-                val msg = if (targetMuted) {
-                    "카메라 셔터음 무음화가 활성화되었습니다. (진동/무음 시 무음)"
+                val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
+                val baseMessage = if (targetMuted) {
+                    "카메라 무음 설정이 적용되었습니다."
                 } else {
                     "카메라 셔터음이 기본 상태로 복원되었습니다."
                 }
-                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                val msg = if (wirelessCleanup.isSuccess) {
+                    "$baseMessage 무선 디버깅도 껐습니다."
+                } else {
+                    "$baseMessage 무선 디버깅은 직접 꺼 주세요."
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             } else {
-                // ADB 시도 중 사용자가 권한 연동을 해제했을 수 있으므로 직접 쓰기 전 다시 검증한다.
-                val canDirectWrite = !prefs.isPermissionRevokedByUser &&
-                    CscMuteManager.hasWritePermission(context)
-                val directResult = if (canDirectWrite) {
-                    CscMuteManager.setCscShutterSoundMuted(context, targetMuted)
-                } else {
-                    Result.failure(SecurityException("Permission unavailable"))
-                }
-
-                if (directResult.isSuccess) {
-                    prefs.shouldMuteOnBoot = targetMuted
-                    Toast.makeText(context, "카메라 셔터음 설정이 변경되었습니다.", Toast.LENGTH_SHORT).show()
-                } else {
-                    prefs.shouldMuteOnBoot = currentMuted
-                    Log.w(TAG, "Tile toggle failed via ADB and direct write")
-                    Toast.makeText(context, "설정 변경 실패: Wi-Fi 및 무선 디버깅을 확인해 주세요.", Toast.LENGTH_LONG).show()
-                }
+                prefs.shouldMuteOnBoot = currentMuted
+                Log.w(TAG, "Tile toggle failed via ADB")
+                Toast.makeText(
+                    context,
+                    "설정 변경 실패: 무선 디버깅을 켠 뒤 다시 시도해 주세요.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
             updateTileState()
         }
