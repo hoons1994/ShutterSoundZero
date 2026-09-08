@@ -188,7 +188,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     )
                 }
             } else {
-                // 실패 시 사용자의 기존 자동 복원 의도는 보존하고, UI는 실제 CSC 값 그대로 유지한다.
+                // 실패 시 사용자의 기존 무음 사용 의도는 보존하고, UI는 실제 CSC 값 그대로 유지한다.
                 prefs.shouldMuteOnBoot = previousDesiredMute
                 _uiState.update {
                     it.copy(

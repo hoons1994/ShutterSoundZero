@@ -246,7 +246,7 @@ fun SettingsScreen(
             SettingsCard {
                 SwitchRow(
                     title = "소프트웨어 업데이트 자동 감지",
-                    subtitle = "업데이트 후 카메라 무음 설정 상태를 확인하고 필요한 경우 자동 복원",
+                    subtitle = "업데이트를 감지해 셔터음 상태를 확인하고 재적용이 필요하면 알림으로 안내",
                     checked = isSoftwareUpdateCheck,
                     onCheckedChange = { enabled ->
                         isSoftwareUpdateCheck = enabled

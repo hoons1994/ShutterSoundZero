@@ -85,23 +85,13 @@ class CameraMuteTileService : TileService() {
                 }
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             } else {
-                // ADB 시도 중 사용자가 권한 연동을 해제했을 수 있으므로 직접 쓰기 전 다시 검증한다.
-                val canDirectWrite = !prefs.isPermissionRevokedByUser &&
-                    CscMuteManager.hasWritePermission(context)
-                val directResult = if (canDirectWrite) {
-                    CscMuteManager.setCscShutterSoundMuted(context, targetMuted)
-                } else {
-                    Result.failure(SecurityException("Permission unavailable"))
-                }
-
-                if (directResult.isSuccess) {
-                    prefs.shouldMuteOnBoot = targetMuted
-                    Toast.makeText(context, "카메라 셔터음 설정이 변경되었습니다.", Toast.LENGTH_SHORT).show()
-                } else {
-                    prefs.shouldMuteOnBoot = currentMuted
-                    Log.w(TAG, "Tile toggle failed via ADB and direct write")
-                    Toast.makeText(context, "설정 변경 실패: Wi-Fi 및 무선 디버깅을 확인해 주세요.", Toast.LENGTH_LONG).show()
-                }
+                prefs.shouldMuteOnBoot = currentMuted
+                Log.w(TAG, "Tile toggle failed via ADB")
+                Toast.makeText(
+                    context,
+                    "설정 변경 실패: 무선 디버깅을 켠 뒤 다시 시도해 주세요.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
             updateTileState()
         }
