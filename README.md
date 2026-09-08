@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.4.2-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.4.3-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터음 제로 안내 인포그래픽" width="720" />
@@ -128,7 +128,7 @@ Android의 보안 정책에 따라 최초 1회 **[이 출처 허용]** 설정을
 ## 🛡️ 안전성 및 보안
 
 * **On-Device 중심 동작**: 무선 ADB 페어링과 시스템 설정 변경은 사용자 기기 내부에서 처리합니다.
-* **명시적 업데이트 통신**: GitHub Releases 네트워크 연결은 사용자가 [앱 업데이트]를 눌렀을 때만 발생하며 자동·주기적 업데이트 확인은 하지 않습니다.
+* **최소 업데이트 통신**: 자동 확인이 켜져 있으면 앱을 열거나 다시 활성화할 때 24시간에 한 번 이하로 최신 정식 Release 메타데이터만 확인합니다. APK 다운로드는 사용자가 [업데이트]를 누른 뒤에만 시작하며, 자동 확인은 설정에서 끌 수 있습니다.
 * **검증된 업데이트 APK**: 다운로드한 APK는 SHA-256뿐 아니라 현재 설치 앱과의 서명 인증서 일치까지 확인한 뒤 설치 화면으로 전달합니다.
 * **카메라 권한 없음**: 앱은 `android.permission.CAMERA` 권한을 요청하지 않으며 사진이나 카메라 영상에 접근하지 않습니다.
 * **독립 암호화 키**: 무선 디버깅에 사용하는 키는 각 기기의 앱 전용 저장 영역에서 생성·보관합니다.
