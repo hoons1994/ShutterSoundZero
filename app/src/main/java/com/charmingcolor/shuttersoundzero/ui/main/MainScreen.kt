@@ -44,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,10 +65,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.navigation3.runtime.NavKey
+import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.theme.BrandBlueLight
 import com.charmingcolor.shuttersoundzero.theme.StatusAmber
 import com.charmingcolor.shuttersoundzero.theme.StatusGreen
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
+import com.charmingcolor.shuttersoundzero.update.AppUpdateManager
+import kotlinx.coroutines.launch
 
 private val CardRadius = 20.dp
 private val CardPaddingH = 20.dp
@@ -84,8 +88,80 @@ fun MainScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val prefs = remember { PreferencesRepository.getInstance(context) }
+    val updateScope = rememberCoroutineScope()
 
     var showWifiRequiredDialog by remember { mutableStateOf(false) }
+    var availableAppUpdateVersion by remember { mutableStateOf<String?>(null) }
+    var isAppUpdatePreparing by remember { mutableStateOf(false) }
+    var isSilentAppUpdateChecking by remember { mutableStateOf(false) }
+    var appUpdateProgress by remember { mutableStateOf(0) }
+    var appUpdateStatusMessage by remember { mutableStateOf<String?>(null) }
+    var appUpdateErrorMessage by remember { mutableStateOf<String?>(null) }
+
+    fun refreshKnownAppUpdateVersion() {
+        val knownVersion = prefs.knownAvailableAppUpdateVersion
+        val currentVersion = AppUpdateManager.installedVersionName(context)
+        if (knownVersion != null && AppUpdateManager.isNewerVersion(knownVersion, currentVersion)) {
+            availableAppUpdateVersion = knownVersion
+        } else {
+            availableAppUpdateVersion = null
+            if (knownVersion != null) prefs.knownAvailableAppUpdateVersion = null
+        }
+    }
+
+    val startHomeAppUpdate: () -> Unit = {
+        if (!isAppUpdatePreparing) {
+            if (!AppUpdateManager.canRequestPackageInstalls(context)) {
+                Toast.makeText(
+                    context,
+                    "최초 1회 [이 출처 허용]을 켠 뒤 앱으로 돌아와 [업데이트]를 다시 눌러 주세요.",
+                    Toast.LENGTH_LONG
+                ).show()
+                try {
+                    AppUpdateManager.openInstallPermissionSettings(context)
+                } catch (error: Throwable) {
+                    appUpdateErrorMessage = friendlyHomeUpdateError(error)
+                }
+            } else {
+                updateScope.launch {
+                    isAppUpdatePreparing = true
+                    appUpdateProgress = 0
+                    appUpdateErrorMessage = null
+                    try {
+                        val update = when (val result = AppUpdateManager.checkForUpdate(context)) {
+                            is AppUpdateManager.UpdateCheckResult.UpToDate -> {
+                                prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
+                                prefs.knownAvailableAppUpdateVersion = null
+                                availableAppUpdateVersion = null
+                                appUpdateStatusMessage = "이미 최신 버전을 사용하고 있습니다."
+                                return@launch
+                            }
+                            is AppUpdateManager.UpdateCheckResult.Available -> {
+                                prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
+                                prefs.knownAvailableAppUpdateVersion = result.update.versionName
+                                availableAppUpdateVersion = result.update.versionName
+                                result.update
+                            }
+                        }
+
+                        val verified = AppUpdateManager.downloadAndVerify(
+                            context = context,
+                            update = update,
+                            onProgress = { progress -> appUpdateProgress = progress }
+                        )
+                        if (!AppUpdateManager.launchInstaller(context, verified)) {
+                            error("Android 설치 화면을 열 수 없습니다. 기기의 설치 권한 설정을 확인해 주세요.")
+                        }
+                    } catch (error: Throwable) {
+                        appUpdateErrorMessage = friendlyHomeUpdateError(error)
+                    } finally {
+                        isAppUpdatePreparing = false
+                    }
+                }
+            }
+        }
+    }
 
     val startPairing = {
         viewModel.startNotificationPairing(context)
@@ -144,9 +220,54 @@ fun MainScreen(
         }
     }
 
+    fun checkAppUpdateSilentlyIfDue() {
+        if (isAppUpdatePreparing || isSilentAppUpdateChecking) return
+        val now = System.currentTimeMillis()
+        if (
+            !AppUpdateManager.isAutomaticCheckDue(
+                enabled = prefs.isAppUpdateAutoCheckEnabled,
+                lastCheckAtMillis = prefs.lastAppUpdateCheckAtMillis,
+                nowMillis = now
+            )
+        ) {
+            return
+        }
+
+        // 네트워크가 끊겨 있어도 앱을 다시 열 때마다 반복 요청하지 않도록 시도 시점을 먼저 기록한다.
+        prefs.lastAppUpdateCheckAtMillis = now
+        isSilentAppUpdateChecking = true
+        updateScope.launch {
+            try {
+                when (val result = AppUpdateManager.checkForUpdate(context)) {
+                    is AppUpdateManager.UpdateCheckResult.UpToDate -> {
+                        prefs.knownAvailableAppUpdateVersion = null
+                        availableAppUpdateVersion = null
+                    }
+                    is AppUpdateManager.UpdateCheckResult.Available -> {
+                        prefs.knownAvailableAppUpdateVersion = result.update.versionName
+                        availableAppUpdateVersion = result.update.versionName
+                    }
+                }
+            } catch (_: Throwable) {
+                // 자동 확인은 알림/오류 팝업 없이 조용히 실패한다. 수동 확인은 설정 화면에서 항상 가능하다.
+            } finally {
+                isSilentAppUpdateChecking = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshKnownAppUpdateVersion()
+        checkAppUpdateSilentlyIfDue()
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshState()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshState()
+                refreshKnownAppUpdateVersion()
+                checkAppUpdateSilentlyIfDue()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -230,6 +351,27 @@ fun MainScreen(
                 )
             }
 
+            availableAppUpdateVersion?.let { version ->
+                Spacer(modifier = Modifier.height(24.dp))
+
+                GroupLabel("앱 업데이트")
+                SettingsCard {
+                    ActionRow(
+                        title = if (isAppUpdatePreparing) {
+                            "v$version 업데이트 준비 중…"
+                        } else {
+                            "v$version 업데이트"
+                        },
+                        onClick = startHomeAppUpdate
+                    )
+                    RowDivider()
+                    InfoRow(
+                        title = "새 버전을 사용할 수 있습니다",
+                        subtitle = "[업데이트]를 누른 뒤에만 APK를 다운로드하고 SHA-256·패키지·버전·서명을 검증합니다. 검증이 끝나면 Android 설치 화면을 열며, 최종 설치는 사용자가 직접 확인합니다."
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             GroupLabel("초기 설정 및 복구")
@@ -303,6 +445,55 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (isAppUpdatePreparing) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("앱 업데이트") },
+            text = {
+                Text(
+                    if (appUpdateProgress > 0) {
+                        "APK 다운로드 및 검증 중 · $appUpdateProgress%"
+                    } else {
+                        "최신 정식 버전을 확인하고 업데이트를 준비하고 있습니다."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {}, enabled = false) {
+                    Text(if (appUpdateProgress > 0) "$appUpdateProgress%" else "준비 중…")
+                }
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    appUpdateStatusMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { appUpdateStatusMessage = null },
+            title = { Text("앱 업데이트") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { appUpdateStatusMessage = null }) { Text("확인") }
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    appUpdateErrorMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { appUpdateErrorMessage = null },
+            title = { Text("앱 업데이트") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { appUpdateErrorMessage = null }) { Text("확인") }
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     }
 
     if (showWifiRequiredDialog) {
@@ -387,6 +578,11 @@ fun MainScreen(
             }
         )
     }
+}
+
+private fun friendlyHomeUpdateError(error: Throwable): String {
+    return error.message?.trim().takeUnless { it.isNullOrBlank() }
+        ?: "업데이트를 준비하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요."
 }
 
 // ── 헤더 ──────────────────────────────────────
