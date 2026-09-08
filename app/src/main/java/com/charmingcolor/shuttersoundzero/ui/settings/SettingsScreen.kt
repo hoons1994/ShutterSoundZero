@@ -85,8 +85,10 @@ fun SettingsScreen(
     var developerOptionsResultMessage by remember { mutableStateOf<String?>(null) }
     var showLicenseDialog by remember { mutableStateOf(false) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
+    var showReapplyWirelessDebuggingHelp by remember { mutableStateOf(false) }
     var showRestoreWirelessDebuggingHelp by remember { mutableStateOf(false) }
     var restoreResultMessage by remember { mutableStateOf<String?>(null) }
+    var isReapplyInProgress by remember { mutableStateOf(false) }
     var isRestoreInProgress by remember { mutableStateOf(false) }
 
     var isUpdateChecking by remember { mutableStateOf(false) }
@@ -188,8 +190,39 @@ fun SettingsScreen(
             GroupLabel("카메라 설정")
             SettingsCard {
                 ClickableRow(
+                    title = "카메라 무음 다시 적용",
+                    subtitle = "무음 설정이 풀렸을 때 사용 · 적용하는 동안 무선 디버깅을 잠시 켜야 합니다",
+                    onClick = {
+                        if (!CscMuteManager.hasWritePermission(context)) {
+                            restoreResultMessage =
+                                "아직 1회 설정이 완료되지 않았습니다. 메인 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+                        } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
+                            showReapplyWirelessDebuggingHelp = true
+                        } else if (!isReapplyInProgress) {
+                            isReapplyInProgress = true
+                            coroutineScope.launch {
+                                val result = StandaloneAdbManager.getInstance(context).setCameraMute(true)
+                                if (result.isSuccess && CscMuteManager.isCscShutterSoundMuted(context)) {
+                                    prefs.shouldMuteOnBoot = true
+                                    val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
+                                    restoreResultMessage = if (cleanup.isSuccess) {
+                                        "카메라 무음 설정을 다시 적용했고 무선 디버깅도 껐습니다."
+                                    } else {
+                                        "카메라 무음 설정은 다시 적용했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
+                                    }
+                                } else {
+                                    restoreResultMessage =
+                                        "카메라 무음 설정을 다시 적용하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
+                                }
+                                isReapplyInProgress = false
+                            }
+                        }
+                    }
+                )
+                RowDivider()
+                ClickableRow(
                     title = "카메라 셔터음 원래대로 복원",
-                    subtitle = "필요할 때만 사용 · 변경하는 동안 무선 디버깅을 잠시 켜야 합니다",
+                    subtitle = "필요할 때만 사용 · 복원하는 동안 무선 디버깅을 잠시 켜야 합니다",
                     onClick = {
                         if (!CscMuteManager.hasWritePermission(context)) {
                             restoreResultMessage =
@@ -204,7 +237,7 @@ fun SettingsScreen(
                 RowDivider()
                 InfoRow(
                     title = "평소에는 무선 디버깅을 꺼두세요",
-                    subtitle = "카메라 무음 설정은 무선 디버깅을 꺼도 유지됩니다. 다시 적용하거나 원래대로 복원할 때만 잠시 켜면 됩니다."
+                    subtitle = "무음 다시 적용과 원래대로 복원은 모두 이 화면에서 진행합니다. 실제 상태를 바꾸는 동안에만 무선 디버깅을 잠시 켜면 됩니다."
                 )
             }
 
@@ -260,7 +293,7 @@ fun SettingsScreen(
                 RowDivider()
                 ClickableRow(
                     title = "개발자 옵션 전체 끄기",
-                    subtitle = "선택 사항 · 앱은 설정 완료 후 무선 디버깅만 자동으로 종료",
+                    subtitle = "선택 사항 · 앱은 설정 완료 후 무선 디버깅 자동 종료를 시도",
                     onClick = {
                         if (DeveloperOptionsManager.canDisableDirectly(context)) {
                             showDeveloperOptionsConfirm = true
@@ -336,6 +369,37 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
 
+        if (showReapplyWirelessDebuggingHelp) {
+            AlertDialog(
+                onDismissRequest = { showReapplyWirelessDebuggingHelp = false },
+                title = { Text("무선 디버깅을 먼저 켜 주세요") },
+                text = {
+                    Text(
+                        "설정 완료 후 무선 디버깅이 꺼져 있는 것은 정상입니다.\n\n" +
+                            "카메라 무음 설정을 다시 적용하는 동안에만 무선 디버깅이 필요합니다. " +
+                            "[무선 디버깅 설정 열기]에서 켠 뒤 앱으로 돌아와 설정 → 카메라 설정의 [카메라 무음 다시 적용]을 다시 눌러 주세요. 적용이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showReapplyWirelessDebuggingHelp = false
+                            CscMuteManager.openWirelessDebuggingOrDevOptions(context)
+                        }
+                    ) {
+                        Text("무선 디버깅 설정 열기")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showReapplyWirelessDebuggingHelp = false }) {
+                        Text("취소")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
         if (showRestoreWirelessDebuggingHelp) {
             AlertDialog(
                 onDismissRequest = { showRestoreWirelessDebuggingHelp = false },
@@ -344,7 +408,7 @@ fun SettingsScreen(
                     Text(
                         "설정 완료 후 무선 디버깅이 꺼져 있는 것은 정상입니다.\n\n" +
                             "카메라 셔터음을 원래대로 복원하는 동안에만 무선 디버깅이 필요합니다. " +
-                            "[무선 디버깅 설정 열기]에서 켠 뒤 앱으로 돌아와 [카메라 셔터음 원래대로 복원]을 다시 눌러 주세요. 복원이 끝나면 앱이 다시 끕니다."
+                            "[무선 디버깅 설정 열기]에서 켠 뒤 앱으로 돌아와 설정 → 카메라 설정의 [카메라 셔터음 원래대로 복원]을 다시 눌러 주세요. 복원이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다."
                     )
                 },
                 confirmButton = {
@@ -374,7 +438,7 @@ fun SettingsScreen(
                 text = {
                     Text(
                         "진동·무음 모드에서도 카메라 셔터음이 나오는 기본 상태로 되돌립니다.\n\n" +
-                            "복원이 끝나면 무선 디버깅도 다시 끕니다."
+                            "복원이 끝나면 무선 디버깅도 다시 끄려고 시도합니다."
                     )
                 },
                 confirmButton = {

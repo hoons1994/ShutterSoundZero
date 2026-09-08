@@ -21,7 +21,7 @@ import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
  * 기기 재부팅과 앱 업데이트 시 현재 소프트웨어 빌드와 실제 CSC 상태를 확인한다.
  *
  * 비공개 Settings.System CSC 키는 일반 앱 UID에서 직접 수정할 수 없으므로,
- * 재부팅·소프트웨어 업데이트로 무음 상태가 초기화된 경우 자동 복원을 시도하지 않는다.
+ * 재부팅·소프트웨어 업데이트로 무음 상태가 초기화된 경우 앱이 백그라운드에서 자동 재적용하지 않는다.
  * 대신 실제 상태와 권한 연동 상태를 확인해 사용자가 무선 디버깅을 켜고 다시 적용하도록 안내한다.
  */
 class BootReceiver : BroadcastReceiver() {
@@ -80,7 +80,7 @@ class BootReceiver : BroadcastReceiver() {
             Log.i(TAG, "Permission linkage was revoked by user")
             showNotification(
                 context,
-                "소프트웨어 업데이트가 감지되었습니다. 권한 연동이 해제되어 있습니다. 무선 디버깅을 켠 뒤 [권한 요청]을 다시 진행해 주세요."
+                "소프트웨어 업데이트가 감지되었습니다. 권한 연동이 해제되어 있습니다. 무선 디버깅을 켠 뒤 [1회 설정 시작]을 다시 진행해 주세요."
             )
             return
         }
@@ -95,9 +95,9 @@ class BootReceiver : BroadcastReceiver() {
         showNotification(
             context,
             if (hasPermission) {
-                "소프트웨어 업데이트 후 카메라 무음 설정이 초기화되었습니다. 무선 디버깅을 켠 뒤 앱에서 [카메라 셔터음 끄기]를 다시 켜 주세요."
+                "소프트웨어 업데이트 후 카메라 무음 설정이 초기화되었습니다. 무선 디버깅을 켠 뒤 설정 → 카메라 설정에서 [카메라 무음 다시 적용]을 눌러 주세요."
             } else {
-                "소프트웨어 업데이트 후 카메라 무음 설정과 권한 연동이 초기화되었습니다. 무선 디버깅을 켠 뒤 [권한 요청]을 다시 진행해 주세요."
+                "소프트웨어 업데이트 후 카메라 무음 설정과 권한 연동이 초기화되었습니다. 무선 디버깅을 켠 뒤 [1회 설정 시작]을 다시 진행해 주세요."
             }
         )
     }
@@ -114,9 +114,9 @@ class BootReceiver : BroadcastReceiver() {
         showNotification(
             context,
             if (hasPermission) {
-                "재부팅 후 카메라 무음 설정이 초기화되었습니다. 무선 디버깅을 켠 뒤 앱에서 다시 적용해 주세요."
+                "재부팅 후 카메라 무음 설정이 초기화되었습니다. 무선 디버깅을 켠 뒤 설정 → 카메라 설정에서 [카메라 무음 다시 적용]을 눌러 주세요."
             } else {
-                "재부팅 후 카메라 무음 설정과 권한 상태를 확인해야 합니다. 무선 디버깅을 켠 뒤 [권한 요청]을 다시 진행해 주세요."
+                "재부팅 후 카메라 무음 설정과 권한 상태를 확인해야 합니다. 무선 디버깅을 켠 뒤 [1회 설정 시작]을 다시 진행해 주세요."
             }
         )
     }
@@ -174,7 +174,7 @@ class BootReceiver : BroadcastReceiver() {
     private fun createNotificationChannel(context: Context) {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "소프트웨어 업데이트 알림",
+            "카메라 무음 상태 알림",
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description = "재부팅·소프트웨어 업데이트 후 카메라 무음 상태 확인 및 재적용 안내"
