@@ -93,8 +93,8 @@ fun MainScreen(
 
     var showWifiRequiredDialog by remember { mutableStateOf(false) }
     var availableAppUpdateVersion by remember { mutableStateOf<String?>(null) }
-    var cachedAppUpdateInfo by remember { mutableStateOf<AppUpdateManager.UpdateInfo?>(null) }
     var isAppUpdatePreparing by remember { mutableStateOf(false) }
+    var isSilentAppUpdateChecking by remember { mutableStateOf(false) }
     var appUpdateProgress by remember { mutableStateOf(0) }
     var appUpdateStatusMessage by remember { mutableStateOf<String?>(null) }
     var appUpdateErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -129,7 +129,7 @@ fun MainScreen(
                     appUpdateProgress = 0
                     appUpdateErrorMessage = null
                     try {
-                        val update = cachedAppUpdateInfo ?: when (val result = AppUpdateManager.checkForUpdate(context)) {
+                        val update = when (val result = AppUpdateManager.checkForUpdate(context)) {
                             is AppUpdateManager.UpdateCheckResult.UpToDate -> {
                                 prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
                                 prefs.knownAvailableAppUpdateVersion = null
@@ -141,7 +141,6 @@ fun MainScreen(
                                 prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
                                 prefs.knownAvailableAppUpdateVersion = result.update.versionName
                                 availableAppUpdateVersion = result.update.versionName
-                                cachedAppUpdateInfo = result.update
                                 result.update
                             }
                         }
@@ -221,35 +220,45 @@ fun MainScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        refreshKnownAppUpdateVersion()
+    fun checkAppUpdateSilentlyIfDue() {
+        if (isAppUpdatePreparing || isSilentAppUpdateChecking) return
         val now = System.currentTimeMillis()
         if (
-            AppUpdateManager.isAutomaticCheckDue(
+            !AppUpdateManager.isAutomaticCheckDue(
                 enabled = prefs.isAppUpdateAutoCheckEnabled,
                 lastCheckAtMillis = prefs.lastAppUpdateCheckAtMillis,
                 nowMillis = now
             )
         ) {
-            // 실패해도 사용자에게 오류를 띄우지 않고 다음 자동 확인 시점까지 조용히 대기한다.
-            prefs.lastAppUpdateCheckAtMillis = now
+            return
+        }
+
+        // 네트워크가 끊겨 있어도 앱을 다시 열 때마다 반복 요청하지 않도록 시도 시점을 먼저 기록한다.
+        prefs.lastAppUpdateCheckAtMillis = now
+        isSilentAppUpdateChecking = true
+        updateScope.launch {
             try {
                 when (val result = AppUpdateManager.checkForUpdate(context)) {
                     is AppUpdateManager.UpdateCheckResult.UpToDate -> {
                         prefs.knownAvailableAppUpdateVersion = null
                         availableAppUpdateVersion = null
-                        cachedAppUpdateInfo = null
                     }
                     is AppUpdateManager.UpdateCheckResult.Available -> {
                         prefs.knownAvailableAppUpdateVersion = result.update.versionName
                         availableAppUpdateVersion = result.update.versionName
-                        cachedAppUpdateInfo = result.update
                     }
                 }
             } catch (_: Throwable) {
                 // 자동 확인은 알림/오류 팝업 없이 조용히 실패한다. 수동 확인은 설정 화면에서 항상 가능하다.
+            } finally {
+                isSilentAppUpdateChecking = false
             }
         }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshKnownAppUpdateVersion()
+        checkAppUpdateSilentlyIfDue()
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -257,6 +266,7 @@ fun MainScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshState()
                 refreshKnownAppUpdateVersion()
+                checkAppUpdateSilentlyIfDue()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
