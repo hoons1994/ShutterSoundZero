@@ -20,7 +20,9 @@ jobs:
           ref: fix/direct-csc-control-v1.4.2
 
       - name: Apply setup UX refinements
-        run: python3 .github/scripts/refine_v142_setup_ux.py
+        run: |
+          sed -i 's/^    """초기 설정/    "초기 설정/' .github/scripts/refine_v142_setup_ux.py
+          python3 .github/scripts/refine_v142_setup_ux.py
 
       - name: Remove temporary tooling and commit
         run: |
