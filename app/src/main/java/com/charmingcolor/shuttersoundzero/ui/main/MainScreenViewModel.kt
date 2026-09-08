@@ -170,7 +170,18 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
         if (!CscMuteManager.hasWritePermission(app)) {
             _uiState.update {
-                it.copy(errorMessage = "보안 설정 변경 권한이 필요합니다. 아래 [권한 설정]을 진행해 주세요.")
+                it.copy(errorMessage = "보안 설정 변경 권한이 필요합니다. 아래 [1회 설정 시작]을 진행해 주세요.")
+            }
+            return
+        }
+
+        if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(app)) {
+            _uiState.update {
+                it.copy(
+                    showSwitchFailureHelp = true,
+                    errorMessage = null,
+                    infoMessage = null
+                )
             }
             return
         }

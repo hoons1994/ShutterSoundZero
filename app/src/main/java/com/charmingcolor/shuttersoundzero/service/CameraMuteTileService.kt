@@ -62,6 +62,16 @@ class CameraMuteTileService : TileService() {
             return
         }
 
+        if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
+            Toast.makeText(
+                context,
+                "설정을 바꾸려면 무선 디버깅을 잠시 켠 뒤 타일을 다시 눌러 주세요.",
+                Toast.LENGTH_LONG
+            ).show()
+            updateTileState()
+            return
+        }
+
         val currentMuted = CscMuteManager.isCscShutterSoundMuted(context)
         val targetMuted = !currentMuted
 

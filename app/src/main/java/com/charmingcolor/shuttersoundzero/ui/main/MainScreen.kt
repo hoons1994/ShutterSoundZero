@@ -3,12 +3,8 @@ package com.charmingcolor.shuttersoundzero.ui.main
 import android.content.Intent
 import android.provider.MediaStore
 import android.widget.Toast
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -20,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -52,7 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -183,7 +177,6 @@ fun MainScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             AppHeader(
-                isMuted = uiState.isCscMuted,
                 onSettingsClick = { onItemClick(Settings) }
             )
 
@@ -214,18 +207,18 @@ fun MainScreen(
                     },
                     subtitle = when {
                         uiState.isCscMuted ->
-                            "진동·무음 모드에서 카메라 셔터음이 나지 않도록 설정되어 있습니다. 적용된 설정은 무선 디버깅을 꺼도 유지됩니다."
+                            "진동·무음 모드에서 카메라 셔터음이 나지 않도록 설정되어 있습니다. 평소에는 무선 디버깅을 꺼두는 것이 정상이며, 나중에 설정을 바꿀 때만 잠시 다시 켜면 됩니다."
                         hasEffectivePermission ->
                             "현재 카메라 무음 설정이 적용되어 있지 않습니다. 무선 디버깅을 잠시 켠 뒤 [카메라 무음 다시 적용]을 눌러 주세요."
                         else ->
                             "[1회 설정 시작]에서 6자리 페어링 코드만 입력하면 권한 연동과 무음 설정을 한 번에 적용하고, 완료 후 무선 디버깅도 자동으로 끕니다."
                     }
                 )
-                if (hasEffectivePermission) {
+                if (hasEffectivePermission && !uiState.isCscMuted) {
                     RowDivider()
                     ActionRow(
-                        title = if (uiState.isCscMuted) "원래대로 복원" else "카메라 무음 다시 적용",
-                        onClick = { viewModel.toggleCscMute(!uiState.isCscMuted) }
+                        title = "카메라 무음 다시 적용",
+                        onClick = { viewModel.toggleCscMute(true) }
                     )
                 }
                 RowDivider()
@@ -406,56 +399,29 @@ fun MainScreen(
 // ── 헤더 ──────────────────────────────────────
 
 @Composable
-private fun AppHeader(isMuted: Boolean, onSettingsClick: () -> Unit) {
-    val dotColor by animateColorAsState(
-        targetValue = if (isMuted) StatusGreen else Color(0xFFBCC1CA),
-        animationSpec = tween(400),
-        label = "statusDot"
-    )
-
-    Column(
+private fun AppHeader(onSettingsClick: () -> Unit) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = CardPaddingH)
-            .padding(top = 12.dp, bottom = 8.dp)
+            .padding(top = 12.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "셔터음 제로",
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 30.sp,
-                    letterSpacing = (-0.5).sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            IconButton(onClick = onSettingsClick) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "설정",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(dotColor)
-            )
-            Text(
-                text = if (isMuted) "카메라 무음 설정 완료" else "셔터음 기본 상태",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+        Text(
+            text = "셔터음 제로",
+            style = MaterialTheme.typography.headlineLarge.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 30.sp,
+                letterSpacing = (-0.5).sp
+            ),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        IconButton(onClick = onSettingsClick) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = "설정",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

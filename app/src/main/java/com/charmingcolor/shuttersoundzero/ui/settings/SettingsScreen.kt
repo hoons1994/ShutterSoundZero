@@ -50,7 +50,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
+import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.security.AppLockAuthenticator
 import com.charmingcolor.shuttersoundzero.security.AppLockSession
@@ -82,6 +84,10 @@ fun SettingsScreen(
     var showDeveloperOptionsFallback by remember { mutableStateOf(false) }
     var developerOptionsResultMessage by remember { mutableStateOf<String?>(null) }
     var showLicenseDialog by remember { mutableStateOf(false) }
+    var showRestoreConfirm by remember { mutableStateOf(false) }
+    var showRestoreWirelessDebuggingHelp by remember { mutableStateOf(false) }
+    var restoreResultMessage by remember { mutableStateOf<String?>(null) }
+    var isRestoreInProgress by remember { mutableStateOf(false) }
 
     var isUpdateChecking by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<AppUpdateManager.UpdateInfo?>(null) }
@@ -178,6 +184,31 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             Spacer(modifier = Modifier.height(8.dp))
+
+            GroupLabel("카메라 설정")
+            SettingsCard {
+                ClickableRow(
+                    title = "카메라 셔터음 원래대로 복원",
+                    subtitle = "필요할 때만 사용 · 변경하는 동안 무선 디버깅을 잠시 켜야 합니다",
+                    onClick = {
+                        if (!CscMuteManager.hasWritePermission(context)) {
+                            restoreResultMessage =
+                                "아직 1회 설정이 완료되지 않았습니다. 메인 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+                        } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
+                            showRestoreWirelessDebuggingHelp = true
+                        } else {
+                            showRestoreConfirm = true
+                        }
+                    }
+                )
+                RowDivider()
+                InfoRow(
+                    title = "평소에는 무선 디버깅을 꺼두세요",
+                    subtitle = "카메라 무음 설정은 무선 디버깅을 꺼도 유지됩니다. 다시 적용하거나 원래대로 복원할 때만 잠시 켜면 됩니다."
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             GroupLabel("보안")
             SettingsCard {
@@ -303,6 +334,107 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
+        }
+
+        if (showRestoreWirelessDebuggingHelp) {
+            AlertDialog(
+                onDismissRequest = { showRestoreWirelessDebuggingHelp = false },
+                title = { Text("무선 디버깅을 먼저 켜 주세요") },
+                text = {
+                    Text(
+                        "설정 완료 후 무선 디버깅이 꺼져 있는 것은 정상입니다.
+
+" +
+                            "카메라 셔터음을 원래대로 복원하는 동안에만 무선 디버깅이 필요합니다. " +
+                            "[무선 디버깅 설정 열기]에서 켠 뒤 앱으로 돌아와 [카메라 셔터음 원래대로 복원]을 다시 눌러 주세요. 복원이 끝나면 앱이 다시 끕니다."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showRestoreWirelessDebuggingHelp = false
+                            CscMuteManager.openWirelessDebuggingOrDevOptions(context)
+                        }
+                    ) {
+                        Text("무선 디버깅 설정 열기")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRestoreWirelessDebuggingHelp = false }) {
+                        Text("취소")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
+        if (showRestoreConfirm) {
+            AlertDialog(
+                onDismissRequest = { if (!isRestoreInProgress) showRestoreConfirm = false },
+                title = { Text("카메라 셔터음을 원래대로 복원할까요?") },
+                text = {
+                    Text(
+                        "진동·무음 모드에서도 카메라 셔터음이 나오는 기본 상태로 되돌립니다.
+
+" +
+                            "복원이 끝나면 무선 디버깅도 다시 끕니다."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !isRestoreInProgress,
+                        onClick = {
+                            if (isRestoreInProgress) return@TextButton
+                            isRestoreInProgress = true
+                            coroutineScope.launch {
+                                val result = StandaloneAdbManager.getInstance(context).setCameraMute(false)
+                                if (result.isSuccess && !CscMuteManager.isCscShutterSoundMuted(context)) {
+                                    prefs.shouldMuteOnBoot = false
+                                    val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
+                                    restoreResultMessage = if (cleanup.isSuccess) {
+                                        "카메라 셔터음을 기본 상태로 복원했고 무선 디버깅도 껐습니다."
+                                    } else {
+                                        "카메라 셔터음은 기본 상태로 복원했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
+                                    }
+                                } else {
+                                    restoreResultMessage =
+                                        "카메라 셔터음을 복원하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
+                                }
+                                isRestoreInProgress = false
+                                showRestoreConfirm = false
+                            }
+                        }
+                    ) {
+                        Text(if (isRestoreInProgress) "복원 중…" else "원래대로 복원")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        enabled = !isRestoreInProgress,
+                        onClick = { showRestoreConfirm = false }
+                    ) {
+                        Text("취소")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
+        restoreResultMessage?.let { message ->
+            AlertDialog(
+                onDismissRequest = { restoreResultMessage = null },
+                title = { Text("카메라 설정") },
+                text = { Text(message) },
+                confirmButton = {
+                    TextButton(onClick = { restoreResultMessage = null }) {
+                        Text("확인")
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         }
 
         lockErrorMessage?.let { message ->
