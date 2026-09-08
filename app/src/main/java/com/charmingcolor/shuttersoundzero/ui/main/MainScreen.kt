@@ -209,18 +209,11 @@ fun MainScreen(
                         uiState.isCscMuted ->
                             "진동·무음 모드에서 카메라 셔터음이 나지 않도록 설정되어 있습니다. 평소에는 무선 디버깅을 꺼두는 것이 정상이며, 나중에 설정을 바꿀 때만 잠시 다시 켜면 됩니다."
                         hasEffectivePermission ->
-                            "현재 카메라 무음 설정이 적용되어 있지 않습니다. 무선 디버깅을 잠시 켠 뒤 [카메라 무음 다시 적용]을 눌러 주세요."
+                            "현재 카메라 무음 설정이 적용되어 있지 않습니다. 설정 → 카메라 설정에서 [카메라 무음 다시 적용]을 사용해 주세요. 상태를 바꾸는 동안에만 무선 디버깅을 잠시 켜면 됩니다."
                         else ->
-                            "[1회 설정 시작]에서 6자리 페어링 코드만 입력하면 권한 연동과 무음 설정을 한 번에 적용하고, 완료 후 무선 디버깅도 자동으로 끕니다."
+                            "[1회 설정 시작]에서 6자리 페어링 코드만 입력하면 권한 연동과 무음 설정을 한 번에 적용합니다. 완료 후에는 무선 디버깅 자동 종료를 시도하고, 자동으로 끄지 못하면 바로 안내합니다."
                     }
                 )
-                if (hasEffectivePermission && !uiState.isCscMuted) {
-                    RowDivider()
-                    ActionRow(
-                        title = "카메라 무음 다시 적용",
-                        onClick = { viewModel.toggleCscMute(true) }
-                    )
-                }
                 RowDivider()
                 ActionRow(
                     title = "카메라 열어서 테스트",
@@ -316,7 +309,7 @@ fun MainScreen(
         com.charmingcolor.shuttersoundzero.ui.components.ModernPromptDialog(
             eyebrow = "연결 확인",
             title = "Wi-Fi 연결이 필요해요",
-            message = "무선 디버깅 권한을 연동하려면 기기가 Wi-Fi 네트워크에 연결되어 있어야 합니다.\n\nWi-Fi 설정에서 네트워크에 연결한 뒤 다시 권한 요청을 진행해 주세요.",
+            message = "1회 설정을 진행하려면 기기가 Wi-Fi 네트워크에 연결되어 있어야 합니다.\n\nWi-Fi 설정에서 네트워크에 연결한 뒤 [1회 설정 시작]을 다시 눌러 주세요.",
             primaryLabel = "Wi-Fi 설정 열기",
             onPrimary = {
                 showWifiRequiredDialog = false
