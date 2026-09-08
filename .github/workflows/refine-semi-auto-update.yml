@@ -1,0 +1,36 @@
+name: 반자동 업데이트 재진입 흐름 보정
+
+on:
+  push:
+    branches:
+      - feat/semi-auto-app-update
+    paths:
+      - '.github/workflows/refine-semi-auto-update.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feat/semi-auto-app-update
+          fetch-depth: 1
+
+      - name: Refine resume and fresh release check flow
+        run: |
+          python3 .github/scripts/refine_semi_auto_update.py
+          git diff --check
+
+      - name: Commit production changes and remove temporary files
+        run: |
+          rm -f .github/scripts/refine_semi_auto_update.py
+          rm -f .github/workflows/refine-semi-auto-update.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: 앱 재진입 시 자동 업데이트 확인 주기 정확화'
+          git push origin HEAD:feat/semi-auto-app-update
