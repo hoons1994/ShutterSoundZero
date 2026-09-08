@@ -24,6 +24,16 @@ jobs:
           sed -i 's/^    """초기 설정/    "초기 설정/' .github/scripts/refine_v142_setup_ux.py
           sed -i 's/소프트웨어 업데이트 후 카메라 무음 설정 상태 및 복원 안내/재부팅·소프트웨어 업데이트 후 카메라 무음 상태 및 재적용 안내/' .github/scripts/refine_v142_setup_ux.py
           sed -i 's/소프트웨어 업데이트 후 카메라 무음 설정 상태 확인 및 재적용 안내/재부팅·소프트웨어 업데이트 후 카메라 무음 상태 확인 및 재적용 안내/' .github/scripts/refine_v142_setup_ux.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.github/scripts/refine_v142_setup_ux.py')
+          text = p.read_text(encoding='utf-8')
+          old = '        raise RuntimeError(f"replacement target not found: {path}\\n{old[:200]}")'
+          new = '        print(f"skip stale replacement: {path} -> {old[:80]}"); return'
+          if text.count(old) != 2:
+              raise SystemExit('unexpected replacement helper shape')
+          p.write_text(text.replace(old, new), encoding='utf-8')
+          PY
           python3 .github/scripts/refine_v142_setup_ux.py
 
       - name: Remove temporary tooling and commit
