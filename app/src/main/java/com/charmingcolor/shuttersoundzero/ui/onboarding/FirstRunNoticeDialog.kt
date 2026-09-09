@@ -30,25 +30,19 @@ fun FirstRunNoticeDialog(onConfirm: () -> Unit) {
                     lineHeight = 20.sp
                 )
                 Text(
-                    text = "• 처음 한 번 무선 디버깅으로 기기 연동이 필요합니다. 설정이 끝나면 무선 디버깅을 계속 켜둘 필요는 없습니다.",
+                    text = "• 처음 한 번 무선 디버깅으로 기기 연동이 필요합니다. 설정이 끝나면 계속 켜둘 필요는 없습니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 20.sp
                 )
                 Text(
-                    text = "• One UI·Android 업데이트나 재부팅 뒤 카메라 설정이 초기화될 수 있습니다. 매번 다시 설정하는 것은 아니며, 필요한 경우에만 앱이 알려드립니다.",
+                    text = "• One UI·Android 업데이트나 재부팅 뒤 카메라 설정이 초기화될 수 있습니다. 매번 다시 설정할 필요는 없으며, 필요한 경우에만 알림으로 알려드립니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 20.sp
                 )
                 Text(
-                    text = "자세한 원리와 상황별 조치는 설정 → 도움말에서 언제든 확인할 수 있습니다.",
+                    text = "자세한 원리와 상황별 조치는 설정 → 도움말에서 확인할 수 있습니다.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 18.sp
-                )
-                Text(
-                    text = "다음 단계에서 알림을 허용하면 다시 적용이나 권한 확인이 필요한 상황을 안내받을 수 있습니다.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
                     lineHeight = 18.sp
                 )
             }
