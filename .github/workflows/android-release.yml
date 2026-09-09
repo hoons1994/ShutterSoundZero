@@ -31,7 +31,6 @@ jobs:
       - name: Confirm release workflow is loadable
         run: echo 'Android Release workflow loaded successfully.'
 
-
   dispatch-tag-release:
     name: Dispatch Tagged Release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -40,11 +39,11 @@ jobs:
       actions: write
       contents: read
     steps:
-      - name: Dispatch release on main
+      - name: Dispatch release on tag
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run android-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f release_tag="$GITHUB_REF_NAME"
+        run: gh workflow run android-release.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f release_tag="$GITHUB_REF_NAME"
 
   preflight:
     name: Validate Signed Release Preflight
@@ -218,7 +217,7 @@ jobs:
 
   release:
     name: Build Signed Release APK
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag != ''
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v') && inputs.release_tag != ''
     runs-on: ubuntu-latest
     environment: release-signing
     timeout-minutes: 25
@@ -241,8 +240,19 @@ jobs:
             echo "Invalid release tag: $RELEASE_TAG"
             exit 1
           fi
+
+          if [ "$GITHUB_REF" != "refs/tags/$RELEASE_TAG" ]; then
+            echo "Release workflow must run from the matching tag ref. ref=$GITHUB_REF tag=$RELEASE_TAG"
+            exit 1
+          fi
+
           git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
           RELEASE_SOURCE_SHA="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          if [ "$GITHUB_SHA" != "$RELEASE_SOURCE_SHA" ]; then
+            echo "Workflow source SHA ($GITHUB_SHA) does not match release tag SHA ($RELEASE_SOURCE_SHA)."
+            exit 1
+          fi
+
           git checkout --detach "$RELEASE_SOURCE_SHA"
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           echo "RELEASE_SOURCE_SHA=$RELEASE_SOURCE_SHA" >> "$GITHUB_ENV"
@@ -269,6 +279,16 @@ jobs:
 
           if [ "$TAG_VERSION" != "$APP_VERSION" ]; then
             echo "Tag version ($TAG_VERSION) does not match app versionName ($APP_VERSION)."
+            exit 1
+          fi
+
+      - name: Ensure release is immutable
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists. Published releases are immutable; create a new version instead."
             exit 1
           fi
 
@@ -402,25 +422,17 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --bundle "${RELEASE_APK}.sigstore.json" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/android-release.yml" \
-            --source-digest "$GITHUB_SHA"
+            --source-digest "$RELEASE_SOURCE_SHA"
 
-      - name: Create or update GitHub Release
+      - name: Create GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" \
-              "$RELEASE_APK" \
-              "${RELEASE_APK}.sha256" \
-              "${RELEASE_APK}.sigstore.json" \
-              --clobber
-          else
-            gh release create "$RELEASE_TAG" \
-              "$RELEASE_APK" \
-              "${RELEASE_APK}.sha256" \
-              "${RELEASE_APK}.sigstore.json" \
-              --verify-tag \
-              --generate-notes \
-              --title "$RELEASE_TAG"
-          fi
+          gh release create "$RELEASE_TAG" \
+            "$RELEASE_APK" \
+            "${RELEASE_APK}.sha256" \
+            "${RELEASE_APK}.sigstore.json" \
+            --verify-tag \
+            --generate-notes \
+            --title "$RELEASE_TAG"
