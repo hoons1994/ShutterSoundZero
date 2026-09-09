@@ -336,7 +336,7 @@ fun MainScreen(
                 RowDivider()
                 InfoRow(
                     title = when {
-                        uiState.isCscMuted -> "이제 앱을 계속 열어둘 필요가 없습니다"
+                        uiState.isCscMuted -> "앱을 계속 열어둘 필요가 없습니다"
                         hasEffectivePermission -> "권한은 유지되어 있습니다"
                         else -> "처음 한 번만 설정하면 됩니다"
                     },

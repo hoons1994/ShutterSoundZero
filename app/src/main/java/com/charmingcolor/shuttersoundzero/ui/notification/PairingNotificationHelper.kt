@@ -243,7 +243,7 @@ object PairingNotificationHelper {
             .setContentTitle("셔터음 제로: 설정 완료 ✨")
             .setContentText(
                 if (wirelessDebuggingDisabled) {
-                    "카메라 무음 설정을 적용했고 무선 디버깅도 껐습니다. 이제 앱을 계속 열어둘 필요가 없습니다."
+                    "카메라 무음 설정을 적용했고 무선 디버깅도 껐습니다. 앱을 계속 열어둘 필요가 없습니다."
                 } else {
                     "카메라 무음 설정은 완료됐습니다. Wi-Fi 연결 알림을 피하려면 무선 디버깅을 직접 꺼 주세요."
                 }
