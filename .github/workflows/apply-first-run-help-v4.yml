@@ -1,0 +1,79 @@
+name: Apply first-run notice and help v4
+
+on:
+  push:
+    branches:
+      - feat/first-run-notice-help
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/first-run-notice-help
+          fetch-depth: 0
+
+      - name: Apply source changes
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          source = Path('.github/workflows/apply-first-run-help-v2.yml').read_text()
+          start_marker = "          python <<'PY'\n"
+          end_marker = "\n          PY\n"
+          start = source.index(start_marker) + len(start_marker)
+          end = source.index(end_marker, start)
+          embedded = source[start:end]
+          script = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in embedded.splitlines()
+          )
+
+          pattern = r"old_nav = '''.*?main = main\.replace\(old_nav, new_nav, 1\)"
+          replacement = '''nav_marker = '                        MainNavigation()\\n'
+          if nav_marker not in main:
+              raise SystemExit('Main navigation line not found')
+          main = main.replace(
+              nav_marker,
+              '                        Box(modifier = Modifier.fillMaxSize()) {\\n'
+              '                            MainNavigation()\\n'
+              '                            if (showInitialNotice) {\\n'
+              '                                FirstRunNoticeDialog(\\n'
+              '                                    onConfirm = {\\n'
+              '                                        prefs.hasSeenInitialNotice = true\\n'
+              '                                        showInitialNotice = false\\n'
+              '                                        requestNotificationPermissionIfNeeded()\\n'
+              '                                    }\\n'
+              '                                )\\n'
+              '                            }\\n'
+              '                        }\\n',
+              1,
+          )'''
+          script, count = re.subn(pattern, lambda _: replacement, script, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit('Could not patch navigation replacement logic')
+
+          exec(compile(script, '<apply-first-run-help>', 'exec'), {})
+          PY
+
+          rm .github/workflows/apply-first-run-help.yml
+          rm .github/workflows/apply-first-run-help-v2.yml
+          rm .github/workflows/apply-first-run-help-v3.yml
+          rm .github/workflows/apply-first-run-help-v4.yml
+
+      - name: Commit applied changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: 첫 실행 중요 안내와 아코디언 도움말 추가"
+          git push origin HEAD:feat/first-run-notice-help
