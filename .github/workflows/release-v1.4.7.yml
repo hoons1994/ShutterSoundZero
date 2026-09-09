@@ -1,0 +1,51 @@
+name: Release v1.4.7
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/build.gradle.kts'
+      - '.github/release-notes/v1.4.7.md'
+      - '.github/workflows/release-v1.4.7.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  publish:
+    name: Tag and dispatch v1.4.7
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify release version
+        shell: bash
+        run: |
+          APP_VERSION="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          if [ "$APP_VERSION" != '1.4.7' ]; then
+            echo "Expected versionName 1.4.7, found: $APP_VERSION"
+            exit 1
+          fi
+
+      - name: Create release tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git ls-remote --exit-code --tags origin 'refs/tags/v1.4.7' >/dev/null 2>&1; then
+            echo 'Tag v1.4.7 already exists.'
+          else
+            git tag v1.4.7 "$GITHUB_SHA"
+            git push origin refs/tags/v1.4.7
+          fi
+
+      - name: Dispatch signed release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run android-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f release_tag='v1.4.7'
