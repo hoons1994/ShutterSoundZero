@@ -62,6 +62,11 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
+        if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            notifyIfPermissionLinkageLostAfterAppUpdate(context, prefs)
+            return
+        }
+
         if (isBootAction(action)) {
             notifyIfMuteNeedsReapplyAfterBoot(context, prefs)
         }
@@ -99,6 +104,42 @@ class BootReceiver : BroadcastReceiver() {
             } else {
                 "소프트웨어 업데이트 후 카메라 무음 설정과 권한 연동이 초기화되었습니다. 무선 디버깅을 켠 뒤 [1회 설정 시작]을 다시 진행해 주세요."
             }
+        )
+    }
+
+    /**
+     * 앱 자체 업데이트 완료 직후 기존 WRITE_SECURE_SETTINGS 연동이 유지됐는지 확인한다.
+     *
+     * Android의 정상적인 패키지 업데이트라면 권한은 유지되어야 한다. 다만 기기 정책이나
+     * 제조사 동작으로 권한이 사라지는 예외 상황에 대비해, 이전 연동 흔적이 있는 경우에만
+     * 실제 권한을 검증하고 재연동 안내를 표시한다.
+     */
+    private fun notifyIfPermissionLinkageLostAfterAppUpdate(
+        context: Context,
+        prefs: PreferencesRepository
+    ) {
+        if (prefs.isPermissionRevokedByUser) {
+            Log.i(TAG, "App updated; permission linkage was already revoked by user")
+            return
+        }
+
+        // shouldMuteOnBoot가 false여도 사용자가 카메라 셔터음을 원래대로 복원해 둔 상태일 수 있다.
+        // 성공한 로컬 ADB 연결 포트가 남아 있으면 이전 권한 연동 이력이 있었던 것으로 판단한다.
+        val linkageExpected = prefs.shouldMuteOnBoot || prefs.lastConnectPort > 0
+        if (!linkageExpected) {
+            Log.i(TAG, "App updated; no prior permission linkage evidence")
+            return
+        }
+
+        if (CscMuteManager.hasWritePermission(context)) {
+            Log.i(TAG, "App updated; WRITE_SECURE_SETTINGS permission remained granted")
+            return
+        }
+
+        Log.w(TAG, "App updated; expected WRITE_SECURE_SETTINGS permission is missing")
+        showNotification(
+            context,
+            "앱 업데이트 후 권한 연동 상태를 확인한 결과 보안 설정 변경 권한이 유지되지 않았습니다. 무선 디버깅을 켠 뒤 [1회 설정 시작]을 다시 진행해 주세요."
         )
     }
 
