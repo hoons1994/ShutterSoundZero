@@ -28,64 +28,26 @@ jobs:
           path = Path('app/src/main/java/com/charmingcolor/shuttersoundzero/core/adb/StandaloneAdbManager.kt')
           text = path.read_text()
 
-          old = '''            prefs.shouldMuteOnBoot = true
-            prefs.isPermissionRevokedByUser = false
-
-            Result.success(Unit)
-'''
-          new = '''            prefs.shouldMuteOnBoot = true
-            prefs.isPermissionRevokedByUser = false
-
-            // 이후 무선 디버깅을 끄더라도 죽은 TLS 세션이 연결 상태로 남지 않게 정리한다.
-            disconnectAfterSuccessfulCommand("initial camera mute setup")
-            Result.success(Unit)
-'''
+          old = "            prefs.shouldMuteOnBoot = true\n            prefs.isPermissionRevokedByUser = false\n\n            Result.success(Unit)\n"
+          new = "            prefs.shouldMuteOnBoot = true\n            prefs.isPermissionRevokedByUser = false\n\n            // 이후 무선 디버깅을 끄더라도 죽은 TLS 세션이 연결 상태로 남지 않게 정리한다.\n            disconnectAfterSuccessfulCommand(\"initial camera mute setup\")\n            Result.success(Unit)\n"
           if old not in text:
               raise SystemExit('applyCameraMuteViaAdb success block not found')
           text = text.replace(old, new, 1)
 
-          old = '''                    prefs.shouldMuteOnBoot = enableMute
-                    Log.i(TAG, "Reused active ADB session for camera setting")
-                    return@withContext Result.success(Unit)
-'''
-          new = '''                    prefs.shouldMuteOnBoot = enableMute
-                    Log.i(TAG, "Reused active ADB session for camera setting")
-                    disconnectAfterSuccessfulCommand("reused camera setting session")
-                    return@withContext Result.success(Unit)
-'''
+          old = "                    prefs.shouldMuteOnBoot = enableMute\n                    Log.i(TAG, \"Reused active ADB session for camera setting\")\n                    return@withContext Result.success(Unit)\n"
+          new = "                    prefs.shouldMuteOnBoot = enableMute\n                    Log.i(TAG, \"Reused active ADB session for camera setting\")\n                    disconnectAfterSuccessfulCommand(\"reused camera setting session\")\n                    return@withContext Result.success(Unit)\n"
           if old not in text:
               raise SystemExit('setCameraMute reused-session block not found')
           text = text.replace(old, new, 1)
 
-          old = '''            executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
-            prefs.shouldMuteOnBoot = enableMute
-            Log.i(TAG, "Camera setting updated successfully via ADB")
-            Result.success(Unit)
-'''
-          new = '''            executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
-            prefs.shouldMuteOnBoot = enableMute
-            Log.i(TAG, "Camera setting updated successfully via ADB")
-            disconnectAfterSuccessfulCommand("camera setting update")
-            Result.success(Unit)
-'''
+          old = "            executeShellCommand(\"settings put system csc_pref_camera_forced_shuttersound_key $targetVal\")\n            prefs.shouldMuteOnBoot = enableMute\n            Log.i(TAG, \"Camera setting updated successfully via ADB\")\n            Result.success(Unit)\n"
+          new = "            executeShellCommand(\"settings put system csc_pref_camera_forced_shuttersound_key $targetVal\")\n            prefs.shouldMuteOnBoot = enableMute\n            Log.i(TAG, \"Camera setting updated successfully via ADB\")\n            disconnectAfterSuccessfulCommand(\"camera setting update\")\n            Result.success(Unit)\n"
           if old not in text:
               raise SystemExit('setCameraMute success block not found')
           text = text.replace(old, new, 1)
 
-          marker = '''    private fun saveConnectedPort() {
-'''
-          helper = '''    /** 성공한 셸 작업 뒤 현재 ADB 연결을 정리해 다음 작업이 새 무선 디버깅 세션으로 연결되게 한다. */
-    private fun disconnectAfterSuccessfulCommand(operation: String) {
-        try {
-            disconnect()
-            Log.i(TAG, "ADB session disconnected after $operation")
-        } catch (e: Exception) {
-            // CSC 명령 자체는 이미 완료됐으므로 연결 정리 실패가 작업 성공을 뒤집지는 않는다.
-            logFailure("ADB disconnect after $operation failed", e)
-        }
-    }
-
-'''
+          marker = "    private fun saveConnectedPort() {\n"
+          helper = "    /** 성공한 셸 작업 뒤 현재 ADB 연결을 정리해 다음 작업이 새 무선 디버깅 세션으로 연결되게 한다. */\n    private fun disconnectAfterSuccessfulCommand(operation: String) {\n        try {\n            disconnect()\n            Log.i(TAG, \"ADB session disconnected after $operation\")\n        } catch (e: Exception) {\n            // CSC 명령 자체는 이미 완료됐으므로 연결 정리 실패가 작업 성공을 뒤집지는 않는다.\n            logFailure(\"ADB disconnect after $operation failed\", e)\n        }\n    }\n\n"
           if marker not in text:
               raise SystemExit('saveConnectedPort marker not found')
           text = text.replace(marker, helper + marker, 1)
@@ -98,7 +60,6 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/src/main/java/com/charmingcolor/shuttersoundzero/core/adb/StandaloneAdbManager.kt \
-                  .github/workflows/apply-adb-session-cleanup.yml
+          git add app/src/main/java/com/charmingcolor/shuttersoundzero/core/adb/StandaloneAdbManager.kt .github/workflows/apply-adb-session-cleanup.yml
           git commit -m 'fix: 카메라 설정 변경 후 ADB 세션 정리'
           git push origin HEAD:fix/first-run-shutter-sound-wording
