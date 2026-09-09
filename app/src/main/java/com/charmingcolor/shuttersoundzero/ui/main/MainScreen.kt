@@ -870,7 +870,7 @@ private fun PermissionSetupSection(
         RowDivider()
 
         InfoRow(
-            title = "평소에는 무선 디버깅을 꺼두세요",
+            title = "사용 안내",
             subtitle = "권한 연동은 완료되어 있습니다. 카메라 무음 상태를 다시 적용하거나 원래대로 복원할 때만 설정 → 카메라 설정에서 무선 디버깅을 잠시 켜면 됩니다."
         )
     }
