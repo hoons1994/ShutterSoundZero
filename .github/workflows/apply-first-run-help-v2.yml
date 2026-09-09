@@ -1,0 +1,374 @@
+name: Apply first-run notice and help v2
+
+on:
+  push:
+    branches:
+      - feat/first-run-notice-help
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/first-run-notice-help
+          fetch-depth: 0
+
+      - name: Apply UI changes
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          root = Path('.')
+
+          prefs_path = root / 'app/src/main/java/com/charmingcolor/shuttersoundzero/data/PreferencesRepository.kt'
+          prefs = prefs_path.read_text()
+          marker = '    private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)\n'
+          addition = dedent('''
+
+              /**
+               * 최초 설치 사용자에게만 첫 실행 중요 안내를 보여주기 위한 상태.
+               * 기존 설치 사용자는 과거 설정 키가 있으면 이미 안내를 본 것으로 마이그레이션한다.
+               */
+              var hasSeenInitialNotice: Boolean
+                  get() = prefs.getBoolean(KEY_INITIAL_NOTICE_SEEN, false)
+                  set(value) = prefs.edit { putBoolean(KEY_INITIAL_NOTICE_SEEN, value) }
+
+              fun ensureInitialNoticeMigration() {
+                  if (prefs.contains(KEY_INITIAL_NOTICE_SEEN)) return
+
+                  val isExistingInstall =
+                      prefs.contains(KEY_LAST_SOFTWARE_FINGERPRINT) ||
+                          prefs.contains(KEY_LAST_CONNECT_PORT) ||
+                          prefs.contains(KEY_PERMISSION_REVOKED_BY_USER) ||
+                          prefs.contains(KEY_APP_LOCK_ENABLED) ||
+                          prefs.contains(KEY_APP_UPDATE_AUTO_CHECK)
+
+                  prefs.edit { putBoolean(KEY_INITIAL_NOTICE_SEEN, isExistingInstall) }
+              }
+          ''')
+          if marker not in prefs:
+              raise SystemExit('Preferences insertion marker not found')
+          prefs = prefs.replace(marker, marker + addition, 1)
+          key_marker = '        private const val KEY_SHOULD_MUTE_ON_BOOT = "should_mute_on_boot"\n'
+          if key_marker not in prefs:
+              raise SystemExit('Preferences key marker not found')
+          prefs = prefs.replace(key_marker, key_marker + '        private const val KEY_INITIAL_NOTICE_SEEN = "initial_notice_seen"\n', 1)
+          prefs_path.write_text(prefs)
+
+          main_path = root / 'app/src/main/java/com/charmingcolor/shuttersoundzero/MainActivity.kt'
+          main = main_path.read_text()
+          main = main.replace(
+              'import androidx.compose.foundation.layout.fillMaxSize\n',
+              'import androidx.compose.foundation.layout.Box\nimport androidx.compose.foundation.layout.fillMaxSize\n',
+              1,
+          )
+          main = main.replace(
+              'import com.charmingcolor.shuttersoundzero.ui.lock.AppLockScreen\n',
+              'import com.charmingcolor.shuttersoundzero.ui.lock.AppLockScreen\nimport com.charmingcolor.shuttersoundzero.ui.onboarding.FirstRunNoticeDialog\n',
+              1,
+          )
+          main = main.replace(
+              '    private var unlockErrorMessage by mutableStateOf<String?>(null)\n',
+              '    private var unlockErrorMessage by mutableStateOf<String?>(null)\n    private var showInitialNotice by mutableStateOf(false)\n',
+              1,
+          )
+          main = main.replace(
+              '        prefs = PreferencesRepository.getInstance(this)\n        prefs.ensureSoftwareUpdateBaseline(Build.FINGERPRINT)\n',
+              '        prefs = PreferencesRepository.getInstance(this)\n        prefs.ensureInitialNoticeMigration()\n        showInitialNotice = !prefs.hasSeenInitialNotice\n        prefs.ensureSoftwareUpdateBaseline(Build.FINGERPRINT)\n',
+              1,
+          )
+          main = main.replace(
+              '        if (!prefs.isAppLockEnabled) {\n            requestNotificationPermissionIfNeeded()\n        }\n',
+              '        if (!prefs.isAppLockEnabled && !showInitialNotice) {\n            requestNotificationPermissionIfNeeded()\n        }\n',
+              1,
+          )
+          old_nav = '''                    } else {
+                        MainNavigation()
+                    }
+'''
+          new_nav = '''                    } else {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            MainNavigation()
+                            if (showInitialNotice) {
+                                FirstRunNoticeDialog(
+                                    onConfirm = {
+                                        prefs.hasSeenInitialNotice = true
+                                        showInitialNotice = false
+                                        requestNotificationPermissionIfNeeded()
+                                    }
+                                )
+                            }
+                        }
+                    }
+'''
+          if old_nav not in main:
+              raise SystemExit('Main navigation marker not found')
+          main = main.replace(old_nav, new_nav, 1)
+          unlock_marker = '                requestNotificationPermissionIfNeeded()\n            },\n'
+          if unlock_marker not in main:
+              raise SystemExit('Unlock notification marker not found')
+          main = main.replace(
+              unlock_marker,
+              '                if (!showInitialNotice) {\n                    requestNotificationPermissionIfNeeded()\n                }\n            },\n',
+              1,
+          )
+          main_path.write_text(main)
+
+          onboarding_path = root / 'app/src/main/java/com/charmingcolor/shuttersoundzero/ui/onboarding/FirstRunNoticeDialog.kt'
+          onboarding_path.parent.mkdir(parents=True, exist_ok=True)
+          onboarding_path.write_text(dedent('''
+              package com.charmingcolor.shuttersoundzero.ui.onboarding
+
+              import androidx.compose.foundation.layout.Arrangement
+              import androidx.compose.foundation.layout.Column
+              import androidx.compose.foundation.shape.RoundedCornerShape
+              import androidx.compose.material3.AlertDialog
+              import androidx.compose.material3.MaterialTheme
+              import androidx.compose.material3.Text
+              import androidx.compose.material3.TextButton
+              import androidx.compose.runtime.Composable
+              import androidx.compose.ui.text.font.FontWeight
+              import androidx.compose.ui.unit.dp
+              import androidx.compose.ui.unit.sp
+
+              @Composable
+              fun FirstRunNoticeDialog(onConfirm: () -> Unit) {
+                  AlertDialog(
+                      onDismissRequest = {},
+                      title = {
+                          Text(
+                              text = "사용 전에 꼭 확인해 주세요",
+                              style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                          )
+                      },
+                      text = {
+                          Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                              Text(
+                                  text = "ShutterSoundZero는 삼성 갤럭시의 카메라 셔터음 강제 설정을 변경합니다.",
+                                  style = MaterialTheme.typography.bodyMedium,
+                                  lineHeight = 20.sp
+                              )
+                              Text(
+                                  text = "• 처음 한 번 무선 디버깅으로 기기 연동이 필요합니다. 설정이 끝나면 무선 디버깅을 계속 켜둘 필요는 없습니다.",
+                                  style = MaterialTheme.typography.bodyMedium,
+                                  lineHeight = 20.sp
+                              )
+                              Text(
+                                  text = "• One UI·Android 업데이트나 재부팅 뒤 카메라 설정이 초기화될 수 있습니다. 매번 다시 설정하는 것은 아니며, 필요한 경우에만 앱이 알려드립니다.",
+                                  style = MaterialTheme.typography.bodyMedium,
+                                  lineHeight = 20.sp
+                              )
+                              Text(
+                                  text = "자세한 원리와 상황별 조치는 설정 → 도움말에서 언제든 확인할 수 있습니다.",
+                                  style = MaterialTheme.typography.bodySmall,
+                                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                  lineHeight = 18.sp
+                              )
+                              Text(
+                                  text = "다음 단계에서 알림을 허용하면 다시 적용이나 권한 확인이 필요한 상황을 안내받을 수 있습니다.",
+                                  style = MaterialTheme.typography.bodySmall,
+                                  color = MaterialTheme.colorScheme.primary,
+                                  lineHeight = 18.sp
+                              )
+                          }
+                      },
+                      confirmButton = {
+                          TextButton(onClick = onConfirm) {
+                              Text("확인하고 시작하기")
+                          }
+                      },
+                      shape = RoundedCornerShape(20.dp),
+                      containerColor = MaterialTheme.colorScheme.surface
+                  )
+              }
+          ''').lstrip())
+
+          help_path = root / 'app/src/main/java/com/charmingcolor/shuttersoundzero/ui/settings/SettingsHelpSection.kt'
+          help_path.write_text(dedent('''
+              package com.charmingcolor.shuttersoundzero.ui.settings
+
+              import androidx.compose.foundation.clickable
+              import androidx.compose.foundation.layout.Arrangement
+              import androidx.compose.foundation.layout.Column
+              import androidx.compose.foundation.layout.Row
+              import androidx.compose.foundation.layout.Spacer
+              import androidx.compose.foundation.layout.fillMaxWidth
+              import androidx.compose.foundation.layout.padding
+              import androidx.compose.foundation.layout.width
+              import androidx.compose.foundation.shape.RoundedCornerShape
+              import androidx.compose.material.icons.Icons
+              import androidx.compose.material.icons.filled.KeyboardArrowDown
+              import androidx.compose.material.icons.filled.KeyboardArrowUp
+              import androidx.compose.material3.Card
+              import androidx.compose.material3.CardDefaults
+              import androidx.compose.material3.HorizontalDivider
+              import androidx.compose.material3.Icon
+              import androidx.compose.material3.MaterialTheme
+              import androidx.compose.material3.Text
+              import androidx.compose.runtime.Composable
+              import androidx.compose.runtime.getValue
+              import androidx.compose.runtime.mutableStateOf
+              import androidx.compose.runtime.remember
+              import androidx.compose.runtime.setValue
+              import androidx.compose.ui.Alignment
+              import androidx.compose.ui.Modifier
+              import androidx.compose.ui.text.font.FontWeight
+              import androidx.compose.ui.unit.dp
+              import androidx.compose.ui.unit.sp
+
+              private data class HelpQuestion(val id: String, val question: String, val answer: String)
+
+              private val helpQuestions = listOf(
+                  HelpQuestion(
+                      "csc",
+                      "ShutterSoundZero는 정확히 무엇을 바꾸나요?",
+                      "삼성 갤럭시의 시스템 설정에 있는 카메라 셔터음 강제 값을 변경합니다. 앱을 적용하면 강제 셔터음이 해제되어 휴대전화의 소리·진동·무음 모드에 따라 카메라 촬영음이 동작합니다. 따라서 휴대전화가 소리 모드라면 촬영음이 들릴 수 있습니다."
+                  ),
+                  HelpQuestion(
+                      "wireless_debugging",
+                      "왜 무선 디버깅이 필요한가요?",
+                      "카메라 셔터음 강제 값은 일반 앱이 바로 변경할 수 없는 시스템 영역에 있습니다. ShutterSoundZero는 무선 디버깅을 통해 이 기기의 로컬 ADB에 연결해 최초 권한 연동을 하고, 카메라 값을 실제로 변경할 때 셸 명령을 실행합니다. 설정이 끝난 뒤에는 계속 켜둘 필요가 없습니다."
+                  ),
+                  HelpQuestion(
+                      "software_update",
+                      "One UI·Android 업데이트 후 다시 설정해야 하나요?",
+                      "항상 다시 설정할 필요는 없습니다. 소프트웨어 업데이트 후 카메라 셔터음 값이 그대로 유지될 수도 있고 기본값으로 초기화될 수도 있습니다. 앱은 실제 상태를 확인해 그대로 유지되면 아무 작업도 요구하지 않습니다. 값만 초기화되고 권한이 남아 있으면 [카메라 무음 다시 적용], 권한까지 사라졌다면 [1회 설정 시작]을 안내합니다."
+                  ),
+                  HelpQuestion(
+                      "reboot",
+                      "휴대전화를 재부팅하면 설정이 유지되나요?",
+                      "일반적으로는 유지될 수 있지만 기기 상태나 소프트웨어 동작에 따라 카메라 셔터음 값이 기본 상태로 돌아갈 수 있습니다. 재부팅 뒤 실제 값이 초기화된 경우에만 앱이 다시 적용이 필요하다고 알려드립니다."
+                  ),
+                  HelpQuestion(
+                      "app_update",
+                      "ShutterSoundZero 앱을 업데이트하면 다시 연동해야 하나요?",
+                      "정상적인 앱 업데이트에서는 기존 권한 연동과 앱 설정이 유지됩니다. 앱 업데이트 직후에도 기존 보안 설정 권한이 실제로 유지됐는지 확인하며, 예상과 다르게 권한이 사라진 경우에만 [1회 설정 시작]을 다시 진행하도록 안내합니다."
+                  ),
+                  HelpQuestion(
+                      "reapply_vs_setup",
+                      "[카메라 무음 다시 적용]과 [1회 설정 시작]은 무엇이 다른가요?",
+                      "기존 권한 연동은 남아 있는데 카메라 셔터음 값만 기본 상태로 돌아온 경우에는 [카메라 무음 다시 적용]만 하면 됩니다. WRITE_SECURE_SETTINGS 권한 자체가 없거나 사용자가 권한 연동을 해제했다면 [1회 설정 시작]으로 기기 연동부터 다시 진행해야 합니다."
+                  ),
+                  HelpQuestion(
+                      "notifications",
+                      "알림은 언제 표시되나요?",
+                      "One UI·Android 업데이트나 재부팅 뒤 카메라 설정을 다시 적용해야 할 때, 또는 앱 업데이트 후 기존 권한 연동에 이상이 발견됐을 때처럼 사용자의 조치가 필요한 경우에 안내합니다. 정상 상태라면 별도의 조치 알림을 표시하지 않습니다."
+                  ),
+                  HelpQuestion(
+                      "developer_options",
+                      "개발자 옵션과 무선 디버깅을 계속 켜둬야 하나요?",
+                      "아닙니다. 최초 연동이 끝난 뒤에는 무선 디버깅을 꺼도 이미 부여된 권한은 유지됩니다. 카메라 무음을 다시 적용하거나 원래대로 복원하는 등 시스템 값을 실제로 변경할 때만 잠시 켜면 됩니다. 작업이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다."
+                  )
+              )
+
+              @Composable
+              fun SettingsHelpSection() {
+                  var expandedQuestionId by remember { mutableStateOf<String?>(null) }
+
+                  Text(
+                      text = "도움말",
+                      style = MaterialTheme.typography.labelMedium.copy(
+                          fontWeight = FontWeight.SemiBold,
+                          letterSpacing = 0.1.sp
+                      ),
+                      color = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.padding(start = 24.dp, bottom = 6.dp)
+                  )
+
+                  Card(
+                      modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                      shape = RoundedCornerShape(20.dp),
+                      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                      elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                  ) {
+                      Column {
+                          helpQuestions.forEachIndexed { index, item ->
+                              HelpAccordionItem(
+                                  item = item,
+                                  expanded = expandedQuestionId == item.id,
+                                  onToggle = {
+                                      expandedQuestionId = if (expandedQuestionId == item.id) null else item.id
+                                  }
+                              )
+                              if (index != helpQuestions.lastIndex) {
+                                  HorizontalDivider(
+                                      modifier = Modifier.padding(start = 20.dp),
+                                      color = MaterialTheme.colorScheme.surfaceVariant,
+                                      thickness = 0.5.dp
+                                  )
+                              }
+                          }
+                      }
+                  }
+              }
+
+              @Composable
+              private fun HelpAccordionItem(item: HelpQuestion, expanded: Boolean, onToggle: () -> Unit) {
+                  Column(modifier = Modifier.fillMaxWidth()) {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .clickable(onClick = onToggle)
+                              .padding(horizontal = 20.dp, vertical = 16.dp),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.SpaceBetween
+                      ) {
+                          Text(
+                              text = item.question,
+                              modifier = Modifier.weight(1f),
+                              style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                              color = MaterialTheme.colorScheme.onSurface
+                          )
+                          Spacer(modifier = Modifier.width(8.dp))
+                          Icon(
+                              imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                              contentDescription = if (expanded) "답변 접기" else "답변 펼치기",
+                              tint = MaterialTheme.colorScheme.onSurfaceVariant
+                          )
+                      }
+
+                      if (expanded) {
+                          Text(
+                              text = item.answer,
+                              modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
+                              style = MaterialTheme.typography.bodySmall,
+                              color = MaterialTheme.colorScheme.onSurfaceVariant,
+                              lineHeight = 19.sp
+                          )
+                      }
+                  }
+              }
+          ''').lstrip())
+
+          settings_path = root / 'app/src/main/java/com/charmingcolor/shuttersoundzero/ui/settings/SettingsScreen.kt'
+          settings = settings_path.read_text()
+          marker = '            GroupLabel("앱 정보")\n'
+          if settings.count(marker) != 1:
+              raise SystemExit(f'Expected one app-info marker, found {settings.count(marker)}')
+          settings = settings.replace(
+              marker,
+              '            SettingsHelpSection()\n\n            Spacer(modifier = Modifier.height(24.dp))\n\n' + marker,
+              1,
+          )
+          settings_path.write_text(settings)
+          PY
+
+          rm .github/workflows/apply-first-run-help.yml
+          rm .github/workflows/apply-first-run-help-v2.yml
+
+      - name: Commit applied changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: 첫 실행 중요 안내와 아코디언 도움말 추가"
+          git push origin HEAD:feat/first-run-notice-help
