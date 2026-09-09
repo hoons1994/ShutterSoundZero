@@ -10,6 +10,28 @@ import androidx.core.content.edit
 class PreferencesRepository(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
+
+/**
+ * 최초 설치 사용자에게만 첫 실행 중요 안내를 보여주기 위한 상태.
+ * 기존 설치 사용자는 과거 설정 키가 있으면 이미 안내를 본 것으로 마이그레이션한다.
+ */
+var hasSeenInitialNotice: Boolean
+    get() = prefs.getBoolean(KEY_INITIAL_NOTICE_SEEN, false)
+    set(value) = prefs.edit { putBoolean(KEY_INITIAL_NOTICE_SEEN, value) }
+
+fun ensureInitialNoticeMigration() {
+    if (prefs.contains(KEY_INITIAL_NOTICE_SEEN)) return
+
+    val isExistingInstall =
+        prefs.contains(KEY_LAST_SOFTWARE_FINGERPRINT) ||
+            prefs.contains(KEY_LAST_CONNECT_PORT) ||
+            prefs.contains(KEY_PERMISSION_REVOKED_BY_USER) ||
+            prefs.contains(KEY_APP_LOCK_ENABLED) ||
+            prefs.contains(KEY_APP_UPDATE_AUTO_CHECK)
+
+    prefs.edit { putBoolean(KEY_INITIAL_NOTICE_SEEN, isExistingInstall) }
+}
+
     var shouldMuteOnBoot: Boolean
         get() = prefs.getBoolean(KEY_SHOULD_MUTE_ON_BOOT, false)
         set(value) = prefs.edit { putBoolean(KEY_SHOULD_MUTE_ON_BOOT, value) }
@@ -73,6 +95,7 @@ class PreferencesRepository(context: Context) {
     companion object {
         private const val PREF_NAME = "galaxy_camera_mute_prefs"
         private const val KEY_SHOULD_MUTE_ON_BOOT = "should_mute_on_boot"
+        private const val KEY_INITIAL_NOTICE_SEEN = "initial_notice_seen"
 
         // Legacy key strings intentionally kept for migration compatibility.
         private const val KEY_SOFTWARE_UPDATE_CHECK = "firmware_update_check"
