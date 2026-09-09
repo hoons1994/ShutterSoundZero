@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -21,6 +22,7 @@ import com.charmingcolor.shuttersoundzero.security.AppLockAuthenticator
 import com.charmingcolor.shuttersoundzero.security.AppLockSession
 import com.charmingcolor.shuttersoundzero.theme.ShutterSoundZeroTheme
 import com.charmingcolor.shuttersoundzero.ui.lock.AppLockScreen
+import com.charmingcolor.shuttersoundzero.ui.onboarding.FirstRunNoticeDialog
 
 class MainActivity : ComponentActivity() {
 
@@ -29,6 +31,7 @@ class MainActivity : ComponentActivity() {
     private var authenticationInProgress = false
     private var autoPromptPending = false
     private var unlockErrorMessage by mutableStateOf<String?>(null)
+    private var showInitialNotice by mutableStateOf(false)
 
     private val requestNotificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
@@ -39,6 +42,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         prefs = PreferencesRepository.getInstance(this)
+        prefs.ensureInitialNoticeMigration()
+        showInitialNotice = !prefs.hasSeenInitialNotice
         prefs.ensureSoftwareUpdateBaseline(Build.FINGERPRINT)
         isAppUnlocked = !prefs.isAppLockEnabled || AppLockSession.isUnlocked
         autoPromptPending = prefs.isAppLockEnabled && !isAppUnlocked
@@ -52,7 +57,7 @@ class MainActivity : ComponentActivity() {
             ).show()
         }
 
-        if (!prefs.isAppLockEnabled) {
+        if (!prefs.isAppLockEnabled && !showInitialNotice) {
             requestNotificationPermissionIfNeeded()
         }
 
@@ -70,7 +75,18 @@ class MainActivity : ComponentActivity() {
                             errorMessage = unlockErrorMessage
                         )
                     } else {
-                        MainNavigation()
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            MainNavigation()
+                            if (showInitialNotice) {
+                                FirstRunNoticeDialog(
+                                    onConfirm = {
+                                        prefs.hasSeenInitialNotice = true
+                                        showInitialNotice = false
+                                        requestNotificationPermissionIfNeeded()
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -134,7 +150,9 @@ class MainActivity : ComponentActivity() {
                 unlockErrorMessage = null
                 AppLockSession.unlock()
                 isAppUnlocked = true
-                requestNotificationPermissionIfNeeded()
+                if (!showInitialNotice) {
+                    requestNotificationPermissionIfNeeded()
+                }
             },
             onCancelled = {
                 authenticationInProgress = false
