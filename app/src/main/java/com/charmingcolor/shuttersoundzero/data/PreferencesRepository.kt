@@ -10,27 +10,23 @@ import androidx.core.content.edit
 class PreferencesRepository(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
+    /**
+     * 최초 설치 사용자에게만 첫 실행 중요 안내를 보여주기 위한 상태.
+     */
+    var hasSeenInitialNotice: Boolean
+        get() = prefs.getBoolean(KEY_INITIAL_NOTICE_SEEN, false)
+        set(value) = prefs.edit { putBoolean(KEY_INITIAL_NOTICE_SEEN, value) }
 
-/**
- * 최초 설치 사용자에게만 첫 실행 중요 안내를 보여주기 위한 상태.
- * 기존 설치 사용자는 과거 설정 키가 있으면 이미 안내를 본 것으로 마이그레이션한다.
- */
-var hasSeenInitialNotice: Boolean
-    get() = prefs.getBoolean(KEY_INITIAL_NOTICE_SEEN, false)
-    set(value) = prefs.edit { putBoolean(KEY_INITIAL_NOTICE_SEEN, value) }
-
-fun ensureInitialNoticeMigration() {
-    if (prefs.contains(KEY_INITIAL_NOTICE_SEEN)) return
-
-    val isExistingInstall =
-        prefs.contains(KEY_LAST_SOFTWARE_FINGERPRINT) ||
-            prefs.contains(KEY_LAST_CONNECT_PORT) ||
-            prefs.contains(KEY_PERMISSION_REVOKED_BY_USER) ||
-            prefs.contains(KEY_APP_LOCK_ENABLED) ||
-            prefs.contains(KEY_APP_UPDATE_AUTO_CHECK)
-
-    prefs.edit { putBoolean(KEY_INITIAL_NOTICE_SEEN, isExistingInstall) }
-}
+    /**
+     * 이 기능이 추가되기 전부터 사용하던 설치본에는 기존 환경설정 값이 남아 있다.
+     * 기존 값이 하나라도 있으면 새 설치가 아닌 것으로 보고 안내를 다시 띄우지 않는다.
+     * 아직 한 번도 실행하지 않은 설치본은 기존 값이 없으므로 첫 실행 안내를 정상 표시한다.
+     */
+    fun ensureInitialNoticeMigration() {
+        if (prefs.contains(KEY_INITIAL_NOTICE_SEEN)) return
+        val isExistingInstall = prefs.all.isNotEmpty()
+        prefs.edit { putBoolean(KEY_INITIAL_NOTICE_SEEN, isExistingInstall) }
+    }
 
     var shouldMuteOnBoot: Boolean
         get() = prefs.getBoolean(KEY_SHOULD_MUTE_ON_BOOT, false)
