@@ -223,7 +223,7 @@ fun SettingsScreen(
                 if (isCscMuted) {
                     ClickableRow(
                         title = "카메라 셔터음 원래대로 복원",
-                        subtitle = "현재 무음 설정이 적용되어 있습니다 · 복원하는 동안 무선 디버깅을 잠시 켜야 합니다",
+                        subtitle = "무음 설정 적용됨 · 복원할 때만 무선 디버깅 필요",
                         onClick = {
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
@@ -238,7 +238,7 @@ fun SettingsScreen(
                 } else {
                     ClickableRow(
                         title = "카메라 무음 다시 적용",
-                        subtitle = "현재 셔터음이 기본 상태입니다 · 적용하는 동안 무선 디버깅을 잠시 켜야 합니다",
+                        subtitle = "기본 셔터음 상태 · 다시 적용할 때만 무선 디버깅 필요",
                         onClick = {
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
@@ -271,15 +271,11 @@ fun SettingsScreen(
                 }
                 RowDivider()
                 InfoRow(
-                    title = if (isCscMuted) {
-                        "현재 카메라 무음이 적용되어 있습니다"
-                    } else {
-                        "현재 카메라 셔터음이 기본 상태입니다"
-                    },
+                    title = "카메라 설정 안내",
                     subtitle = if (isCscMuted) {
-                        "원래대로 복원할 때만 무선 디버깅을 잠시 켜면 됩니다. 복원이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다."
+                        "셔터음을 원래대로 복원할 때만 무선 디버깅을 잠시 켜면 됩니다. 작업이 끝나면 앱이 무선 디버깅 자동 종료를 시도합니다."
                     } else {
-                        "카메라 무음을 다시 적용할 때만 무선 디버깅을 잠시 켜면 됩니다. 적용이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다."
+                        "카메라 무음을 다시 적용할 때만 무선 디버깅을 잠시 켜면 됩니다. 작업이 끝나면 앱이 무선 디버깅 자동 종료를 시도합니다."
                     }
                 )
             }

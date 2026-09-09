@@ -336,17 +336,17 @@ fun MainScreen(
                 RowDivider()
                 InfoRow(
                     title = when {
-                        uiState.isCscMuted -> "앱을 계속 열어둘 필요가 없습니다"
-                        hasEffectivePermission -> "권한은 유지되어 있습니다"
-                        else -> "처음 한 번만 설정하면 됩니다"
+                        uiState.isCscMuted -> "사용 안내"
+                        hasEffectivePermission -> "재적용 안내"
+                        else -> "1회 설정 안내"
                     },
                     subtitle = when {
                         uiState.isCscMuted ->
-                            "진동·무음 모드에서 카메라 셔터음이 나지 않도록 설정되어 있습니다. 평소에는 무선 디버깅을 꺼두는 것이 정상이며, 나중에 설정을 바꿀 때만 잠시 다시 켜면 됩니다."
+                            "설정이 완료되면 앱을 계속 열어둘 필요가 없습니다. 평소에는 무선 디버깅을 꺼두고, 카메라 셔터음 설정을 바꿀 때만 잠시 켜면 됩니다."
                         hasEffectivePermission ->
-                            "현재 카메라 무음 설정이 적용되어 있지 않습니다. 설정 → 카메라 설정에서 [카메라 무음 다시 적용]을 사용해 주세요. 상태를 바꾸는 동안에만 무선 디버깅을 잠시 켜면 됩니다."
+                            "설정 → 카메라 설정에서 [카메라 무음 다시 적용]을 사용해 주세요. 적용할 때만 무선 디버깅을 잠시 켜면 됩니다."
                         else ->
-                            "[1회 설정 시작]에서 6자리 페어링 코드만 입력하면 권한 연동과 무음 설정을 한 번에 적용합니다. 완료 후에는 무선 디버깅 자동 종료를 시도하고, 자동으로 끄지 못하면 바로 안내합니다."
+                            "[1회 설정 시작]에서 6자리 페어링 코드를 입력하면 권한 연동과 무음 설정을 함께 진행합니다."
                     }
                 )
             }
@@ -776,8 +776,8 @@ private fun NotificationSettingsChangeContent(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            text = "알림 팝업이 간략하게 보이나요?",
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            text = "알림 팝업 안내",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
@@ -878,7 +878,7 @@ private fun PermissionSetupSection(
     RowDivider()
 
     InfoRow(
-        title = "소프트웨어 업데이트 후",
-        subtitle = "One UI·Android 업데이트 후 카메라 셔터음 설정이 그대로면 아무 작업이 필요 없습니다. 셔터음이 다시 들리면 설정 → 카메라 설정에서 [카메라 무음 다시 적용]을 사용해 주세요. [1회 설정 필요]가 표시될 때만 권한 연동을 다시 진행하면 됩니다."
+        title = "소프트웨어 업데이트 안내",
+        subtitle = "One UI 또는 Android 업데이트 후 셔터음 설정이 그대로면 아무 작업이 필요 없습니다. 셔터음이 다시 들릴 때만 [카메라 무음 다시 적용]을 사용하고, [1회 설정 필요]가 표시된 경우에만 기기 연동을 다시 진행하면 됩니다."
     )
 }
