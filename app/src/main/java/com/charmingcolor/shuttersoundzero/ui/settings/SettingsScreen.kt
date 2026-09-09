@@ -93,6 +93,7 @@ fun SettingsScreen(
     var restoreResultMessage by remember { mutableStateOf<String?>(null) }
     var isReapplyInProgress by remember { mutableStateOf(false) }
     var isRestoreInProgress by remember { mutableStateOf(false) }
+    var isCscMuted by remember { mutableStateOf(CscMuteManager.isCscShutterSoundMuted(context)) }
 
     var isUpdateChecking by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<AppUpdateManager.UpdateInfo?>(null) }
@@ -210,55 +211,66 @@ fun SettingsScreen(
 
             GroupLabel("카메라 설정")
             SettingsCard {
-                ClickableRow(
-                    title = "카메라 무음 다시 적용",
-                    subtitle = "무음 설정이 풀렸을 때 사용 · 적용하는 동안 무선 디버깅을 잠시 켜야 합니다",
-                    onClick = {
-                        if (!CscMuteManager.hasWritePermission(context)) {
-                            restoreResultMessage =
-                                "아직 1회 설정이 완료되지 않았습니다. 메인 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-                        } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
-                            showReapplyWirelessDebuggingHelp = true
-                        } else if (!isReapplyInProgress) {
-                            isReapplyInProgress = true
-                            coroutineScope.launch {
-                                val result = StandaloneAdbManager.getInstance(context).setCameraMute(true)
-                                if (result.isSuccess && CscMuteManager.isCscShutterSoundMuted(context)) {
-                                    prefs.shouldMuteOnBoot = true
-                                    val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
-                                    restoreResultMessage = if (cleanup.isSuccess) {
-                                        "카메라 무음 설정을 다시 적용했고 무선 디버깅도 껐습니다."
-                                    } else {
-                                        "카메라 무음 설정은 다시 적용했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
-                                    }
-                                } else {
-                                    restoreResultMessage =
-                                        "카메라 무음 설정을 다시 적용하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
-                                }
-                                isReapplyInProgress = false
+                if (isCscMuted) {
+                    ClickableRow(
+                        title = "카메라 셔터음 원래대로 복원",
+                        subtitle = "현재 무음 설정이 적용되어 있습니다 · 복원하는 동안 무선 디버깅을 잠시 켜야 합니다",
+                        onClick = {
+                            if (!CscMuteManager.hasWritePermission(context)) {
+                                restoreResultMessage =
+                                    "아직 1회 설정이 완료되지 않았습니다. 메인 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+                            } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
+                                showRestoreWirelessDebuggingHelp = true
+                            } else {
+                                showRestoreConfirm = true
                             }
                         }
-                    }
-                )
-                RowDivider()
-                ClickableRow(
-                    title = "카메라 셔터음 원래대로 복원",
-                    subtitle = "필요할 때만 사용 · 복원하는 동안 무선 디버깅을 잠시 켜야 합니다",
-                    onClick = {
-                        if (!CscMuteManager.hasWritePermission(context)) {
-                            restoreResultMessage =
-                                "아직 1회 설정이 완료되지 않았습니다. 메인 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-                        } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
-                            showRestoreWirelessDebuggingHelp = true
-                        } else {
-                            showRestoreConfirm = true
+                    )
+                } else {
+                    ClickableRow(
+                        title = "카메라 무음 다시 적용",
+                        subtitle = "현재 셔터음이 기본 상태입니다 · 적용하는 동안 무선 디버깅을 잠시 켜야 합니다",
+                        onClick = {
+                            if (!CscMuteManager.hasWritePermission(context)) {
+                                restoreResultMessage =
+                                    "아직 1회 설정이 완료되지 않았습니다. 메인 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+                            } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
+                                showReapplyWirelessDebuggingHelp = true
+                            } else if (!isReapplyInProgress) {
+                                isReapplyInProgress = true
+                                coroutineScope.launch {
+                                    val result = StandaloneAdbManager.getInstance(context).setCameraMute(true)
+                                    if (result.isSuccess && CscMuteManager.isCscShutterSoundMuted(context)) {
+                                        prefs.shouldMuteOnBoot = true
+                                        isCscMuted = true
+                                        val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
+                                        restoreResultMessage = if (cleanup.isSuccess) {
+                                            "카메라 무음 설정을 다시 적용했고 무선 디버깅도 껐습니다."
+                                        } else {
+                                            "카메라 무음 설정은 다시 적용했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
+                                        }
+                                    } else {
+                                        restoreResultMessage =
+                                            "카메라 무음 설정을 다시 적용하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
+                                    }
+                                    isReapplyInProgress = false
+                                }
+                            }
                         }
-                    }
-                )
+                    )
+                }
                 RowDivider()
                 InfoRow(
-                    title = "평소에는 무선 디버깅을 꺼두세요",
-                    subtitle = "무음 다시 적용과 원래대로 복원은 모두 이 화면에서 진행합니다. 실제 상태를 바꾸는 동안에만 무선 디버깅을 잠시 켜면 됩니다."
+                    title = if (isCscMuted) {
+                        "현재 카메라 무음이 적용되어 있습니다"
+                    } else {
+                        "현재 카메라 셔터음이 기본 상태입니다"
+                    },
+                    subtitle = if (isCscMuted) {
+                        "원래대로 복원할 때만 무선 디버깅을 잠시 켜면 됩니다. 복원이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다."
+                    } else {
+                        "카메라 무음을 다시 적용할 때만 무선 디버깅을 잠시 켜면 됩니다. 적용이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다."
+                    }
                 )
             }
 
@@ -487,6 +499,7 @@ fun SettingsScreen(
                                 val result = StandaloneAdbManager.getInstance(context).setCameraMute(false)
                                 if (result.isSuccess && !CscMuteManager.isCscShutterSoundMuted(context)) {
                                     prefs.shouldMuteOnBoot = false
+                                    isCscMuted = false
                                     val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
                                     restoreResultMessage = if (cleanup.isSuccess) {
                                         "카메라 셔터음을 기본 상태로 복원했고 무선 디버깅도 껐습니다."
