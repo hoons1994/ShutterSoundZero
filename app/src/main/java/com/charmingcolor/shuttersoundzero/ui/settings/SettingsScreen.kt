@@ -57,6 +57,7 @@ import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.security.AppLockAuthenticator
 import com.charmingcolor.shuttersoundzero.security.AppLockSession
 import com.charmingcolor.shuttersoundzero.update.AppUpdateManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val CardRadius = 20.dp
@@ -103,6 +104,14 @@ fun SettingsScreen(
     var updateStatusMessage by remember { mutableStateOf<String?>(null) }
     var updateErrorMessage by remember { mutableStateOf<String?>(null) }
     var installPermissionHint by remember { mutableStateOf(false) }
+
+    suspend fun waitForCscState(expectedMuted: Boolean): Boolean {
+        repeat(20) { attempt ->
+            if (CscMuteManager.isCscShutterSoundMuted(context) == expectedMuted) return true
+            if (attempt < 19) delay(100)
+        }
+        return false
+    }
 
     fun checkForAppUpdate() {
         if (isUpdateChecking || isUpdateDownloading) return
@@ -240,7 +249,8 @@ fun SettingsScreen(
                                 isReapplyInProgress = true
                                 coroutineScope.launch {
                                     val result = StandaloneAdbManager.getInstance(context).setCameraMute(true)
-                                    if (result.isSuccess && CscMuteManager.isCscShutterSoundMuted(context)) {
+                                    val stateApplied = result.isSuccess && waitForCscState(true)
+                                    if (stateApplied) {
                                         prefs.shouldMuteOnBoot = true
                                         isCscMuted = true
                                         val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
@@ -501,7 +511,8 @@ fun SettingsScreen(
                             isRestoreInProgress = true
                             coroutineScope.launch {
                                 val result = StandaloneAdbManager.getInstance(context).setCameraMute(false)
-                                if (result.isSuccess && !CscMuteManager.isCscShutterSoundMuted(context)) {
+                                val stateRestored = result.isSuccess && waitForCscState(false)
+                                if (stateRestored) {
                                     prefs.shouldMuteOnBoot = false
                                     isCscMuted = false
                                     val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
