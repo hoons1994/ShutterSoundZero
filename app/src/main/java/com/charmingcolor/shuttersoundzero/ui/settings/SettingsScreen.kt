@@ -363,6 +363,10 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            SettingsHelpSection()
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             GroupLabel("앱 정보")
             SettingsCard {
                 InfoRow(
