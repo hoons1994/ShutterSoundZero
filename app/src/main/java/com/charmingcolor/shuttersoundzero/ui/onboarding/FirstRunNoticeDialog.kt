@@ -35,7 +35,7 @@ fun FirstRunNoticeDialog(onConfirm: () -> Unit) {
                     lineHeight = 20.sp
                 )
                 Text(
-                    text = "• One UI·Android 업데이트나 재부팅 뒤 카메라 설정이 초기화될 수 있습니다. 매번 다시 설정할 필요는 없으며, 필요한 경우에만 알림으로 알려드립니다.",
+                    text = "• One UI 또는 Android 소프트웨어 업데이트 후 카메라 셔터음 설정이 초기화될 수 있습니다. 매번 다시 설정할 필요는 없으며, 필요한 경우에만 알림으로 알려드립니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 20.sp
                 )

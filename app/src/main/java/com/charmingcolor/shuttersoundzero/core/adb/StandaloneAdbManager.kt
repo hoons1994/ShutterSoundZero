@@ -281,6 +281,8 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
             prefs.shouldMuteOnBoot = true
             prefs.isPermissionRevokedByUser = false
 
+            // 이후 무선 디버깅을 끄더라도 죽은 TLS 세션이 연결 상태로 남지 않게 정리한다.
+            disconnectAfterSuccessfulCommand("initial camera mute setup")
             Result.success(Unit)
         } catch (e: Exception) {
             logFailure("Failed to apply permission via ADB", e)
@@ -364,6 +366,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                     executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
                     prefs.shouldMuteOnBoot = enableMute
                     Log.i(TAG, "Reused active ADB session for camera setting")
+                    disconnectAfterSuccessfulCommand("reused camera setting session")
                     return@withContext Result.success(Unit)
                 } catch (e: Exception) {
                     logFailure("Active ADB session failed; reconnecting", e)
@@ -405,6 +408,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
             executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
             prefs.shouldMuteOnBoot = enableMute
             Log.i(TAG, "Camera setting updated successfully via ADB")
+            disconnectAfterSuccessfulCommand("camera setting update")
             Result.success(Unit)
         } catch (e: Exception) {
             logFailure("Failed to update camera setting via ADB", e)
@@ -412,6 +416,17 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
             Result.failure(IOException("셔터음 설정 변경 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
         } finally {
             releaseMulticastLock()
+        }
+    }
+
+    /** 성공한 셸 작업 뒤 현재 ADB 연결을 정리해 다음 작업이 새 무선 디버깅 세션으로 연결되게 한다. */
+    private fun disconnectAfterSuccessfulCommand(operation: String) {
+        try {
+            disconnect()
+            Log.i(TAG, "ADB session disconnected after $operation")
+        } catch (e: Exception) {
+            // CSC 명령 자체는 이미 완료됐으므로 연결 정리 실패가 작업 성공을 뒤집지는 않는다.
+            logFailure("ADB disconnect after $operation failed", e)
         }
     }
 
