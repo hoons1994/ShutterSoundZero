@@ -1,6 +1,11 @@
 package com.charmingcolor.shuttersoundzero.update
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -8,6 +13,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class AppUpdateManagerTest {
 
@@ -97,6 +105,48 @@ class AppUpdateManagerTest {
 
         assertEquals(1, checks)
         assertTrue(failure is CancellationException)
+    }
+
+    @Test
+    fun cancellationCleanup_runsWhileBlockingWorkIsStillActive() = runBlocking {
+        val blockingEntered = CountDownLatch(1)
+        val cleanupCalled = CountDownLatch(1)
+        val releaseBlockingWork = CountDownLatch(1)
+        val cleanupCount = AtomicInteger(0)
+
+        val job = launch(Dispatchers.IO) {
+            AppUpdateManager.withCancellationCleanup(
+                cleanup = {
+                    cleanupCount.incrementAndGet()
+                    cleanupCalled.countDown()
+                    releaseBlockingWork.countDown()
+                }
+            ) {
+                blockingEntered.countDown()
+                releaseBlockingWork.await(5, TimeUnit.SECONDS)
+                currentCoroutineContext().ensureActive()
+            }
+        }
+
+        assertTrue(blockingEntered.await(1, TimeUnit.SECONDS))
+        job.cancel()
+        assertTrue(cleanupCalled.await(1, TimeUnit.SECONDS))
+        job.join()
+        assertEquals(1, cleanupCount.get())
+    }
+
+    @Test
+    fun cancellationCleanup_runsExactlyOnceOnNormalCompletion() = runBlocking {
+        val cleanupCount = AtomicInteger(0)
+
+        val result = AppUpdateManager.withCancellationCleanup(
+            cleanup = { cleanupCount.incrementAndGet() }
+        ) {
+            "done"
+        }
+
+        assertEquals("done", result)
+        assertEquals(1, cleanupCount.get())
     }
 
     @Test
