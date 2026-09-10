@@ -21,6 +21,8 @@ jobs:
     name: Build, Test, Lint & Instrumentation
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      ANDROID_AVD_HOME: ${{ runner.temp }}/android-avd
 
     steps:
       - name: Checkout source
@@ -95,11 +97,17 @@ jobs:
       - name: Create Android emulator
         shell: bash
         run: |
+          mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd \
             --force \
             --name shuttersoundzero-ci \
             --package 'system-images;android-35;default;x86_64' \
             --device pixel
+
+          EMULATOR="$ANDROID_SDK_ROOT/emulator/emulator"
+          echo 'Available AVDs:'
+          "$EMULATOR" -list-avds
+          "$EMULATOR" -list-avds | grep -Fxq 'shuttersoundzero-ci'
 
       - name: Start Android emulator
         shell: bash
@@ -111,7 +119,7 @@ jobs:
             exit 1
           fi
 
-          nohup "$EMULATOR" @shuttersoundzero-ci \
+          nohup "$EMULATOR" -avd shuttersoundzero-ci \
             -no-window \
             -no-audio \
             -no-boot-anim \
