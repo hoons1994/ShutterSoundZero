@@ -63,6 +63,10 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x gradlew
 
+      - name: Verify complete launcher icon resources
+        shell: bash
+        run: bash .github/scripts/verify-launcher-icon.sh
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
