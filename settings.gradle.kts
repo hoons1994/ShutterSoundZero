@@ -22,7 +22,13 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
-        maven { url = uri("https://jitpack.io") }
+        maven {
+            url = uri("https://jitpack.io")
+            content {
+                // JitPack은 libadb 공급자 그룹에만 사용해 저장소 대체 공격면을 제한한다.
+                includeGroup("com.github.MuntashirAkon")
+            }
+        }
     }
 }
 
