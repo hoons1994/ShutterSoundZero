@@ -21,8 +21,6 @@ jobs:
     name: Build, Test, Lint & Instrumentation
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      ANDROID_AVD_HOME: ${{ runner.temp }}/android-avd
 
     steps:
       - name: Checkout source
@@ -94,10 +92,15 @@ jobs:
             sudo chmod 666 /dev/kvm
           fi
 
+      - name: Configure AVD home
+        shell: bash
+        run: |
+          echo "ANDROID_AVD_HOME=$RUNNER_TEMP/android-avd" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/android-avd"
+
       - name: Create Android emulator
         shell: bash
         run: |
-          mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd \
             --force \
             --name shuttersoundzero-ci \
