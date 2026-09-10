@@ -28,13 +28,9 @@
     <!-- Android 17+ 로컬 네트워크(mDNS·무선 ADB) 접근 권한 -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
-    <!-- One UI 버전에 따라 달라지는 삼성 설정과 오류 신고용 메일 앱 조회 -->
+    <!-- One UI 버전에 따라 달라지는 삼성 설정의 소프트웨어 정보 Activity 조회 -->
     <queries>
         <package android:name="com.android.settings" />
-        <intent>
-            <action android:name="android.intent.action.SENDTO" />
-            <data android:scheme="mailto" />
-        </intent>
     </queries>
 
     <application
@@ -58,11 +54,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!-- 사용자가 진단 내용을 확인한 뒤 이메일로 오류 신고 -->
-        <activity
-            android:name=".diagnostics.DiagnosticReportActivity"
-            android:exported="false" />
 
         <!-- 검증된 업데이트 APK만 앱 캐시에서 패키지 설치 화면으로 공유 -->
         <provider
