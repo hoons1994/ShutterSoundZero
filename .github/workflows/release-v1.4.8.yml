@@ -1,0 +1,74 @@
+name: Release v1.4.8
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/build.gradle.kts'
+      - '.github/release-notes/v1.4.8.md'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  dispatch:
+    name: Tag and dispatch v1.4.8
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify v1.4.8 source
+        shell: bash
+        run: |
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\).*/\1/p' app/build.gradle.kts | head -n 1)"
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+
+          if [ "$VERSION_CODE" != '148' ] || [ "$VERSION_NAME" != '1.4.8' ]; then
+            echo "Expected versionCode=148/versionName=1.4.8, got $VERSION_CODE/$VERSION_NAME"
+            exit 1
+          fi
+
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo 'Checked out main does not match the triggering commit.'
+            exit 1
+          fi
+
+      - name: Create release tag if needed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.4.8 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'v1.4.8 release already exists; nothing to do.'
+            echo 'SKIP_RELEASE=1' >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          git fetch --tags --force
+          if git rev-parse -q --verify 'refs/tags/v1.4.8^{commit}' >/dev/null; then
+            TAG_SHA="$(git rev-parse 'refs/tags/v1.4.8^{commit}')"
+            if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+              echo "Existing v1.4.8 tag points to $TAG_SHA instead of $GITHUB_SHA."
+              exit 1
+            fi
+          else
+            git tag v1.4.8 "$GITHUB_SHA"
+            git push origin refs/tags/v1.4.8
+          fi
+
+      - name: Dispatch signed Android release
+        if: env.SKIP_RELEASE != '1'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run android-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref v1.4.8 \
+            -f release_tag=v1.4.8
