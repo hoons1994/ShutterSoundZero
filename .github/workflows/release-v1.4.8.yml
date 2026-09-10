@@ -7,6 +7,7 @@ on:
     paths:
       - 'app/build.gradle.kts'
       - '.github/release-notes/v1.4.8.md'
+      - '.github/workflows/android-release.yml'
 
 permissions:
   contents: write
@@ -39,7 +40,7 @@ jobs:
             exit 1
           fi
 
-      - name: Create release tag if needed
+      - name: Create or repair unpublished release tag
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,8 +55,13 @@ jobs:
           if git rev-parse -q --verify 'refs/tags/v1.4.8^{commit}' >/dev/null; then
             TAG_SHA="$(git rev-parse 'refs/tags/v1.4.8^{commit}')"
             if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
-              echo "Existing v1.4.8 tag points to $TAG_SHA instead of $GITHUB_SHA."
-              exit 1
+              if ! git merge-base --is-ancestor "$TAG_SHA" "$GITHUB_SHA"; then
+                echo "Existing unpublished v1.4.8 tag ($TAG_SHA) is not an ancestor of $GITHUB_SHA."
+                exit 1
+              fi
+              echo "Moving unpublished v1.4.8 tag from $TAG_SHA to $GITHUB_SHA."
+              git tag -f v1.4.8 "$GITHUB_SHA"
+              git push --force origin refs/tags/v1.4.8
             fi
           else
             git tag v1.4.8 "$GITHUB_SHA"
@@ -70,5 +76,5 @@ jobs:
         run: |
           gh workflow run android-release.yml \
             --repo "$GITHUB_REPOSITORY" \
-            --ref v1.4.8 \
+            --ref main \
             -f release_tag=v1.4.8
