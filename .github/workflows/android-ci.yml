@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 # Temporary write access is restricted by a branch guard below and will be removed
-# after the reviewed PGP verification metadata and public keyring are committed.
+# after the reviewed PGP verification metadata is committed to this PR branch.
 permissions:
   contents: write
 
@@ -72,28 +72,18 @@ jobs:
       - name: Bootstrap dependency signatures for review
         shell: bash
         run: |
-          # Prefer the reviewable ASCII-armored public keyring over a binary keyring.
-          if ! grep -q '<keyring-format>armored</keyring-format>' gradle/verification-metadata.xml; then
-            sed -i '/<verify-signatures>/a\      <keyring-format>armored</keyring-format>' gradle/verification-metadata.xml
-          fi
-
-          ./gradlew --write-verification-metadata sha256,pgp --export-keys \
+          ./gradlew --write-verification-metadata sha256,pgp \
             assembleDebug \
             testDebugUnitTest \
             lintDebug \
             assembleDebugAndroidTest \
             --no-daemon --stacktrace
 
-          test -s gradle/verification-keyring.keys
-          test ! -e gradle/verification-keyring.gpg
-
       - name: Upload dependency signature bootstrap
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: dependency-signature-bootstrap-${{ github.sha }}
-          path: |
-            gradle/verification-metadata.xml
-            gradle/verification-keyring.keys
+          path: gradle/verification-metadata.xml
           if-no-files-found: error
           retention-days: 1
 
@@ -102,21 +92,18 @@ jobs:
         shell: bash
         run: |
           cp gradle/verification-metadata.xml "$RUNNER_TEMP/verification-metadata.xml"
-          cp gradle/verification-keyring.keys "$RUNNER_TEMP/verification-keyring.keys"
 
           # pull_request checks out a synthetic merge ref. Reattach to the actual PR head
-          # so the generated files can be committed as a fast-forward update.
+          # so the generated metadata can be committed as a fast-forward update.
           git fetch --depth=1 origin "${{ github.head_ref }}:refs/remotes/origin/${{ github.head_ref }}"
           git checkout -B "${{ github.head_ref }}" "refs/remotes/origin/${{ github.head_ref }}"
-
           cp "$RUNNER_TEMP/verification-metadata.xml" gradle/verification-metadata.xml
-          cp "$RUNNER_TEMP/verification-keyring.keys" gradle/verification-keyring.keys
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add gradle/verification-metadata.xml gradle/verification-keyring.keys
+          git add gradle/verification-metadata.xml
           if git diff --cached --quiet; then
-            echo 'Dependency verification metadata and keyring are already up to date.'
+            echo 'Dependency verification metadata is already up to date.'
             exit 0
           fi
           git commit -m 'chore: Gradle PGP verification metadata 적용'
