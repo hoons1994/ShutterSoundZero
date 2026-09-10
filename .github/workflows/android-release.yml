@@ -31,7 +31,6 @@ jobs:
       - name: Confirm release workflow is loadable
         run: echo 'Android Release workflow loaded successfully.'
 
-
   dispatch-tag-release:
     name: Dispatch Tagged Release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -40,7 +39,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - name: Dispatch release on main
+      - name: Dispatch release on tag
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -100,6 +99,10 @@ jobs:
 
       - name: Ensure Gradle wrapper is executable
         run: chmod +x gradlew
+
+      - name: Verify complete launcher icon resources
+        shell: bash
+        run: bash .github/scripts/verify-launcher-icon.sh
 
       - name: Restore release keystore
         shell: bash
@@ -231,6 +234,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Resolve release tag
@@ -241,8 +245,19 @@ jobs:
             echo "Invalid release tag: $RELEASE_TAG"
             exit 1
           fi
+
+          if [ "$GITHUB_REF" != 'refs/heads/main' ]; then
+            echo "Release workflow must be dispatched from main. ref=$GITHUB_REF"
+            exit 1
+          fi
+
           git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
           RELEASE_SOURCE_SHA="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          if [ "$GITHUB_SHA" != "$RELEASE_SOURCE_SHA" ]; then
+            echo "Workflow source SHA ($GITHUB_SHA) does not match release tag SHA ($RELEASE_SOURCE_SHA)."
+            exit 1
+          fi
+
           git checkout --detach "$RELEASE_SOURCE_SHA"
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           echo "RELEASE_SOURCE_SHA=$RELEASE_SOURCE_SHA" >> "$GITHUB_ENV"
@@ -269,6 +284,16 @@ jobs:
 
           if [ "$TAG_VERSION" != "$APP_VERSION" ]; then
             echo "Tag version ($TAG_VERSION) does not match app versionName ($APP_VERSION)."
+            exit 1
+          fi
+
+      - name: Ensure release is immutable
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists. Published releases are immutable; create a new version instead."
             exit 1
           fi
 
@@ -308,6 +333,10 @@ jobs:
 
       - name: Ensure Gradle wrapper is executable
         run: chmod +x gradlew
+
+      - name: Verify complete launcher icon resources
+        shell: bash
+        run: bash .github/scripts/verify-launcher-icon.sh
 
       - name: Restore release keystore
         shell: bash
@@ -402,25 +431,17 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --bundle "${RELEASE_APK}.sigstore.json" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/android-release.yml" \
-            --source-digest "$GITHUB_SHA"
+            --source-digest "$RELEASE_SOURCE_SHA"
 
-      - name: Create or update GitHub Release
+      - name: Create GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" \
-              "$RELEASE_APK" \
-              "${RELEASE_APK}.sha256" \
-              "${RELEASE_APK}.sigstore.json" \
-              --clobber
-          else
-            gh release create "$RELEASE_TAG" \
-              "$RELEASE_APK" \
-              "${RELEASE_APK}.sha256" \
-              "${RELEASE_APK}.sigstore.json" \
-              --verify-tag \
-              --generate-notes \
-              --title "$RELEASE_TAG"
-          fi
+          gh release create "$RELEASE_TAG" \
+            "$RELEASE_APK" \
+            "${RELEASE_APK}.sha256" \
+            "${RELEASE_APK}.sigstore.json" \
+            --verify-tag \
+            --generate-notes \
+            --title "$RELEASE_TAG"
