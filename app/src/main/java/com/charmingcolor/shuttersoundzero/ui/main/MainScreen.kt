@@ -71,6 +71,7 @@ import com.charmingcolor.shuttersoundzero.theme.StatusAmber
 import com.charmingcolor.shuttersoundzero.theme.StatusGreen
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
 import com.charmingcolor.shuttersoundzero.update.AppUpdateManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private val CardRadius = 20.dp
@@ -120,7 +121,7 @@ fun MainScreen(
                 ).show()
                 try {
                     AppUpdateManager.openInstallPermissionSettings(context)
-                } catch (error: Throwable) {
+                } catch (error: Exception) {
                     appUpdateErrorMessage = friendlyHomeUpdateError(error)
                 }
             } else {
@@ -153,7 +154,9 @@ fun MainScreen(
                         if (!AppUpdateManager.launchInstaller(context, verified)) {
                             error("Android 설치 화면을 열 수 없습니다. 기기의 설치 권한 설정을 확인해 주세요.")
                         }
-                    } catch (error: Throwable) {
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
                         appUpdateErrorMessage = friendlyHomeUpdateError(error)
                     } finally {
                         isAppUpdatePreparing = false
@@ -248,7 +251,9 @@ fun MainScreen(
                         availableAppUpdateVersion = result.update.versionName
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
                 // 자동 확인은 알림/오류 팝업 없이 조용히 실패한다. 수동 확인은 설정 화면에서 항상 가능하다.
             } finally {
                 isSilentAppUpdateChecking = false
@@ -580,7 +585,7 @@ fun MainScreen(
     }
 }
 
-private fun friendlyHomeUpdateError(error: Throwable): String {
+private fun friendlyHomeUpdateError(error: Exception): String {
     return error.message?.trim().takeUnless { it.isNullOrBlank() }
         ?: "업데이트를 준비하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요."
 }
