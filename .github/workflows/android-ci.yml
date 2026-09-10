@@ -9,10 +9,8 @@ on:
       - main
   workflow_dispatch:
 
-# Temporary write access is restricted by the branch guard below and will be removed
-# after the public verification keyring is committed to this PR branch.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: android-ci-${{ github.ref }}
@@ -68,64 +66,6 @@ jobs:
       - name: Verify dependency checksum baseline exists
         shell: bash
         run: test -s gradle/verification-metadata.xml
-
-      - name: Bootstrap pinned public verification keyring
-        if: github.event_name == 'pull_request' && github.head_ref == 'chore/dependency-signature-hardening'
-        shell: bash
-        run: |
-          KEYRING_URL='https://raw.githubusercontent.com/androidx/androidx/fb36344c55b5c811a64f5957153baddbe150fa04/gradle/verification-keyring.keys'
-          EXPECTED_GIT_BLOB='276a49621a95cb9e55d4b26521751d0851bdfbff'
-
-          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
-            "$KEYRING_URL" \
-            --output gradle/verification-keyring.keys
-
-          test -s gradle/verification-keyring.keys
-          ACTUAL_GIT_BLOB="$(git hash-object gradle/verification-keyring.keys)"
-          if [[ "$ACTUAL_GIT_BLOB" != "$EXPECTED_GIT_BLOB" ]]; then
-            echo "Pinned AndroidX keyring blob mismatch: $ACTUAL_GIT_BLOB"
-            exit 1
-          fi
-
-          grep -oE 'trusted-key id="[A-Fa-f0-9]+"' gradle/verification-metadata.xml \
-            | sed -E 's/.*"([A-Fa-f0-9]+)"/\1/' \
-            | tr '[:lower:]' '[:upper:]' \
-            | sort -u > "$RUNNER_TEMP/trusted-keys.txt"
-
-          gpg --batch --show-keys --with-colons gradle/verification-keyring.keys \
-            | awk -F: '$1 == "fpr" { print toupper($10) }' \
-            | sort -u > "$RUNNER_TEMP/keyring-fingerprints.txt"
-
-          comm -23 "$RUNNER_TEMP/trusted-keys.txt" "$RUNNER_TEMP/keyring-fingerprints.txt" \
-            > "$RUNNER_TEMP/missing-trusted-keys.txt"
-
-          if [[ -s "$RUNNER_TEMP/missing-trusted-keys.txt" ]]; then
-            echo 'Pinned AndroidX keyring does not contain every trusted key:'
-            cat "$RUNNER_TEMP/missing-trusted-keys.txt"
-            exit 1
-          fi
-
-          echo "Verified $(wc -l < "$RUNNER_TEMP/trusted-keys.txt") trusted keys against the pinned AndroidX keyring."
-
-      - name: Commit public verification keyring to hardening branch
-        if: github.event_name == 'pull_request' && github.head_ref == 'chore/dependency-signature-hardening'
-        shell: bash
-        run: |
-          cp gradle/verification-keyring.keys "$RUNNER_TEMP/verification-keyring.keys"
-
-          git fetch --depth=1 origin "${{ github.head_ref }}:refs/remotes/origin/${{ github.head_ref }}"
-          git checkout -B "${{ github.head_ref }}" "refs/remotes/origin/${{ github.head_ref }}"
-          cp "$RUNNER_TEMP/verification-keyring.keys" gradle/verification-keyring.keys
-
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add gradle/verification-keyring.keys
-          if git diff --cached --quiet; then
-            echo 'Dependency verification keyring is already up to date.'
-            exit 0
-          fi
-          git commit -m 'chore: Gradle PGP 공개키 keyring 고정'
-          git push origin "HEAD:${{ github.head_ref }}"
 
       - name: Verify complete launcher icon resources
         shell: bash
