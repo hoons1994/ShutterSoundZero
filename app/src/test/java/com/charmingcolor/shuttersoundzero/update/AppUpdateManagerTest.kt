@@ -5,6 +5,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.IOException
 
 class AppUpdateManagerTest {
 
@@ -41,6 +43,42 @@ class AppUpdateManagerTest {
     @Test
     fun invalidSha256_isRejected() {
         assertNull(AppUpdateManager.parseSha256("not-a-checksum"))
+    }
+
+    @Test
+    fun boundedText_acceptsPayloadAtLimit() {
+        val payload = "12345678"
+        val payloadBytes = payload.toByteArray()
+        val result = AppUpdateManager.readBoundedText(
+            ByteArrayInputStream(payloadBytes),
+            maxBytes = payloadBytes.size
+        )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun boundedText_rejectsPayloadOverLimit() {
+        val failure = runCatching {
+            AppUpdateManager.readBoundedText(
+                ByteArrayInputStream("123456789".toByteArray()),
+                maxBytes = 8
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IOException)
+    }
+
+    @Test
+    fun boundedText_rejectsNonPositiveLimit() {
+        val failure = runCatching {
+            AppUpdateManager.readBoundedText(
+                ByteArrayInputStream(byteArrayOf()),
+                maxBytes = 0
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
     }
 
     @Test
