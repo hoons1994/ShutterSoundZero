@@ -25,8 +25,9 @@ dependencyResolutionManagement {
         maven {
             url = uri("https://jitpack.io")
             content {
-                // JitPack은 libadb 공급자 그룹에만 사용해 저장소 대체 공격면을 제한한다.
-                includeGroup("com.github.MuntashirAkon")
+                // libadb와 같은 공급자의 JitPack 전이 의존성까지 허용하되,
+                // 다른 GitHub 그룹이 이 저장소에서 해석되지 않도록 범위를 제한한다.
+                includeGroupByRegex("com\\.github\\.MuntashirAkon(\\..*)?")
             }
         }
     }
