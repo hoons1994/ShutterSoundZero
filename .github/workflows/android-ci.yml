@@ -18,9 +18,9 @@ concurrency:
 
 jobs:
   verify:
-    name: Build, Test & Lint
+    name: Build, Test, Lint & Instrumentation
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout source
@@ -76,7 +76,74 @@ jobs:
       - name: Run Android Lint
         run: ./gradlew lintDebug --no-daemon --stacktrace
 
+      - name: Install emulator image
+        shell: bash
+        run: |
+          sdkmanager --channel=0 emulator 'system-images;android-35;default;x86_64'
+
+      - name: Enable KVM access
+        shell: bash
+        run: |
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod 666 /dev/kvm
+          fi
+
+      - name: Create Android emulator
+        shell: bash
+        run: |
+          echo no | avdmanager create avd \
+            --force \
+            --name shuttersoundzero-ci \
+            --package 'system-images;android-35;default;x86_64' \
+            --device pixel
+
+      - name: Start Android emulator
+        shell: bash
+        run: |
+          nohup emulator @shuttersoundzero-ci \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot \
+            -gpu swiftshader_indirect \
+            > "$RUNNER_TEMP/emulator.log" 2>&1 &
+
+      - name: Wait for emulator boot
+        shell: bash
+        run: |
+          adb wait-for-device
+          for _ in $(seq 1 90); do
+            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then
+              adb shell input keyevent 82 || true
+              adb shell settings put global window_animation_scale 0
+              adb shell settings put global transition_animation_scale 0
+              adb shell settings put global animator_duration_scale 0
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo 'Android emulator did not finish booting.'
+          cat "$RUNNER_TEMP/emulator.log" || true
+          exit 1
+
+      - name: Run instrumented tests
+        run: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+
+      - name: Upload instrumented test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ShutterSoundZero-androidTest-${{ github.sha }}
+          path: |
+            app/build/reports/androidTests/connected/**
+            app/build/outputs/androidTest-results/connected/**
+            ${{ runner.temp }}/emulator.log
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload debug APK
+        if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ShutterSoundZero-debug-${{ github.sha }}
