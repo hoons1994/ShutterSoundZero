@@ -17,6 +17,7 @@ import com.charmingcolor.shuttersoundzero.MainActivity
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
+import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticLogger
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -122,6 +123,12 @@ class PairingForegroundService : Service() {
     }
 
     private fun startPairing(isDevOptionsOff: Boolean) {
+        DiagnosticLogger.record(
+            this,
+            DiagnosticLogger.Stage.PAIRING_DISCOVERY,
+            DiagnosticLogger.Outcome.STARTED
+        )
+
         val notification = PairingNotificationHelper.buildPairingNotification(
             this,
             isDevOptionsOff = isDevOptionsOff
@@ -138,11 +145,28 @@ class PairingForegroundService : Service() {
         try {
             adbManager.startPairingDiscovery(
                 onPairingPortDiscovered = { port ->
+                    DiagnosticLogger.record(
+                        this,
+                        DiagnosticLogger.Stage.PAIRING_SERVICE_DISCOVERED,
+                        DiagnosticLogger.Outcome.INFO
+                    )
                     PairingNotificationHelper.showPairingNotification(this, pairingPort = port)
                 },
-                onConnectPortDiscovered = { _ -> }
+                onConnectPortDiscovered = {
+                    DiagnosticLogger.record(
+                        this,
+                        DiagnosticLogger.Stage.CONNECT_SERVICE_DISCOVERED,
+                        DiagnosticLogger.Outcome.INFO
+                    )
+                }
             )
         } catch (e: Exception) {
+            DiagnosticLogger.record(
+                this,
+                DiagnosticLogger.Stage.PAIRING_DISCOVERY,
+                DiagnosticLogger.Outcome.FAILURE,
+                e
+            )
             Log.w(TAG, "Unable to start pairing discovery (${e.javaClass.simpleName})")
             PairingNotificationHelper.showPairingNotification(
                 this,
@@ -155,6 +179,11 @@ class PairingForegroundService : Service() {
         val pairingPort = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
 
         if (code.length != 6 || !code.all(Char::isDigit)) {
+            DiagnosticLogger.record(
+                this,
+                DiagnosticLogger.Stage.PAIRING_CODE_SUBMITTED,
+                DiagnosticLogger.Outcome.FAILURE
+            )
             val notification = PairingNotificationHelper.buildPairingNotification(
                 this,
                 pairingPort = pairingPort,
@@ -169,6 +198,12 @@ class PairingForegroundService : Service() {
         }
 
         if (pairingJob?.isActive == true) return
+
+        DiagnosticLogger.record(
+            this,
+            DiagnosticLogger.Stage.PAIRING_CODE_SUBMITTED,
+            DiagnosticLogger.Outcome.INFO
+        )
 
         startForeground(
             PairingNotificationHelper.NOTIFICATION_ID,
@@ -190,6 +225,11 @@ class PairingForegroundService : Service() {
                     }
 
                     if (port == null) {
+                        DiagnosticLogger.record(
+                            this@PairingForegroundService,
+                            DiagnosticLogger.Stage.PAIRING_DISCOVERY,
+                            DiagnosticLogger.Outcome.TIMEOUT
+                        )
                         PairingNotificationHelper.showPairingNotification(
                             this@PairingForegroundService,
                             null,
@@ -200,18 +240,48 @@ class PairingForegroundService : Service() {
 
                     adbManager.stopPairingDiscovery()
                     Log.i(TAG, "Attempting pairing using app-discovered endpoint")
+                    DiagnosticLogger.record(
+                        this@PairingForegroundService,
+                        DiagnosticLogger.Stage.PAIRING,
+                        DiagnosticLogger.Outcome.STARTED
+                    )
                     val pairResult = adbManager.pairLocal(port, code)
 
                     if (pairResult.isSuccess) {
+                        DiagnosticLogger.record(
+                            this@PairingForegroundService,
+                            DiagnosticLogger.Stage.PAIRING,
+                            DiagnosticLogger.Outcome.SUCCESS
+                        )
                         Log.i(TAG, "Pairing successful; applying camera mute and permissions")
                         delay(300)
 
+                        DiagnosticLogger.record(
+                            this@PairingForegroundService,
+                            DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
+                            DiagnosticLogger.Outcome.STARTED
+                        )
                         val muteResult = adbManager.applyCameraMuteViaAdb()
                         if (muteResult.isSuccess) {
+                            DiagnosticLogger.record(
+                                this@PairingForegroundService,
+                                DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
+                                DiagnosticLogger.Outcome.SUCCESS
+                            )
                             val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(
                                 this@PairingForegroundService
                             )
                             val wirelessDebuggingDisabled = wirelessCleanup.isSuccess
+                            DiagnosticLogger.record(
+                                this@PairingForegroundService,
+                                DiagnosticLogger.Stage.WIRELESS_DEBUGGING_CLEANUP,
+                                if (wirelessDebuggingDisabled) {
+                                    DiagnosticLogger.Outcome.SUCCESS
+                                } else {
+                                    DiagnosticLogger.Outcome.FAILURE
+                                },
+                                wirelessCleanup.exceptionOrNull()
+                            )
                             if (wirelessDebuggingDisabled) {
                                 Log.i(TAG, "Wireless debugging disabled after successful setup")
                             } else {
@@ -220,6 +290,11 @@ class PairingForegroundService : Service() {
                                 }
                             }
 
+                            DiagnosticLogger.record(
+                                this@PairingForegroundService,
+                                DiagnosticLogger.Stage.PAIRING_WORKFLOW,
+                                DiagnosticLogger.Outcome.SUCCESS
+                            )
                             Log.i(TAG, "Pairing workflow completed successfully")
                             complete(
                                 this@PairingForegroundService,
@@ -254,6 +329,12 @@ class PairingForegroundService : Service() {
                                 logFailure("Background activity launch restricted", e)
                             }
                         } else {
+                            DiagnosticLogger.record(
+                                this@PairingForegroundService,
+                                DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
+                                DiagnosticLogger.Outcome.FAILURE,
+                                muteResult.exceptionOrNull()
+                            )
                             muteResult.exceptionOrNull()?.let {
                                 logFailure("Mute apply failed after pairing", it)
                             } ?: Log.w(TAG, "Mute apply failed after pairing")
@@ -264,6 +345,12 @@ class PairingForegroundService : Service() {
                             )
                         }
                     } else {
+                        DiagnosticLogger.record(
+                            this@PairingForegroundService,
+                            DiagnosticLogger.Stage.PAIRING,
+                            DiagnosticLogger.Outcome.FAILURE,
+                            pairResult.exceptionOrNull()
+                        )
                         pairResult.exceptionOrNull()?.let {
                             logFailure("Pairing failed", it)
                         } ?: Log.w(TAG, "Pairing failed")
@@ -277,6 +364,11 @@ class PairingForegroundService : Service() {
                 }
 
                 if (timedResult == null) {
+                    DiagnosticLogger.record(
+                        this@PairingForegroundService,
+                        DiagnosticLogger.Stage.PAIRING_WORKFLOW,
+                        DiagnosticLogger.Outcome.TIMEOUT
+                    )
                     Log.w(TAG, "Pairing timed out after 25 seconds")
                     PairingNotificationHelper.showPairingNotification(
                         this@PairingForegroundService,
@@ -291,6 +383,12 @@ class PairingForegroundService : Service() {
                 Log.i(TAG, "Pairing workflow cancelled during service shutdown")
                 throw e
             } catch (e: Exception) {
+                DiagnosticLogger.record(
+                    this@PairingForegroundService,
+                    DiagnosticLogger.Stage.PAIRING_WORKFLOW,
+                    DiagnosticLogger.Outcome.FAILURE,
+                    e
+                )
                 logFailure("Pairing error", e)
                 PairingNotificationHelper.showPairingNotification(
                     this@PairingForegroundService,
@@ -318,36 +416,26 @@ class PairingForegroundService : Service() {
         pairingJob = null
         adbManager.stopPairingDiscovery()
         stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+
         if (showSuccess) {
             PairingNotificationHelper.showSuccessNotification(
                 this,
                 wirelessDebuggingDisabled = wirelessDebuggingDisabled
             )
+        } else {
+            PairingNotificationHelper.cancelNotification(this)
         }
-        stopSelf()
-    }
-
-    override fun onDestroy() {
-        unregisterDeveloperOptionsObserver()
-        pairingJob?.cancel()
-        pairingJob = null
-        serviceScope.cancel()
-        adbManager.stopPairingDiscovery()
-        super.onDestroy()
     }
 
     private fun registerDeveloperOptionsObserver() {
         if (isDeveloperOptionsObserverRegistered) return
-        try {
-            contentResolver.registerContentObserver(
-                Settings.Global.getUriFor(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED),
-                false,
-                developerOptionsObserver
-            )
-            isDeveloperOptionsObserverRegistered = true
-        } catch (e: Exception) {
-            Log.w(TAG, "Unable to observe developer options (${e.javaClass.simpleName})")
-        }
+        contentResolver.registerContentObserver(
+            Settings.Global.getUriFor(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED),
+            false,
+            developerOptionsObserver
+        )
+        isDeveloperOptionsObserverRegistered = true
     }
 
     private fun unregisterDeveloperOptionsObserver() {
@@ -357,6 +445,15 @@ class PairingForegroundService : Service() {
         } catch (_: Exception) {
         }
         isDeveloperOptionsObserverRegistered = false
+    }
+
+    override fun onDestroy() {
+        unregisterDeveloperOptionsObserver()
+        pairingJob?.cancel()
+        pairingJob = null
+        adbManager.stopPairingDiscovery()
+        serviceScope.cancel()
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
