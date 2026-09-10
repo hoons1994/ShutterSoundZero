@@ -104,30 +104,50 @@ jobs:
       - name: Start Android emulator
         shell: bash
         run: |
-          nohup emulator @shuttersoundzero-ci \
+          EMULATOR="$ANDROID_SDK_ROOT/emulator/emulator"
+          if [[ ! -x "$EMULATOR" ]]; then
+            echo "Android emulator executable was not found at $EMULATOR"
+            ls -la "$ANDROID_SDK_ROOT/emulator" || true
+            exit 1
+          fi
+
+          nohup "$EMULATOR" @shuttersoundzero-ci \
             -no-window \
             -no-audio \
             -no-boot-anim \
             -no-snapshot \
             -gpu swiftshader_indirect \
             > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/emulator.pid"
 
       - name: Wait for emulator boot
         shell: bash
         run: |
-          adb wait-for-device
-          for _ in $(seq 1 90); do
-            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then
-              adb shell input keyevent 82 || true
-              adb shell settings put global window_animation_scale 0
-              adb shell settings put global transition_animation_scale 0
-              adb shell settings put global animator_duration_scale 0
-              exit 0
+          EMULATOR_PID="$(cat "$RUNNER_TEMP/emulator.pid")"
+
+          for _ in $(seq 1 120); do
+            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
+              echo 'Android emulator process exited before boot completed.'
+              cat "$RUNNER_TEMP/emulator.log" || true
+              exit 1
             fi
+
+            if adb devices | grep -qE '^emulator-[0-9]+[[:space:]]+device$'; then
+              BOOT_COMPLETED="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+              if [[ "$BOOT_COMPLETED" == "1" ]]; then
+                adb shell input keyevent 82 || true
+                adb shell settings put global window_animation_scale 0
+                adb shell settings put global transition_animation_scale 0
+                adb shell settings put global animator_duration_scale 0
+                exit 0
+              fi
+            fi
+
             sleep 2
           done
 
-          echo 'Android emulator did not finish booting.'
+          echo 'Android emulator did not finish booting within 4 minutes.'
+          adb devices -l || true
           cat "$RUNNER_TEMP/emulator.log" || true
           exit 1
 
