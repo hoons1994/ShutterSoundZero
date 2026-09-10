@@ -48,9 +48,10 @@ class AppUpdateManagerTest {
     @Test
     fun boundedText_acceptsPayloadAtLimit() {
         val payload = "12345678"
+        val payloadBytes = payload.toByteArray()
         val result = AppUpdateManager.readBoundedText(
-            ByteArrayInputStream(payload.toByteArray()),
-            maxBytes = payload.toByteArray().size
+            ByteArrayInputStream(payloadBytes),
+            maxBytes = payloadBytes.size
         )
 
         assertEquals(payload, result)
@@ -66,6 +67,18 @@ class AppUpdateManagerTest {
         }.exceptionOrNull()
 
         assertTrue(failure is IOException)
+    }
+
+    @Test
+    fun boundedText_rejectsNonPositiveLimit() {
+        val failure = runCatching {
+            AppUpdateManager.readBoundedText(
+                ByteArrayInputStream(byteArrayOf()),
+                maxBytes = 0
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
     }
 
     @Test
