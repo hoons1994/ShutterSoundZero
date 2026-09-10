@@ -55,6 +55,11 @@
             </intent-filter>
         </activity>
 
+        <!-- 사용자가 진단 내용을 확인한 뒤 이메일로 오류 신고 -->
+        <activity
+            android:name=".diagnostics.DiagnosticReportActivity"
+            android:exported="false" />
+
         <!-- 검증된 업데이트 APK만 앱 캐시에서 패키지 설치 화면으로 공유 -->
         <provider
             android:name="androidx.core.content.FileProvider"
