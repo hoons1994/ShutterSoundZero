@@ -1,5 +1,6 @@
 package com.charmingcolor.shuttersoundzero.update
 
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -79,6 +80,23 @@ class AppUpdateManagerTest {
         }.exceptionOrNull()
 
         assertTrue(failure is IllegalArgumentException)
+    }
+
+    @Test
+    fun boundedText_propagatesCancellationCheck() {
+        var checks = 0
+        val failure = runCatching {
+            AppUpdateManager.readBoundedText(
+                ByteArrayInputStream("payload".toByteArray()),
+                maxBytes = 32
+            ) {
+                checks += 1
+                throw CancellationException("cancelled")
+            }
+        }.exceptionOrNull()
+
+        assertEquals(1, checks)
+        assertTrue(failure is CancellationException)
     }
 
     @Test
