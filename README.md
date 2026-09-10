@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.4.6-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.4.8-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터음 제로 안내 인포그래픽" width="720" />
@@ -19,13 +19,13 @@
 
 접근성 서비스를 이용해 화면이나 카메라 실행을 상시 감시하지 않습니다. 최초 1회 로컬 무선 ADB로 `WRITE_SECURE_SETTINGS` 권한을 연동한 뒤, 필요할 때만 무선 디버깅을 켜서 실제 CSC 값을 변경합니다.
 
-현재 최신 안정 버전은 **v1.4.6**입니다.
+현재 최신 안정 버전은 **v1.4.8**입니다.
 
 ## 📱 다운로드
 
 - **최신 APK:** [GitHub Releases](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 - **지원 환경:** 삼성 갤럭시 / Android 11 이상
-- v1.4.6부터 새 One UI 스타일 적응형 앱 아이콘이 적용되었습니다.
+- v1.4.8부터 루트의 완성형 앱 아이콘을 런처 리소스로 직접 사용해 동일한 디자인이 표시되도록 정리했습니다.
 
 ## ✨ 주요 기능
 
