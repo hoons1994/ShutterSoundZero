@@ -51,13 +51,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.security.AppLockAuthenticator
 import com.charmingcolor.shuttersoundzero.security.AppLockSession
 import com.charmingcolor.shuttersoundzero.update.AppUpdateManager
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private val CardRadius = 20.dp
@@ -105,14 +106,6 @@ fun SettingsScreen(
     var updateErrorMessage by remember { mutableStateOf<String?>(null) }
     var installPermissionHint by remember { mutableStateOf(false) }
 
-    suspend fun waitForCscState(expectedMuted: Boolean): Boolean {
-        repeat(20) { attempt ->
-            if (CscMuteManager.isCscShutterSoundMuted(context) == expectedMuted) return true
-            if (attempt < 19) delay(100)
-        }
-        return false
-    }
-
     fun checkForAppUpdate() {
         if (isUpdateChecking || isUpdateDownloading) return
         coroutineScope.launch {
@@ -137,7 +130,9 @@ fun SettingsScreen(
                         updateDownloadProgress = 0
                     }
                 }
-            } catch (error: Throwable) {
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
                 updateErrorMessage = friendlyUpdateError(error)
             } finally {
                 isUpdateChecking = false
@@ -151,7 +146,7 @@ fun SettingsScreen(
             installPermissionHint = true
             try {
                 AppUpdateManager.openInstallPermissionSettings(context)
-            } catch (error: Throwable) {
+            } catch (error: Exception) {
                 updateErrorMessage = friendlyUpdateError(error)
             }
             return
@@ -172,7 +167,9 @@ fun SettingsScreen(
                     updateErrorMessage =
                         "Android 설치 화면을 열 수 없습니다. 기기의 설치 권한 설정을 확인해 주세요."
                 }
-            } catch (error: Throwable) {
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
                 verifiedUpdate = null
                 updateErrorMessage = friendlyUpdateError(error)
             } finally {
@@ -249,7 +246,9 @@ fun SettingsScreen(
                                 isReapplyInProgress = true
                                 coroutineScope.launch {
                                     val result = StandaloneAdbManager.getInstance(context).setCameraMute(true)
-                                    val stateApplied = result.isSuccess && waitForCscState(true)
+                                    val stateApplied = result.isSuccess && CscStateVerifier.waitFor(true) {
+                                        CscMuteManager.isCscShutterSoundMuted(context)
+                                    }
                                     if (stateApplied) {
                                         prefs.shouldMuteOnBoot = true
                                         isCscMuted = true
@@ -507,7 +506,9 @@ fun SettingsScreen(
                             isRestoreInProgress = true
                             coroutineScope.launch {
                                 val result = StandaloneAdbManager.getInstance(context).setCameraMute(false)
-                                val stateRestored = result.isSuccess && waitForCscState(false)
+                                val stateRestored = result.isSuccess && CscStateVerifier.waitFor(false) {
+                                    CscMuteManager.isCscShutterSoundMuted(context)
+                                }
                                 if (stateRestored) {
                                     prefs.shouldMuteOnBoot = false
                                     isCscMuted = false
@@ -685,7 +686,7 @@ fun SettingsScreen(
                                         installPermissionHint = true
                                         try {
                                             AppUpdateManager.openInstallPermissionSettings(context)
-                                        } catch (error: Throwable) {
+                                        } catch (error: Exception) {
                                             updateErrorMessage = friendlyUpdateError(error)
                                         }
                                     } else if (!AppUpdateManager.launchInstaller(context, verified)) {
@@ -869,7 +870,7 @@ private fun currentVersionName(context: Context): String {
     return packageInfo.versionName ?: "-"
 }
 
-private fun friendlyUpdateError(error: Throwable): String {
+private fun friendlyUpdateError(error: Exception): String {
     val message = error.message?.trim().orEmpty()
     return if (message.isBlank()) {
         "업데이트를 확인하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요."

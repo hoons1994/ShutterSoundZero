@@ -9,6 +9,8 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -118,6 +120,7 @@ object AppUpdateManager {
                     onProgress(progress)
                 }
             }
+            currentCoroutineContext().ensureActive()
 
             val expectedSha = parseSha256(
                 readUrl(
@@ -126,11 +129,14 @@ object AppUpdateManager {
                     maxBytes = MAX_SHA256_FILE_BYTES
                 )
             ) ?: error("SHA-256 검증값을 읽을 수 없습니다.")
+            currentCoroutineContext().ensureActive()
+
             val actualSha = sha256(apkFile)
             if (!actualSha.equals(expectedSha, ignoreCase = true)) {
                 error("다운로드한 APK의 SHA-256 값이 릴리즈 정보와 일치하지 않습니다.")
             }
 
+            currentCoroutineContext().ensureActive()
             val archiveInfo = packageArchiveInfo(context, apkFile)
                 ?: error("다운로드한 APK 정보를 읽을 수 없습니다.")
             if (archiveInfo.packageName != context.packageName) {
@@ -153,6 +159,7 @@ object AppUpdateManager {
                 error("다운로드한 APK의 버전 정보가 GitHub 릴리즈와 일치하지 않습니다.")
             }
 
+            currentCoroutineContext().ensureActive()
             withContext(Dispatchers.Main.immediate) {
                 onProgress(100)
             }
@@ -234,7 +241,11 @@ object AppUpdateManager {
         return Regex("(?i)\\b[0-9a-f]{64}\\b").find(value)?.value?.lowercase()
     }
 
-    internal fun readBoundedText(input: InputStream, maxBytes: Int): String {
+    internal fun readBoundedText(
+        input: InputStream,
+        maxBytes: Int,
+        checkActive: () -> Unit = {}
+    ): String {
         require(maxBytes > 0) { "maxBytes must be positive" }
 
         val output = ByteArrayOutputStream(minOf(maxBytes, DEFAULT_BUFFER_SIZE * 2))
@@ -242,6 +253,7 @@ object AppUpdateManager {
         var totalBytes = 0
 
         while (true) {
+            checkActive()
             val read = input.read(buffer)
             if (read < 0) break
 
@@ -336,6 +348,7 @@ object AppUpdateManager {
                 FileOutputStream(target).use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE * 4)
                     while (true) {
+                        currentCoroutineContext().ensureActive()
                         val read = input.read(buffer)
                         if (read < 0) break
                         downloadedBytes += read
@@ -359,15 +372,19 @@ object AppUpdateManager {
         }
     }
 
-    private fun readUrl(url: String, acceptJson: Boolean, maxBytes: Int): String {
+    private suspend fun readUrl(url: String, acceptJson: Boolean, maxBytes: Int): String {
+        currentCoroutineContext().ensureActive()
         val connection = openConnection(url, acceptJson)
         return try {
             val declaredLength = connection.contentLengthLong
             if (declaredLength > maxBytes) {
                 error("업데이트 서버 응답 크기가 허용 범위를 초과했습니다.")
             }
+            val coroutineContext = currentCoroutineContext()
             connection.inputStream.use { input ->
-                readBoundedText(input, maxBytes)
+                readBoundedText(input, maxBytes) {
+                    coroutineContext.ensureActive()
+                }
             }
         } finally {
             connection.disconnect()
@@ -403,11 +420,12 @@ object AppUpdateManager {
         return connection
     }
 
-    private fun sha256(file: File): String {
+    private suspend fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { input ->
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE * 4)
             while (true) {
+                currentCoroutineContext().ensureActive()
                 val read = input.read(buffer)
                 if (read < 0) break
                 digest.update(buffer, 0, read)

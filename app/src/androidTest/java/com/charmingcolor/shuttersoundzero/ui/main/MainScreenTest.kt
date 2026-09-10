@@ -7,18 +7,22 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
-/** UI tests for [com.charmingcolor.shuttersoundzero.ui.main.MainScreen]. */
+/** UI smoke tests for [MainScreen]. */
 class MainScreenTest {
 
-  @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule
+    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
-  @Before
-  fun setup() {
-    composeTestRule.setContent { MainScreen() }
-  }
+    @Before
+    fun setup() {
+        composeTestRule.setContent { MainScreen() }
+    }
 
-  @Test
-  fun header_exists() {
-    composeTestRule.onNodeWithText("셔터음 제로").assertExists()
-  }
+    @Test
+    fun primarySections_arePresent() {
+        composeTestRule.onNodeWithText("셔터음 제로").assertExists()
+        composeTestRule.onNodeWithText("현재 상태").assertExists()
+        composeTestRule.onNodeWithText("초기 설정 및 복구").assertExists()
+        composeTestRule.onNodeWithText("주의사항 및 법적 고지").assertExists()
+    }
 }
