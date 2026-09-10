@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
@@ -128,10 +129,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
         viewModelScope.launch {
             val adbResult = adbManager.setCameraMute(enableMute)
+            val actualStateMatchesRequest = adbResult.isSuccess && CscStateVerifier.waitFor(enableMute) {
+                CscMuteManager.isCscShutterSoundMuted(app)
+            }
             refreshState()
 
-            val actualStateMatchesRequest = _uiState.value.isCscMuted == enableMute
-            if (adbResult.isSuccess && actualStateMatchesRequest) {
+            if (actualStateMatchesRequest) {
                 prefs.shouldMuteOnBoot = enableMute
                 val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(app)
                 _uiState.update {
