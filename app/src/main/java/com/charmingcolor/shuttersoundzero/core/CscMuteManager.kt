@@ -195,7 +195,8 @@ object CscMuteManager {
     }
 
     /**
-     * Wi-Fi 네트워크 연결 여부 확인
+     * Wi-Fi 네트워크 연결 여부 확인.
+     * 네트워크 상태를 읽지 못한 경우에는 무선 ADB 전제조건을 확인할 수 없으므로 안전하게 false를 반환한다.
      */
     fun isWifiConnected(context: Context): Boolean {
         return try {
@@ -203,8 +204,9 @@ object CscMuteManager {
             val network = cm.activeNetwork ?: return false
             val capabilities = cm.getNetworkCapabilities(network) ?: return false
             capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
-        } catch (_: Exception) {
-            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to determine Wi-Fi connectivity (${e.javaClass.simpleName})")
+            false
         }
     }
 
