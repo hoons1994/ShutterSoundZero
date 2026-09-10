@@ -9,10 +9,8 @@ on:
       - main
   workflow_dispatch:
 
-# Temporary write access is restricted by a branch guard below and will be removed
-# after the reviewed PGP verification metadata is committed to this PR branch.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: android-ci-${{ github.ref }}
@@ -68,46 +66,6 @@ jobs:
       - name: Verify dependency checksum baseline exists
         shell: bash
         run: test -s gradle/verification-metadata.xml
-
-      - name: Bootstrap dependency signatures for review
-        shell: bash
-        run: |
-          ./gradlew --write-verification-metadata sha256,pgp \
-            assembleDebug \
-            testDebugUnitTest \
-            lintDebug \
-            assembleDebugAndroidTest \
-            --no-daemon --stacktrace
-
-      - name: Upload dependency signature bootstrap
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: dependency-signature-bootstrap-${{ github.sha }}
-          path: gradle/verification-metadata.xml
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Commit reviewed bootstrap metadata to hardening branch
-        if: github.event_name == 'pull_request' && github.head_ref == 'chore/dependency-signature-hardening'
-        shell: bash
-        run: |
-          cp gradle/verification-metadata.xml "$RUNNER_TEMP/verification-metadata.xml"
-
-          # pull_request checks out a synthetic merge ref. Reattach to the actual PR head
-          # so the generated metadata can be committed as a fast-forward update.
-          git fetch --depth=1 origin "${{ github.head_ref }}:refs/remotes/origin/${{ github.head_ref }}"
-          git checkout -B "${{ github.head_ref }}" "refs/remotes/origin/${{ github.head_ref }}"
-          cp "$RUNNER_TEMP/verification-metadata.xml" gradle/verification-metadata.xml
-
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add gradle/verification-metadata.xml
-          if git diff --cached --quiet; then
-            echo 'Dependency verification metadata is already up to date.'
-            exit 0
-          fi
-          git commit -m 'chore: Gradle PGP verification metadata 적용'
-          git push origin "HEAD:${{ github.head_ref }}"
 
       - name: Verify complete launcher icon resources
         shell: bash
