@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
@@ -21,13 +22,6 @@ data class MainUiState(
     val adbGrantCommand: String = "",
     val adbDirectSetCommand: String = "",
     val adbCheckCommand: String = "",
-
-    // 자체 무선 디버깅 페어링 상태
-    val detectedPairingPort: Int? = null,
-    val detectedConnectPort: Int? = null,
-    val isWirelessPairingInProgress: Boolean = false,
-    val wirelessPairingError: String? = null,
-
     val infoMessage: String? = null,
     val errorMessage: String? = null,
     val showSwitchFailureHelp: Boolean = false,
@@ -76,7 +70,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun startNotificationPairing(context: Context) {
-        prefs.isPermissionRevokedByUser = false
+        // 사용자가 설정을 시작한 것만으로 권한 연동 상태를 성공으로 바꾸지 않는다.
+        // 실제 pm grant와 CSC 적용이 완료된 뒤 StandaloneAdbManager가 이 값을 갱신한다.
         startPairingNow(context)
     }
 
@@ -93,66 +88,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun cancelNotificationPairing(context: Context) {
         PairingForegroundService.stop(context)
-    }
-
-    fun stopMdnsDiscovery() {
-        PairingForegroundService.stop(getApplication())
-    }
-
-    /**
-     * 6자리 페어링 코드로 로컬 페어링 후 CSC 무음화 명령 자동 실행
-     */
-    fun pairAndApplyMute(port: Int, pairingCode: String, onComplete: (Boolean) -> Unit) {
-        _uiState.update {
-            it.copy(isWirelessPairingInProgress = true, wirelessPairingError = null)
-        }
-
-        viewModelScope.launch {
-            val pairResult = adbManager.pairLocal(port, pairingCode)
-            if (pairResult.isFailure) {
-                _uiState.update {
-                    it.copy(
-                        isWirelessPairingInProgress = false,
-                        wirelessPairingError = "페어링에 실패했습니다. 무선 디버깅 상태와 6자리 코드를 확인해 다시 시도해 주세요."
-                    )
-                }
-                onComplete(false)
-                return@launch
-            }
-
-            val connectPort = _uiState.value.detectedConnectPort
-            val muteResult = adbManager.applyCameraMuteViaAdb(connectPort)
-
-            if (muteResult.isSuccess) {
-                stopMdnsDiscovery()
-                prefs.shouldMuteOnBoot = true
-                val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(getApplication())
-                refreshState()
-                _uiState.update {
-                    it.copy(
-                        isWirelessPairingInProgress = false,
-                        wirelessPairingError = null,
-                        infoMessage = if (wirelessCleanup.isSuccess) {
-                            "✨ 설정 완료! 카메라 무음 설정을 적용하고 무선 디버깅도 껐습니다."
-                        } else {
-                            "✨ 카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요."
-                        },
-                        showWirelessDebuggingCleanupHelp = wirelessCleanup.isFailure
-                    )
-                }
-                onComplete(true)
-            } else {
-                refreshState()
-                _uiState.update {
-                    it.copy(
-                        isWirelessPairingInProgress = false,
-                        wirelessPairingError = null,
-                        infoMessage = "✅ 기기 페어링이 완료되었습니다! 셔터음 무음 스위치를 켜주세요."
-                    )
-                }
-                onComplete(true)
-            }
-        }
     }
 
     /**
@@ -194,10 +129,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
         viewModelScope.launch {
             val adbResult = adbManager.setCameraMute(enableMute)
+            val actualStateMatchesRequest = adbResult.isSuccess && CscStateVerifier.waitFor(enableMute) {
+                CscMuteManager.isCscShutterSoundMuted(app)
+            }
             refreshState()
 
-            val actualStateMatchesRequest = _uiState.value.isCscMuted == enableMute
-            if (adbResult.isSuccess && actualStateMatchesRequest) {
+            if (actualStateMatchesRequest) {
                 prefs.shouldMuteOnBoot = enableMute
                 val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(app)
                 _uiState.update {

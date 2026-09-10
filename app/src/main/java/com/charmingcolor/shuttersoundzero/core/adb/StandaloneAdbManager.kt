@@ -6,6 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.os.SystemClock
 import android.util.Log
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
 import io.github.muntashirakon.adb.android.AdbMdns
@@ -244,6 +245,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                         Log.i(TAG, "Attempting direct ADB connect")
                         logSensitive { "Direct connect port: $requestedPort" }
                         connected = connect(host, requestedPort)
+                        if (connected) rememberConnectedPort(requestedPort)
                     } catch (e: Exception) {
                         logFailure("Direct ADB connect failed", e)
                     }
@@ -257,6 +259,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                         Log.i(TAG, "Attempting cached ADB connect")
                         logSensitive { "Cached connect port: $cachedPort" }
                         connected = connect(host, cachedPort)
+                        if (connected) rememberConnectedPort(cachedPort)
                     } catch (e: Exception) {
                         logFailure("Cached ADB connect failed", e)
                     }
@@ -276,20 +279,28 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                     return@withContext Result.failure(IOException("ADB 연결 실패: 무선 디버깅이 활성화되어 있는지 확인해 주세요."))
                 }
 
-                saveConnectedPort()
                 Log.i(TAG, "ADB session established; applying permission and camera setting")
 
                 // 1) WRITE_SECURE_SETTINGS 권한 부여 (영구 권한)
                 executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+                if (!CscMuteManager.hasWritePermission(context)) {
+                    throw IOException("WRITE_SECURE_SETTINGS 권한 부여 상태를 확인할 수 없습니다.")
+                }
+                prefs.isPermissionRevokedByUser = false
 
                 // 2) CSC 셔터음 키 무음화 설정 (0) - 권한 부여 시 켜짐 상태 적용
                 executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 0")
+                if (!CscStateVerifier.waitFor(true) {
+                        CscMuteManager.isCscShutterSoundMuted(context)
+                    }
+                ) {
+                    throw IOException("카메라 무음 설정 적용 상태를 확인할 수 없습니다.")
+                }
 
                 Log.i(TAG, "ADB permission and camera setting applied successfully")
 
-                // 3) 설정 저장
+                // 3) 실제 적용이 확인된 뒤 사용자 의도를 저장한다.
                 prefs.shouldMuteOnBoot = true
-                prefs.isPermissionRevokedByUser = false
 
                 // 이후 무선 디버깅을 끄더라도 죽은 TLS 세션이 연결 상태로 남지 않게 정리한다.
                 disconnectAfterSuccessfulCommand("initial camera mute setup")
@@ -323,6 +334,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 if (!connected && savedPort != null) {
                     try {
                         connected = connect(host, savedPort)
+                        if (connected) rememberConnectedPort(savedPort)
                     } catch (e: Exception) {
                         logFailure("Saved-port reconnect for permission revoke failed", e)
                     }
@@ -331,7 +343,6 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 if (!connected) {
                     try {
                         connected = connectLocalTls(4000)
-                        if (connected) saveConnectedPort()
                     } catch (e: Exception) {
                         logFailure("Local-only TLS reconnect for permission revoke failed", e)
                     }
@@ -343,9 +354,15 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                     )
                 }
 
-                // 1) 셔터음 키 1로 복원 (소리 남). 성공한 단계의 상태는 즉시 저장해
+                // 1) 셔터음 키 1로 복원 (소리 남). 실제 상태가 확인된 뒤 의도를 저장해
                 // 뒤의 권한 회수가 실패하더라도 앱 의도와 실제 CSC 상태가 엇갈리지 않게 한다.
                 executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 1")
+                if (!CscStateVerifier.waitFor(false) {
+                        CscMuteManager.isCscShutterSoundMuted(context)
+                    }
+                ) {
+                    throw IOException("카메라 셔터음 복원 상태를 확인할 수 없습니다.")
+                }
                 prefs.shouldMuteOnBoot = false
 
                 // 2) WRITE_SECURE_SETTINGS 권한 회수. 명령 응답이 끊겨도 실제 권한이 이미
@@ -410,6 +427,12 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 if (isConnected) {
                     try {
                         executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
+                        if (!CscStateVerifier.waitFor(enableMute) {
+                                CscMuteManager.isCscShutterSoundMuted(context)
+                            }
+                        ) {
+                            throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
+                        }
                         prefs.shouldMuteOnBoot = enableMute
                         Log.i(TAG, "Reused active ADB session for camera setting")
                         disconnectAfterSuccessfulCommand("reused camera setting session")
@@ -430,7 +453,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                         Log.i(TAG, "Attempting fast ADB reconnect")
                         logSensitive { "Saved reconnect port: $savedPort" }
                         connected = connect(host, savedPort)
-                        if (connected) saveConnectedPort()
+                        if (connected) rememberConnectedPort(savedPort)
                     } catch (e: Exception) {
                         logFailure("Fast ADB reconnect failed", e)
                     }
@@ -441,7 +464,6 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                     try {
                         Log.i(TAG, "Attempting local-only TLS discovery with 4s timeout")
                         connected = connectLocalTls(4000)
-                        if (connected) saveConnectedPort()
                     } catch (e: Exception) {
                         logFailure("Local-only TLS discovery failed", e)
                     }
@@ -452,6 +474,12 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 }
 
                 executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
+                if (!CscStateVerifier.waitFor(enableMute) {
+                        CscMuteManager.isCscShutterSoundMuted(context)
+                    }
+                ) {
+                    throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
+                }
                 prefs.shouldMuteOnBoot = enableMute
                 Log.i(TAG, "Camera setting updated successfully via ADB")
                 disconnectAfterSuccessfulCommand("camera setting update")
@@ -479,20 +507,15 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         }
     }
 
-    private fun saveConnectedPort() {
-        try {
-            val adbConn = adbConnection ?: return
-            val portField = adbConn.javaClass.getDeclaredField("mPort").apply { isAccessible = true }
-            val port = portField.getInt(adbConn)
-            if (port in 1..65535) {
-                lastDiscoveredConnectPort = port
-                PreferencesRepository.getInstance(context).lastConnectPort = port
-                Log.i(TAG, "Saved active ADB connect endpoint")
-                logSensitive { "Saved active ADB connect port: $port" }
-            }
-        } catch (e: Exception) {
-            logFailure("Could not extract connect port", e)
-        }
+    /**
+     * 연결에 사용한 포트는 호출 시점에 이미 알고 있으므로 libadb 내부 필드에 reflection으로 접근하지 않고 저장한다.
+     */
+    private fun rememberConnectedPort(port: Int) {
+        if (port !in 1..65535) return
+        lastDiscoveredConnectPort = port
+        PreferencesRepository.getInstance(context).lastConnectPort = port
+        Log.i(TAG, "Saved active ADB connect endpoint")
+        logSensitive { "Saved active ADB connect port: $port" }
     }
 
     private fun connectLocalTls(timeoutMs: Long): Boolean {
@@ -514,7 +537,9 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 Log.i(TAG, "Connecting to discovered local TLS ADB service")
                 logSensitive { "Discovered TLS endpoint: $address:$port" }
                 val hostAddress = address.hostAddress ?: return false
-                connect(hostAddress, port)
+                val connected = connect(hostAddress, port)
+                if (connected) rememberConnectedPort(port)
+                connected
             }
         } finally {
             mdns.stop()

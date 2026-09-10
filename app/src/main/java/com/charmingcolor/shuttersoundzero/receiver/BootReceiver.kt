@@ -28,9 +28,10 @@ class BootReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "BootReceiver"
 
-        // 기존 사용자 알림 채널 설정을 보존하기 위해 ID는 변경하지 않는다.
+        // 기존 사용자 알림 채널 설정을 보존하기 위해 채널 ID는 변경하지 않는다.
         private const val CHANNEL_ID = "firmware_updates"
-        private const val NOTIFICATION_ID = 2001
+        // 페어링 foreground 알림(2001)과 별도 identity를 사용한다.
+        private const val NOTIFICATION_ID = 2002
     }
 
     override fun onReceive(context: Context, intent: Intent) {

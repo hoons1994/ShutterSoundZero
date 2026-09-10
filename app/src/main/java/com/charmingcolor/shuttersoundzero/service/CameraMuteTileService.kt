@@ -7,6 +7,7 @@ import android.util.Log
 import android.widget.Toast
 import com.charmingcolor.shuttersoundzero.R
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
@@ -74,8 +75,9 @@ class CameraMuteTileService : TileService() {
 
         val currentMuted = CscMuteManager.isCscShutterSoundMuted(context)
         val targetMuted = !currentMuted
+        val previousDesiredMute = prefs.shouldMuteOnBoot
 
-        // 빠른 체감을 위한 낙관적 타일 업데이트
+        // 빠른 체감을 위한 낙관적 타일 업데이트. 작업이 끝나면 실제 CSC 값으로 다시 확정한다.
         qsTile?.let { tile ->
             tile.icon = Icon.createWithResource(this, R.drawable.ic_qs_camera_mute)
             tile.state = if (targetMuted) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
@@ -86,8 +88,11 @@ class CameraMuteTileService : TileService() {
         serviceScope.launch {
             val adbManager = StandaloneAdbManager.getInstance(context)
             val result = adbManager.setCameraMute(targetMuted)
+            val stateApplied = result.isSuccess && CscStateVerifier.waitFor(targetMuted) {
+                CscMuteManager.isCscShutterSoundMuted(context)
+            }
 
-            if (result.isSuccess) {
+            if (stateApplied) {
                 prefs.shouldMuteOnBoot = targetMuted
                 val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
                 val baseMessage = if (targetMuted) {
@@ -102,11 +107,19 @@ class CameraMuteTileService : TileService() {
                 }
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             } else {
-                prefs.shouldMuteOnBoot = currentMuted
-                Log.w(TAG, "Tile toggle failed via ADB")
+                // 명령이 성공으로 끝났더라도 실제 CSC 값이 바뀌지 않았다면 실패로 처리한다.
+                prefs.shouldMuteOnBoot = previousDesiredMute
+                Log.w(
+                    TAG,
+                    if (result.isSuccess) {
+                        "Tile toggle command completed but CSC state did not match request"
+                    } else {
+                        "Tile toggle failed via ADB"
+                    }
+                )
                 Toast.makeText(
                     context,
-                    "설정 변경 실패: 무선 디버깅을 켠 뒤 다시 시도해 주세요.",
+                    "설정 변경 실패: 실제 카메라 설정을 확인하지 못했습니다. 무선 디버깅을 켠 뒤 다시 시도해 주세요.",
                     Toast.LENGTH_LONG
                 ).show()
             }
