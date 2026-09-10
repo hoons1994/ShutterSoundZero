@@ -416,26 +416,36 @@ class PairingForegroundService : Service() {
         pairingJob = null
         adbManager.stopPairingDiscovery()
         stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-
         if (showSuccess) {
             PairingNotificationHelper.showSuccessNotification(
                 this,
                 wirelessDebuggingDisabled = wirelessDebuggingDisabled
             )
-        } else {
-            PairingNotificationHelper.cancelNotification(this)
         }
+        stopSelf()
+    }
+
+    override fun onDestroy() {
+        unregisterDeveloperOptionsObserver()
+        pairingJob?.cancel()
+        pairingJob = null
+        serviceScope.cancel()
+        adbManager.stopPairingDiscovery()
+        super.onDestroy()
     }
 
     private fun registerDeveloperOptionsObserver() {
         if (isDeveloperOptionsObserverRegistered) return
-        contentResolver.registerContentObserver(
-            Settings.Global.getUriFor(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED),
-            false,
-            developerOptionsObserver
-        )
-        isDeveloperOptionsObserverRegistered = true
+        try {
+            contentResolver.registerContentObserver(
+                Settings.Global.getUriFor(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED),
+                false,
+                developerOptionsObserver
+            )
+            isDeveloperOptionsObserverRegistered = true
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to observe developer options (${e.javaClass.simpleName})")
+        }
     }
 
     private fun unregisterDeveloperOptionsObserver() {
@@ -445,15 +455,6 @@ class PairingForegroundService : Service() {
         } catch (_: Exception) {
         }
         isDeveloperOptionsObserverRegistered = false
-    }
-
-    override fun onDestroy() {
-        unregisterDeveloperOptionsObserver()
-        pairingJob?.cancel()
-        pairingJob = null
-        adbManager.stopPairingDiscovery()
-        serviceScope.cancel()
-        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
