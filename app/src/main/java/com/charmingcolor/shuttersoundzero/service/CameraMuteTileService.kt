@@ -1,6 +1,5 @@
 package com.charmingcolor.shuttersoundzero.service
 
-import android.content.Context
 import android.graphics.drawable.Icon
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -8,6 +7,7 @@ import android.util.Log
 import android.widget.Toast
 import com.charmingcolor.shuttersoundzero.R
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
@@ -15,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -25,8 +24,6 @@ import kotlinx.coroutines.launch
 class CameraMuteTileService : TileService() {
     companion object {
         private const val TAG = "CameraMuteTileService"
-        private const val CSC_VERIFY_ATTEMPTS = 20
-        private const val CSC_VERIFY_INTERVAL_MS = 100L
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -91,7 +88,9 @@ class CameraMuteTileService : TileService() {
         serviceScope.launch {
             val adbManager = StandaloneAdbManager.getInstance(context)
             val result = adbManager.setCameraMute(targetMuted)
-            val stateApplied = result.isSuccess && waitForCscState(context, targetMuted)
+            val stateApplied = result.isSuccess && CscStateVerifier.waitFor(targetMuted) {
+                CscMuteManager.isCscShutterSoundMuted(context)
+            }
 
             if (stateApplied) {
                 prefs.shouldMuteOnBoot = targetMuted
@@ -126,14 +125,6 @@ class CameraMuteTileService : TileService() {
             }
             updateTileState()
         }
-    }
-
-    private suspend fun waitForCscState(context: Context, expectedMuted: Boolean): Boolean {
-        repeat(CSC_VERIFY_ATTEMPTS) { attempt ->
-            if (CscMuteManager.isCscShutterSoundMuted(context) == expectedMuted) return true
-            if (attempt < CSC_VERIFY_ATTEMPTS - 1) delay(CSC_VERIFY_INTERVAL_MS)
-        }
-        return false
     }
 
     private fun updateTileState() {
