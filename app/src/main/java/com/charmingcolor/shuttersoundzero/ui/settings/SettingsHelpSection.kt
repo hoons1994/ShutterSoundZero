@@ -1,6 +1,10 @@
 package com.charmingcolor.shuttersoundzero.ui.settings
 
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,23 +12,31 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +44,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticReportActivity
+import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticLogger
+import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticReportBuilder
 
 private data class HelpQuestion(val id: String, val question: String, val answer: String)
 
@@ -83,6 +96,8 @@ private val helpQuestions = listOf(
 fun SettingsHelpSection() {
     val context = LocalContext.current
     var expandedQuestionId by remember { mutableStateOf<String?>(null) }
+    var diagnosticReport by remember { mutableStateOf<DiagnosticReportBuilder.Report?>(null) }
+    var userDescription by rememberSaveable { mutableStateOf("") }
 
     SectionLabel("도움말")
 
@@ -125,7 +140,7 @@ fun SettingsHelpSection() {
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable {
-                    context.startActivity(Intent(context, DiagnosticReportActivity::class.java))
+                    diagnosticReport = DiagnosticReportBuilder.build(context)
                 }
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -151,6 +166,113 @@ fun SettingsHelpSection() {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+
+    diagnosticReport?.let { report ->
+        AlertDialog(
+            onDismissRequest = { diagnosticReport = null },
+            title = { Text("오류 신고") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 560.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "아래 내용을 확인한 뒤 ${DiagnosticReportBuilder.SUPPORT_EMAIL}로 이메일을 보냅니다. 페어링 코드, IP 주소, Wi-Fi 이름, IMEI·일련번호, ADB 키는 진단 로그에 기록하지 않습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = userDescription,
+                        onValueChange = { userDescription = it.take(2000) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("문제가 발생하기 전에 한 작업") },
+                        placeholder = {
+                            Text("예: 소프트웨어 업데이트 후 1회 설정을 다시 진행했는데 오류가 표시됨")
+                        },
+                        minLines = 3,
+                        maxLines = 6
+                    )
+
+                    Text(
+                        text = "전송될 진단 정보",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    SelectionContainer {
+                        Text(
+                            text = report.diagnosticText,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            DiagnosticLogger.clear(context)
+                            diagnosticReport = DiagnosticReportBuilder.build(context)
+                            Toast.makeText(context, "진단 로그를 삭제했습니다.", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Text("진단 로그 지우기")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        sendDiagnosticEmail(context, report, userDescription)
+                    }
+                ) {
+                    Text("이메일로 보내기")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { diagnosticReport = null }) {
+                    Text("닫기")
+                }
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+}
+
+private fun sendDiagnosticEmail(
+    context: Context,
+    report: DiagnosticReportBuilder.Report,
+    userDescription: String
+) {
+    val body = buildString {
+        appendLine("안녕하세요. ShutterSoundZero 사용 중 오류가 발생해 진단 정보를 보냅니다.")
+        appendLine()
+        appendLine("[사용자 설명]")
+        appendLine(userDescription.trim().ifBlank { "작성하지 않음" })
+        appendLine()
+        appendLine(report.diagnosticText)
+    }
+    val mailUri = Uri.parse(
+        "mailto:${Uri.encode(DiagnosticReportBuilder.SUPPORT_EMAIL)}" +
+            "?subject=${Uri.encode(report.subject)}" +
+            "&body=${Uri.encode(body)}"
+    )
+
+    try {
+        context.startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SENDTO, mailUri),
+                "오류 신고 메일 보내기"
+            )
+        )
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(
+            context,
+            "이메일을 보낼 수 있는 앱을 찾지 못했습니다.",
+            Toast.LENGTH_LONG
+        ).show()
     }
 }
 
