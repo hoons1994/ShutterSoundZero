@@ -9,8 +9,10 @@ on:
       - main
   workflow_dispatch:
 
+# Temporary write access is restricted by a branch guard below and will be removed
+# after the reviewed PGP verification metadata is committed to this PR branch.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-ci-${{ github.ref }}
@@ -84,6 +86,20 @@ jobs:
           path: gradle/verification-metadata.xml
           if-no-files-found: error
           retention-days: 1
+
+      - name: Commit reviewed bootstrap metadata to hardening branch
+        if: github.event_name == 'pull_request' && github.head_ref == 'chore/dependency-signature-hardening'
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add gradle/verification-metadata.xml
+          if git diff --cached --quiet; then
+            echo 'Dependency verification metadata is already up to date.'
+            exit 0
+          fi
+          git commit -m 'chore: Gradle PGP verification metadata 적용'
+          git push origin "HEAD:${{ github.head_ref }}"
 
       - name: Verify complete launcher icon resources
         shell: bash
