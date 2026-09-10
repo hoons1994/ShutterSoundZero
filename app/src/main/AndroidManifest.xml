@@ -41,6 +41,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="false"
         android:windowSoftInputMode="adjustResize"
         android:theme="@style/Theme.ShutterSoundZero">
 
