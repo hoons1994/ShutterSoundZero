@@ -8,9 +8,13 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -21,6 +25,7 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
 
 object AppUpdateManager {
     private const val LATEST_RELEASE_API =
@@ -267,6 +272,36 @@ object AppUpdateManager {
         return output.toString(Charsets.UTF_8.name())
     }
 
+    internal suspend fun <T> withCancellationCleanup(
+        cleanup: () -> Unit,
+        block: suspend () -> T
+    ): T = coroutineScope {
+        val cleaned = AtomicBoolean(false)
+        fun cleanupOnce() {
+            if (cleaned.compareAndSet(false, true)) {
+                runCatching(cleanup)
+            }
+        }
+
+        // Start undispatched so the cancellation hook is installed before any blocking I/O begins.
+        // If the parent coroutine is cancelled while connect/read is blocked, this child resumes on
+        // another IO worker and disconnects the underlying connection to unblock the operation.
+        val cancellationWatcher = launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
+            try {
+                awaitCancellation()
+            } finally {
+                cleanupOnce()
+            }
+        }
+
+        try {
+            block()
+        } finally {
+            cancellationWatcher.cancel()
+            cleanupOnce()
+        }
+    }
+
     private fun normalizeVersion(value: String): String? {
         val normalized = value.removePrefix("v")
         return if (semanticVersionParts(normalized) != null) normalized else null
@@ -335,8 +370,7 @@ object AppUpdateManager {
         target: File,
         onProgress: suspend (Int) -> Unit
     ) {
-        val connection = openConnection(url, acceptJson = false)
-        try {
+        withOpenConnection(url, acceptJson = false) { connection ->
             val totalBytes = connection.contentLengthLong
             if (totalBytes > MAX_APK_BYTES) {
                 error("업데이트 APK 크기가 허용 범위를 초과했습니다.")
@@ -367,15 +401,12 @@ object AppUpdateManager {
                     output.flush()
                 }
             }
-        } finally {
-            connection.disconnect()
         }
     }
 
     private suspend fun readUrl(url: String, acceptJson: Boolean, maxBytes: Int): String {
         currentCoroutineContext().ensureActive()
-        val connection = openConnection(url, acceptJson)
-        return try {
+        return withOpenConnection(url, acceptJson) { connection ->
             val declaredLength = connection.contentLengthLong
             if (declaredLength > maxBytes) {
                 error("업데이트 서버 응답 크기가 허용 범위를 초과했습니다.")
@@ -386,38 +417,49 @@ object AppUpdateManager {
                     coroutineContext.ensureActive()
                 }
             }
-        } finally {
-            connection.disconnect()
         }
     }
 
-    private fun openConnection(url: String, acceptJson: Boolean): HttpURLConnection {
+    private suspend fun <T> withOpenConnection(
+        url: String,
+        acceptJson: Boolean,
+        block: suspend (HttpURLConnection) -> T
+    ): T {
+        val connection = createConnection(url, acceptJson)
+        return withCancellationCleanup(connection::disconnect) {
+            currentCoroutineContext().ensureActive()
+            connection.connect()
+            currentCoroutineContext().ensureActive()
+
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                connection.errorStream?.close()
+                error("업데이트 서버 응답 오류 ($responseCode). 잠시 후 다시 시도해 주세요.")
+            }
+            if (!connection.url.protocol.equals("https", ignoreCase = true)) {
+                error("업데이트 다운로드가 안전하지 않은 연결로 전환되었습니다.")
+            }
+
+            block(connection)
+        }
+    }
+
+    private fun createConnection(url: String, acceptJson: Boolean): HttpURLConnection {
         val parsedUrl = URL(url)
         if (!parsedUrl.protocol.equals("https", ignoreCase = true)) {
             error("보안 연결(HTTPS)이 아닌 업데이트 주소는 사용할 수 없습니다.")
         }
 
-        val connection = parsedUrl.openConnection() as HttpURLConnection
-        connection.connectTimeout = 10_000
-        connection.readTimeout = 30_000
-        connection.instanceFollowRedirects = true
-        connection.setRequestProperty("User-Agent", USER_AGENT)
-        if (acceptJson) {
-            connection.setRequestProperty("Accept", "application/vnd.github+json")
-            connection.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+        return (parsedUrl.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 30_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", USER_AGENT)
+            if (acceptJson) {
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            }
         }
-        connection.connect()
-        val responseCode = connection.responseCode
-        if (responseCode !in 200..299) {
-            connection.errorStream?.close()
-            connection.disconnect()
-            error("업데이트 서버 응답 오류 ($responseCode). 잠시 후 다시 시도해 주세요.")
-        }
-        if (!connection.url.protocol.equals("https", ignoreCase = true)) {
-            connection.disconnect()
-            error("업데이트 다운로드가 안전하지 않은 연결로 전환되었습니다.")
-        }
-        return connection
     }
 
     private suspend fun sha256(file: File): String {
