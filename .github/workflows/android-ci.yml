@@ -67,6 +67,24 @@ jobs:
         shell: bash
         run: test -s gradle/verification-metadata.xml
 
+      - name: Bootstrap dependency signatures for review
+        shell: bash
+        run: |
+          ./gradlew --write-verification-metadata sha256,pgp \
+            assembleDebug \
+            testDebugUnitTest \
+            lintDebug \
+            assembleDebugAndroidTest \
+            --no-daemon --stacktrace
+
+      - name: Upload dependency signature bootstrap
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dependency-signature-bootstrap-${{ github.sha }}
+          path: gradle/verification-metadata.xml
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Verify complete launcher icon resources
         shell: bash
         run: bash .github/scripts/verify-launcher-icon.sh
