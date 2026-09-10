@@ -21,8 +21,8 @@ android {
         applicationId = "com.charmingcolor.shuttersoundzero"
         minSdk = 30
         targetSdk = 37
-        versionCode = 147
-        versionName = "1.4.7"
+        versionCode = 148
+        versionName = "1.4.8"
     }
 
     signingConfigs {
