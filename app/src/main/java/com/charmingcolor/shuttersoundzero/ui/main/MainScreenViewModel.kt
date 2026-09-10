@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
+import com.charmingcolor.shuttersoundzero.core.CscTogglePersistencePolicy
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
@@ -133,9 +134,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 CscMuteManager.isCscShutterSoundMuted(app)
             }
             refreshState()
+            prefs.shouldMuteOnBoot = CscTogglePersistencePolicy.resolve(
+                previousDesiredMute = previousDesiredMute,
+                targetMuted = enableMute,
+                stateApplied = actualStateMatchesRequest
+            )
 
             if (actualStateMatchesRequest) {
-                prefs.shouldMuteOnBoot = enableMute
                 val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(app)
                 _uiState.update {
                     it.copy(
@@ -155,7 +160,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 }
             } else {
                 // 실패 시 사용자의 기존 무음 사용 의도는 보존하고, UI는 실제 CSC 값 그대로 유지한다.
-                prefs.shouldMuteOnBoot = previousDesiredMute
                 _uiState.update {
                     it.copy(
                         showSwitchFailureHelp = true,

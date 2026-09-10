@@ -8,6 +8,7 @@ import android.widget.Toast
 import com.charmingcolor.shuttersoundzero.R
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
+import com.charmingcolor.shuttersoundzero.core.CscTogglePersistencePolicy
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
@@ -91,9 +92,13 @@ class CameraMuteTileService : TileService() {
             val stateApplied = result.isSuccess && CscStateVerifier.waitFor(targetMuted) {
                 CscMuteManager.isCscShutterSoundMuted(context)
             }
+            prefs.shouldMuteOnBoot = CscTogglePersistencePolicy.resolve(
+                previousDesiredMute = previousDesiredMute,
+                targetMuted = targetMuted,
+                stateApplied = stateApplied
+            )
 
             if (stateApplied) {
-                prefs.shouldMuteOnBoot = targetMuted
                 val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
                 val baseMessage = if (targetMuted) {
                     "카메라 무음 설정이 적용되었습니다."
@@ -108,7 +113,6 @@ class CameraMuteTileService : TileService() {
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             } else {
                 // 명령이 성공으로 끝났더라도 실제 CSC 값이 바뀌지 않았다면 실패로 처리한다.
-                prefs.shouldMuteOnBoot = previousDesiredMute
                 Log.w(
                     TAG,
                     if (result.isSuccess) {
