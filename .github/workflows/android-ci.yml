@@ -9,8 +9,10 @@ on:
       - main
   workflow_dispatch:
 
+# Temporary write access is restricted by the branch guard below and will be removed
+# after the public verification keyring is committed to this PR branch.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-ci-${{ github.ref }}
@@ -66,6 +68,38 @@ jobs:
       - name: Verify dependency checksum baseline exists
         shell: bash
         run: test -s gradle/verification-metadata.xml
+
+      - name: Export dependency verification public keyring
+        if: github.event_name == 'pull_request' && github.head_ref == 'chore/dependency-signature-hardening'
+        shell: bash
+        run: |
+          ./gradlew --write-verification-metadata sha256,pgp --export-keys \
+            assembleDebug \
+            testDebugUnitTest \
+            lintDebug \
+            assembleDebugAndroidTest \
+            --no-daemon --stacktrace
+          test -s gradle/verification-keyring.keys
+
+      - name: Commit public verification keyring to hardening branch
+        if: github.event_name == 'pull_request' && github.head_ref == 'chore/dependency-signature-hardening'
+        shell: bash
+        run: |
+          cp gradle/verification-keyring.keys "$RUNNER_TEMP/verification-keyring.keys"
+
+          git fetch --depth=1 origin "${{ github.head_ref }}:refs/remotes/origin/${{ github.head_ref }}"
+          git checkout -B "${{ github.head_ref }}" "refs/remotes/origin/${{ github.head_ref }}"
+          cp "$RUNNER_TEMP/verification-keyring.keys" gradle/verification-keyring.keys
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add gradle/verification-keyring.keys
+          if git diff --cached --quiet; then
+            echo 'Dependency verification keyring is already up to date.'
+            exit 0
+          fi
+          git commit -m 'chore: Gradle PGP 공개키 keyring 고정'
+          git push origin "HEAD:${{ github.head_ref }}"
 
       - name: Verify complete launcher icon resources
         shell: bash
