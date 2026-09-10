@@ -63,6 +63,16 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x gradlew
 
+      - name: Bootstrap dependency verification metadata
+        if: ${{ hashFiles('gradle/verification-metadata.xml') == '' }}
+        shell: bash
+        run: |
+          ./gradlew --write-verification-metadata sha256 help --no-daemon --stacktrace
+          echo 'VERIFICATION_METADATA_BEGIN'
+          base64 -w 0 gradle/verification-metadata.xml
+          echo
+          echo 'VERIFICATION_METADATA_END'
+
       - name: Verify complete launcher icon resources
         shell: bash
         run: bash .github/scripts/verify-launcher-icon.sh
