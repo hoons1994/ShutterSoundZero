@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - chore/audit-hardening-followup
   workflow_dispatch:
 
 permissions:
@@ -17,8 +18,93 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  bootstrap-verification:
+    name: Bootstrap dependency verification
+    if: ${{ github.event_name == 'push' && github.ref_name == 'chore/audit-hardening-followup' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Skip existing baseline
+        id: baseline
+        shell: bash
+        run: |
+          if [[ -f gradle/verification-metadata.xml ]]; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up JDK 17
+        if: ${{ steps.baseline.outputs.exists == 'false' }}
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK tools
+        if: ${{ steps.baseline.outputs.exists == 'false' }}
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: ''
+
+      - name: Install Android 17 SDK
+        if: ${{ steps.baseline.outputs.exists == 'false' }}
+        shell: bash
+        run: |
+          sdkmanager --list --channel=3 > sdk-packages.txt
+
+          if grep -q 'platforms;android-CinnamonBun' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-CinnamonBun'
+          elif grep -q 'platforms;android-37.0' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-37.0'
+          elif grep -q 'platforms;android-37 ' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-37'
+          else
+            echo 'Android 17 SDK platform package was not found.'
+            grep -E 'platforms;android-(CinnamonBun|37)' sdk-packages.txt || true
+            exit 1
+          fi
+
+          sdkmanager --channel=3 "$PLATFORM_PACKAGE" 'build-tools;37.0.0' platform-tools
+
+      - name: Set up Gradle
+        if: ${{ steps.baseline.outputs.exists == 'false' }}
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Generate SHA-256 verification metadata
+        if: ${{ steps.baseline.outputs.exists == 'false' }}
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew --write-verification-metadata sha256 \
+            assembleDebug \
+            testDebugUnitTest \
+            lintDebug \
+            assembleDebugAndroidTest \
+            --no-daemon \
+            --stacktrace
+          test -s gradle/verification-metadata.xml
+
+      - name: Commit verification metadata
+        if: ${{ steps.baseline.outputs.exists == 'false' }}
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add gradle/verification-metadata.xml
+          git diff --cached --quiet && exit 0
+          git commit -m 'chore: lock Gradle dependency checksums'
+          git push origin HEAD:"${GITHUB_REF_NAME}"
+
   verify:
     name: Build, Test, Lint & Instrumentation
+    if: ${{ github.event_name != 'push' || github.ref_name == 'main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -62,27 +148,6 @@ jobs:
 
       - name: Ensure Gradle wrapper is executable
         run: chmod +x gradlew
-
-      - name: Bootstrap dependency verification metadata
-        if: ${{ hashFiles('gradle/verification-metadata.xml') == '' }}
-        shell: bash
-        run: |
-          ./gradlew --write-verification-metadata sha256 \
-            assembleDebug \
-            testDebugUnitTest \
-            lintDebug \
-            assembleDebugAndroidTest \
-            --no-daemon \
-            --stacktrace
-
-      - name: Upload dependency verification baseline
-        if: ${{ always() && hashFiles('gradle/verification-metadata.xml') != '' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: dependency-verification-${{ github.sha }}
-          path: gradle/verification-metadata.xml
-          if-no-files-found: error
-          retention-days: 1
 
       - name: Verify complete launcher icon resources
         shell: bash
