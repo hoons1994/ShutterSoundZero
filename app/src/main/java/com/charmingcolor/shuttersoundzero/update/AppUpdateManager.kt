@@ -11,8 +11,11 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -23,6 +26,9 @@ object AppUpdateManager {
     private const val RELEASE_DOWNLOAD_PREFIX =
         "/hoons1994/ShutterSoundZero/releases/download/"
     private const val USER_AGENT = "ShutterSoundZero-UpdateChecker"
+    private const val MAX_RELEASE_METADATA_BYTES = 512 * 1024
+    private const val MAX_SHA256_FILE_BYTES = 16 * 1024
+    private const val MAX_APK_BYTES = 200L * 1024L * 1024L
     internal const val AUTOMATIC_CHECK_INTERVAL_MILLIS = 24L * 60L * 60L * 1000L
 
     sealed interface UpdateCheckResult {
@@ -46,7 +52,11 @@ object AppUpdateManager {
     )
 
     suspend fun checkForUpdate(context: Context): UpdateCheckResult = withContext(Dispatchers.IO) {
-        val response = readUrl(LATEST_RELEASE_API, acceptJson = true)
+        val response = readUrl(
+            LATEST_RELEASE_API,
+            acceptJson = true,
+            maxBytes = MAX_RELEASE_METADATA_BYTES
+        )
         val json = JSONObject(response)
 
         if (json.optBoolean("draft", false) || json.optBoolean("prerelease", false)) {
@@ -109,8 +119,13 @@ object AppUpdateManager {
                 }
             }
 
-            val expectedSha = parseSha256(readUrl(update.sha256Url, acceptJson = false))
-                ?: error("SHA-256 검증값을 읽을 수 없습니다.")
+            val expectedSha = parseSha256(
+                readUrl(
+                    update.sha256Url,
+                    acceptJson = false,
+                    maxBytes = MAX_SHA256_FILE_BYTES
+                )
+            ) ?: error("SHA-256 검증값을 읽을 수 없습니다.")
             val actualSha = sha256(apkFile)
             if (!actualSha.equals(expectedSha, ignoreCase = true)) {
                 error("다운로드한 APK의 SHA-256 값이 릴리즈 정보와 일치하지 않습니다.")
@@ -219,6 +234,27 @@ object AppUpdateManager {
         return Regex("(?i)\\b[0-9a-f]{64}\\b").find(value)?.value?.lowercase()
     }
 
+    internal fun readBoundedText(input: InputStream, maxBytes: Int): String {
+        require(maxBytes > 0) { "maxBytes must be positive" }
+
+        val output = ByteArrayOutputStream(minOf(maxBytes, DEFAULT_BUFFER_SIZE * 2))
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var totalBytes = 0
+
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+
+            totalBytes += read
+            if (totalBytes > maxBytes) {
+                throw IOException("업데이트 서버 응답 크기가 허용 범위를 초과했습니다.")
+            }
+            output.write(buffer, 0, read)
+        }
+
+        return output.toString(Charsets.UTF_8.name())
+    }
+
     private fun normalizeVersion(value: String): String? {
         val normalized = value.removePrefix("v")
         return if (semanticVersionParts(normalized) != null) normalized else null
@@ -290,6 +326,10 @@ object AppUpdateManager {
         val connection = openConnection(url, acceptJson = false)
         try {
             val totalBytes = connection.contentLengthLong
+            if (totalBytes > MAX_APK_BYTES) {
+                error("업데이트 APK 크기가 허용 범위를 초과했습니다.")
+            }
+
             var downloadedBytes = 0L
             var lastProgress = -1
             connection.inputStream.use { input ->
@@ -298,8 +338,11 @@ object AppUpdateManager {
                     while (true) {
                         val read = input.read(buffer)
                         if (read < 0) break
-                        output.write(buffer, 0, read)
                         downloadedBytes += read
+                        if (downloadedBytes > MAX_APK_BYTES) {
+                            throw IOException("업데이트 APK 크기가 허용 범위를 초과했습니다.")
+                        }
+                        output.write(buffer, 0, read)
                         if (totalBytes > 0L) {
                             val progress = ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 99)
                             if (progress != lastProgress) {
@@ -316,17 +359,28 @@ object AppUpdateManager {
         }
     }
 
-    private fun readUrl(url: String, acceptJson: Boolean): String {
+    private fun readUrl(url: String, acceptJson: Boolean, maxBytes: Int): String {
         val connection = openConnection(url, acceptJson)
         return try {
-            connection.inputStream.bufferedReader().use { it.readText() }
+            val declaredLength = connection.contentLengthLong
+            if (declaredLength > maxBytes) {
+                error("업데이트 서버 응답 크기가 허용 범위를 초과했습니다.")
+            }
+            connection.inputStream.use { input ->
+                readBoundedText(input, maxBytes)
+            }
         } finally {
             connection.disconnect()
         }
     }
 
     private fun openConnection(url: String, acceptJson: Boolean): HttpURLConnection {
-        val connection = URL(url).openConnection() as HttpURLConnection
+        val parsedUrl = URL(url)
+        if (!parsedUrl.protocol.equals("https", ignoreCase = true)) {
+            error("보안 연결(HTTPS)이 아닌 업데이트 주소는 사용할 수 없습니다.")
+        }
+
+        val connection = parsedUrl.openConnection() as HttpURLConnection
         connection.connectTimeout = 10_000
         connection.readTimeout = 30_000
         connection.instanceFollowRedirects = true
@@ -341,6 +395,10 @@ object AppUpdateManager {
             connection.errorStream?.close()
             connection.disconnect()
             error("업데이트 서버 응답 오류 ($responseCode). 잠시 후 다시 시도해 주세요.")
+        }
+        if (!connection.url.protocol.equals("https", ignoreCase = true)) {
+            connection.disconnect()
+            error("업데이트 다운로드가 안전하지 않은 연결로 전환되었습니다.")
         }
         return connection
     }
