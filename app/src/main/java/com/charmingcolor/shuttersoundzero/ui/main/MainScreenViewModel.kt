@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 data class MainUiState(
     val isCscMuted: Boolean = false,
     val hasCscPermission: Boolean = false,
+    val isWirelessDebuggingEnabled: Boolean = false,
     val adbGrantCommand: String = "",
     val adbDirectSetCommand: String = "",
     val adbCheckCommand: String = "",
@@ -48,6 +49,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         return MainUiState(
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
+            isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
             adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
             adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
             adbCheckCommand = CscMuteManager.getAdbCheckCommand()
@@ -63,6 +65,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             current.copy(
                 isCscMuted = isMuted,
                 hasCscPermission = perm,
+                isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
                 adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
                 adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
                 adbCheckCommand = CscMuteManager.getAdbCheckCommand()
@@ -120,6 +123,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(app)) {
             _uiState.update {
                 it.copy(
+                    isWirelessDebuggingEnabled = false,
                     showSwitchFailureHelp = true,
                     errorMessage = null,
                     infoMessage = null
@@ -150,6 +154,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(app)
                 _uiState.update {
                     it.copy(
+                        isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
                         infoMessage = when {
                             enableMute && wirelessCleanup.isSuccess ->
                                 "카메라 무음 설정을 적용했고 무선 디버깅도 껐습니다."

@@ -85,10 +85,12 @@ fun SettingsScreen(
     var isAppLockEnabled by remember { mutableStateOf(prefs.isAppLockEnabled) }
     var isLockSetupInProgress by remember { mutableStateOf(false) }
     var lockErrorMessage by remember { mutableStateOf<String?>(null) }
+
     var showDeveloperOptionsConfirm by remember { mutableStateOf(false) }
     var showDeveloperOptionsFallback by remember { mutableStateOf(false) }
     var developerOptionsResultMessage by remember { mutableStateOf<String?>(null) }
     var showLicenseDialog by remember { mutableStateOf(false) }
+
     var showRestoreConfirm by remember { mutableStateOf(false) }
     var showReapplyWirelessDebuggingHelp by remember { mutableStateOf(false) }
     var showRestoreWirelessDebuggingHelp by remember { mutableStateOf(false) }
@@ -99,7 +101,6 @@ fun SettingsScreen(
 
     var isUpdateChecking by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<AppUpdateManager.UpdateInfo?>(null) }
-    var verifiedUpdate by remember { mutableStateOf<AppUpdateManager.VerifiedUpdate?>(null) }
     var isUpdateDownloading by remember { mutableStateOf(false) }
     var updateDownloadProgress by remember { mutableStateOf(0) }
     var updateStatusMessage by remember { mutableStateOf<String?>(null) }
@@ -118,15 +119,12 @@ fun SettingsScreen(
                         prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
                         prefs.knownAvailableAppUpdateVersion = null
                         updateInfo = null
-                        verifiedUpdate = null
-                        updateStatusMessage =
-                            "현재 최신 버전을 사용하고 있습니다.\n\nv$versionName"
+                        updateStatusMessage = "현재 최신 버전을 사용하고 있습니다.\n\nv$versionName"
                     }
                     is AppUpdateManager.UpdateCheckResult.Available -> {
                         prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
                         prefs.knownAvailableAppUpdateVersion = result.update.versionName
                         updateInfo = result.update
-                        verifiedUpdate = null
                         updateDownloadProgress = 0
                     }
                 }
@@ -162,7 +160,6 @@ fun SettingsScreen(
                     update = update,
                     onProgress = { progress -> updateDownloadProgress = progress }
                 )
-                verifiedUpdate = verified
                 if (!AppUpdateManager.launchInstaller(context, verified)) {
                     updateErrorMessage =
                         "Android 설치 화면을 열 수 없습니다. 기기의 설치 권한 설정을 확인해 주세요."
@@ -170,7 +167,6 @@ fun SettingsScreen(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                verifiedUpdate = null
                 updateErrorMessage = friendlyUpdateError(error)
             } finally {
                 isUpdateDownloading = false
@@ -220,11 +216,11 @@ fun SettingsScreen(
                 if (isCscMuted) {
                     ClickableRow(
                         title = "카메라 셔터음 원래대로 복원",
-                        subtitle = "무음 설정 적용됨 · 복원할 때만 무선 디버깅 필요",
+                        subtitle = "현재 무음 설정 적용됨",
                         onClick = {
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
-                                    "아직 1회 설정이 완료되지 않았습니다. 메인 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+                                    "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
                             } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
                                 showRestoreWirelessDebuggingHelp = true
                             } else {
@@ -235,11 +231,11 @@ fun SettingsScreen(
                 } else {
                     ClickableRow(
                         title = "카메라 무음 다시 적용",
-                        subtitle = "기본 셔터음 상태 · 다시 적용할 때만 무선 디버깅 필요",
+                        subtitle = "카메라 설정이 기본 상태로 돌아온 경우 사용",
                         onClick = {
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
-                                    "아직 1회 설정이 완료되지 않았습니다. 메인 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+                                    "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
                             } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
                                 showReapplyWirelessDebuggingHelp = true
                             } else if (!isReapplyInProgress) {
@@ -254,13 +250,13 @@ fun SettingsScreen(
                                         isCscMuted = true
                                         val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
                                         restoreResultMessage = if (cleanup.isSuccess) {
-                                            "카메라 무음 설정을 다시 적용했고 무선 디버깅도 껐습니다."
+                                            "카메라 무음 설정을 다시 적용했습니다."
                                         } else {
-                                            "카메라 무음 설정은 다시 적용했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
+                                            "카메라 무음 설정은 적용했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
                                         }
                                     } else {
                                         restoreResultMessage =
-                                            "카메라 무음 설정을 다시 적용하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
+                                            "다시 적용하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
                                     }
                                     isReapplyInProgress = false
                                 }
@@ -270,22 +266,18 @@ fun SettingsScreen(
                 }
                 RowDivider()
                 InfoRow(
-                    title = "카메라 설정 안내",
-                    subtitle = if (isCscMuted) {
-                        "셔터음을 원래대로 복원할 때만 무선 디버깅을 잠시 켜면 됩니다. 작업이 끝나면 앱이 무선 디버깅 자동 종료를 시도합니다."
-                    } else {
-                        "카메라 무음을 다시 적용할 때만 무선 디버깅을 잠시 켜면 됩니다. 작업이 끝나면 앱이 무선 디버깅 자동 종료를 시도합니다."
-                    }
+                    title = "사용 방법",
+                    subtitle = "카메라 설정을 바꿀 때만 무선 디버깅을 잠시 켜면 됩니다. 작업이 끝나면 앱이 다시 끄려고 시도합니다."
                 )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("보안")
+            GroupLabel("앱 동작")
             SettingsCard {
                 SwitchRow(
                     title = "앱 잠금",
-                    subtitle = "앱 실행 시 지문 또는 PIN·패턴·비밀번호로 확인",
+                    subtitle = "앱 실행 시 지문 또는 화면 잠금으로 확인",
                     checked = isAppLockEnabled,
                     onCheckedChange = { enabled ->
                         if (isLockSetupInProgress) return@SwitchRow
@@ -304,7 +296,7 @@ fun SettingsScreen(
                             subtitle = if (enabled) {
                                 "지문 또는 화면 잠금으로 본인 확인해 주세요."
                             } else {
-                                "앱 잠금을 해제하려면 지문 또는 화면 잠금으로 본인 확인해 주세요."
+                                "앱 잠금을 해제하려면 본인 확인해 주세요."
                             },
                             onSuccess = {
                                 isLockSetupInProgress = false
@@ -329,9 +321,22 @@ fun SettingsScreen(
                     }
                 )
                 RowDivider()
+                SwitchRow(
+                    title = "소프트웨어 업데이트 후 상태 확인",
+                    subtitle = "다시 설정이 필요한 경우에만 알림",
+                    checked = isSoftwareUpdateCheck,
+                    onCheckedChange = { enabled ->
+                        isSoftwareUpdateCheck = enabled
+                        prefs.isSoftwareUpdateCheckEnabled = enabled
+                        if (enabled) {
+                            prefs.lastSoftwareFingerprint = Build.FINGERPRINT
+                        }
+                    }
+                )
+                RowDivider()
                 ClickableRow(
                     title = "개발자 옵션 전체 끄기",
-                    subtitle = "선택 사항 · 앱은 설정 완료 후 무선 디버깅 자동 종료를 시도",
+                    subtitle = "선택 사항 · 개발자 옵션 자체를 더 이상 사용하지 않을 때",
                     onClick = {
                         if (DeveloperOptionsManager.canDisableDirectly(context)) {
                             showDeveloperOptionsConfirm = true
@@ -344,25 +349,34 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("상태 확인")
+            GroupLabel("업데이트")
             SettingsCard {
                 SwitchRow(
-                    title = "소프트웨어 업데이트 후 상태 확인",
-                    subtitle = "업데이트 후 실제 셔터음 상태를 확인하고, 다시 설정이 필요할 때만 알림",
-                    checked = isSoftwareUpdateCheck,
+                    title = "앱 업데이트 자동 확인",
+                    subtitle = "하루 한 번 이하로 새 정식 버전만 확인",
+                    checked = isAppUpdateAutoCheck,
                     onCheckedChange = { enabled ->
-                        isSoftwareUpdateCheck = enabled
-                        prefs.isSoftwareUpdateCheckEnabled = enabled
+                        isAppUpdateAutoCheck = enabled
+                        prefs.isAppUpdateAutoCheckEnabled = enabled
                         if (enabled) {
-                            // 켜는 시점의 현재 빌드를 기준으로 저장해 다음 업데이트부터 정확히 감지한다.
-                            prefs.lastSoftwareFingerprint = Build.FINGERPRINT
+                            prefs.lastAppUpdateCheckAtMillis = 0L
                         }
                     }
                 )
                 RowDivider()
-                InfoRow(
-                    title = "빠른 설정 타일",
-                    subtitle = "상태를 바꿀 때만 무선 디버깅이 필요하며, 변경 후 앱이 다시 끄려고 시도합니다."
+                ClickableRow(
+                    title = "지금 업데이트 확인",
+                    subtitle = when {
+                        isUpdateChecking -> "새 버전을 확인하고 있습니다…"
+                        updateInfo != null -> "v${updateInfo?.versionName} 사용 가능"
+                        isAppUpdateAutoCheck -> "자동 확인 켜짐"
+                        else -> "자동 확인 꺼짐"
+                    },
+                    onClick = {
+                        if (updateInfo == null) {
+                            checkForAppUpdate()
+                        }
+                    }
                 )
             }
 
@@ -372,43 +386,11 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("앱 정보")
+            GroupLabel("정보")
             SettingsCard {
                 InfoRow(
                     title = "버전",
                     subtitle = versionName
-                )
-                RowDivider()
-                SwitchRow(
-                    title = "앱 업데이트 자동 확인",
-                    subtitle = "앱을 열 때 하루 한 번 이하로 최신 정식 버전만 확인 · APK는 자동 다운로드하지 않음",
-                    checked = isAppUpdateAutoCheck,
-                    onCheckedChange = { enabled ->
-                        isAppUpdateAutoCheck = enabled
-                        prefs.isAppUpdateAutoCheckEnabled = enabled
-                        if (enabled) {
-                            // 다음 홈 화면 진입 시 즉시 한 번 확인한 뒤 24시간 간격을 적용한다.
-                            prefs.lastAppUpdateCheckAtMillis = 0L
-                        }
-                    }
-                )
-                RowDivider()
-                ClickableRow(
-                    title = "앱 업데이트",
-                    subtitle = when {
-                        isUpdateChecking -> "GitHub Releases에서 최신 버전 확인 중…"
-                        updateInfo != null -> "v${updateInfo?.versionName} 사용 가능 · 눌러 변경사항 확인"
-                        isAppUpdateAutoCheck -> "자동 확인 켜짐 · 눌러 지금 확인"
-                        else -> "자동 확인 꺼짐 · 눌러 지금 확인"
-                    },
-                    onClick = {
-                        val available = updateInfo
-                        if (available != null) {
-                            updateInfo = available
-                        } else {
-                            checkForAppUpdate()
-                        }
-                    }
                 )
                 RowDivider()
                 InfoRow(
@@ -429,12 +411,11 @@ fun SettingsScreen(
         if (showReapplyWirelessDebuggingHelp) {
             AlertDialog(
                 onDismissRequest = { showReapplyWirelessDebuggingHelp = false },
-                title = { Text("무선 디버깅을 먼저 켜 주세요") },
+                title = { Text("무선 디버깅을 켜 주세요") },
                 text = {
                     Text(
-                        "설정 완료 후 무선 디버깅이 꺼져 있는 것은 정상입니다.\n\n" +
-                            "카메라 무음 설정을 다시 적용하는 동안에만 무선 디버깅이 필요합니다. " +
-                            "[무선 디버깅 설정 열기]에서 켠 뒤 앱으로 돌아와 설정 → 카메라 설정의 [카메라 무음 다시 적용]을 다시 눌러 주세요. 적용이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다."
+                        "카메라 무음 설정을 다시 적용하는 동안에만 필요합니다.\n\n" +
+                            "무선 디버깅을 켠 뒤 앱으로 돌아와 [카메라 무음 다시 적용]을 다시 눌러 주세요."
                     )
                 },
                 confirmButton = {
@@ -444,7 +425,7 @@ fun SettingsScreen(
                             CscMuteManager.openWirelessDebuggingOrDevOptions(context)
                         }
                     ) {
-                        Text("무선 디버깅 설정 열기")
+                        Text("설정 열기")
                     }
                 },
                 dismissButton = {
@@ -460,12 +441,11 @@ fun SettingsScreen(
         if (showRestoreWirelessDebuggingHelp) {
             AlertDialog(
                 onDismissRequest = { showRestoreWirelessDebuggingHelp = false },
-                title = { Text("무선 디버깅을 먼저 켜 주세요") },
+                title = { Text("무선 디버깅을 켜 주세요") },
                 text = {
                     Text(
-                        "설정 완료 후 무선 디버깅이 꺼져 있는 것은 정상입니다.\n\n" +
-                            "카메라 셔터음을 원래대로 복원하는 동안에만 무선 디버깅이 필요합니다. " +
-                            "[무선 디버깅 설정 열기]에서 켠 뒤 앱으로 돌아와 설정 → 카메라 설정의 [카메라 셔터음 원래대로 복원]을 다시 눌러 주세요. 복원이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다."
+                        "카메라 셔터음을 원래대로 복원하는 동안에만 필요합니다.\n\n" +
+                            "무선 디버깅을 켠 뒤 앱으로 돌아와 [카메라 셔터음 원래대로 복원]을 다시 눌러 주세요."
                     )
                 },
                 confirmButton = {
@@ -475,7 +455,7 @@ fun SettingsScreen(
                             CscMuteManager.openWirelessDebuggingOrDevOptions(context)
                         }
                     ) {
-                        Text("무선 디버깅 설정 열기")
+                        Text("설정 열기")
                     }
                 },
                 dismissButton = {
@@ -494,8 +474,7 @@ fun SettingsScreen(
                 title = { Text("카메라 셔터음을 원래대로 복원할까요?") },
                 text = {
                     Text(
-                        "진동·무음 모드에서도 카메라 셔터음이 나오는 기본 상태로 되돌립니다.\n\n" +
-                            "복원이 끝나면 무선 디버깅도 다시 끄려고 시도합니다."
+                        "진동·무음 모드에서도 카메라 셔터음이 나오는 기본 상태로 되돌립니다."
                     )
                 },
                 confirmButton = {
@@ -514,9 +493,9 @@ fun SettingsScreen(
                                     isCscMuted = false
                                     val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
                                     restoreResultMessage = if (cleanup.isSuccess) {
-                                        "카메라 셔터음을 기본 상태로 복원했고 무선 디버깅도 껐습니다."
+                                        "카메라 셔터음을 기본 상태로 복원했습니다."
                                     } else {
-                                        "카메라 셔터음은 기본 상태로 복원했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
+                                        "카메라 셔터음은 복원했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
                                     }
                                 } else {
                                     restoreResultMessage =
@@ -608,7 +587,6 @@ fun SettingsScreen(
                 onDismissRequest = {
                     if (!isUpdateDownloading) {
                         updateInfo = null
-                        verifiedUpdate = null
                         installPermissionHint = false
                     }
                 },
@@ -635,24 +613,9 @@ fun SettingsScreen(
                         if (isUpdateDownloading) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
                             Text(
-                                text = "APK 다운로드 및 검증 중 · $updateDownloadProgress%",
+                                text = "업데이트 파일 확인 중 · $updateDownloadProgress%",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        verifiedUpdate?.let { verified ->
-                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-                            Text(
-                                text = "✓ SHA-256 검증 완료\n✓ 패키지 및 버전 검증 완료\n✓ 앱 서명 인증서 일치 확인",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.primary,
-                                lineHeight = 19.sp
-                            )
-                            Text(
-                                text = "검증된 버전: v${verified.versionName} (${verified.versionCode})",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
@@ -667,36 +630,13 @@ fun SettingsScreen(
                     }
                 },
                 confirmButton = {
-                    when {
-                        isUpdateDownloading -> {
-                            TextButton(onClick = {}, enabled = false) {
-                                Text("$updateDownloadProgress%")
-                            }
+                    if (isUpdateDownloading) {
+                        TextButton(onClick = {}, enabled = false) {
+                            Text("$updateDownloadProgress%")
                         }
-                        verifiedUpdate == null -> {
-                            TextButton(onClick = { downloadUpdate(update) }) {
-                                Text("업데이트")
-                            }
-                        }
-                        else -> {
-                            TextButton(
-                                onClick = {
-                                    val verified = verifiedUpdate ?: return@TextButton
-                                    if (!AppUpdateManager.canRequestPackageInstalls(context)) {
-                                        installPermissionHint = true
-                                        try {
-                                            AppUpdateManager.openInstallPermissionSettings(context)
-                                        } catch (error: Exception) {
-                                            updateErrorMessage = friendlyUpdateError(error)
-                                        }
-                                    } else if (!AppUpdateManager.launchInstaller(context, verified)) {
-                                        updateErrorMessage =
-                                            "Android 설치 화면을 열 수 없습니다. 기기의 설치 권한 설정을 확인해 주세요."
-                                    }
-                                }
-                            ) {
-                                Text("설치")
-                            }
+                    } else {
+                        TextButton(onClick = { downloadUpdate(update) }) {
+                            Text("업데이트")
                         }
                     }
                 },
@@ -705,7 +645,6 @@ fun SettingsScreen(
                         TextButton(
                             onClick = {
                                 updateInfo = null
-                                verifiedUpdate = null
                                 installPermissionHint = false
                             }
                         ) {
@@ -724,9 +663,8 @@ fun SettingsScreen(
                 title = { Text("개발자 옵션 끄기") },
                 text = {
                     Text(
-                        "앱은 카메라 무음 설정을 적용한 뒤 무선 디버깅만 자동으로 끄려고 시도합니다.\n\n" +
-                            "이 메뉴는 개발자 옵션 자체와 USB 디버깅까지 모두 끄고 싶은 경우에만 사용하세요. " +
-                            "이미 ShutterSoundZero에 부여된 WRITE_SECURE_SETTINGS 권한과 적용된 카메라 무음 설정은 이 작업에서 취소하지 않습니다."
+                        "개발자 옵션 자체와 USB·무선 디버깅을 모두 끕니다.\n\n" +
+                            "이미 연결된 ShutterSoundZero 권한과 적용된 카메라 설정은 그대로 유지됩니다."
                     )
                 },
                 confirmButton = {
@@ -736,7 +674,7 @@ fun SettingsScreen(
                             val result = DeveloperOptionsManager.disableDeveloperOptions(context)
                             if (result.isSuccess) {
                                 developerOptionsResultMessage =
-                                    "개발자 옵션과 USB·무선 디버깅을 껐습니다. 필요할 때는 기기 설정에서 개발자 옵션을 다시 활성화할 수 있습니다."
+                                    "개발자 옵션과 USB·무선 디버깅을 껐습니다."
                             } else {
                                 showDeveloperOptionsFallback = true
                             }
@@ -762,8 +700,7 @@ fun SettingsScreen(
                 text = {
                     Text(
                         "이 기기에서는 앱이 개발자 옵션을 직접 끌 수 없습니다.\n\n" +
-                            "개발자 옵션 화면을 연 뒤 화면 상단의 사용 스위치를 꺼 주세요. " +
-                            "가능하면 무선 디버깅도 꺼져 있는지 확인해 주세요."
+                            "개발자 옵션 화면을 연 뒤 화면 상단의 사용 스위치를 꺼 주세요."
                     )
                 },
                 confirmButton = {
@@ -944,10 +881,12 @@ private fun SwitchRow(
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
@@ -974,10 +913,12 @@ private fun InfoRow(title: String, subtitle: String) {
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
             color = MaterialTheme.colorScheme.onSurface
         )
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = subtitle,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 18.sp
         )
     }
 }
@@ -1002,10 +943,12 @@ private fun ClickableRow(
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp
             )
         }
         Spacer(modifier = Modifier.width(8.dp))

@@ -51,44 +51,44 @@ private data class HelpQuestion(val id: String, val question: String, val answer
 
 private val helpQuestions = listOf(
     HelpQuestion(
-        "csc",
-        "ShutterSoundZero는 정확히 무엇을 바꾸나요?",
-        "삼성 갤럭시의 시스템 설정에 있는 카메라 셔터음 강제 값을 변경합니다. 앱을 적용하면 강제 셔터음이 해제되어 휴대전화의 소리·진동·무음 모드에 따라 카메라 촬영음이 동작합니다. 따라서 휴대전화가 소리 모드라면 촬영음이 들릴 수 있습니다. 다만 소리 모드여도 설정의 [소리 및 진동 → 음량 → 시스템] 음량이 0이면 촬영음이 들리지 않을 수 있습니다."
+        "camera_behavior",
+        "카메라 무음 설정은 어떻게 동작하나요?",
+        "카메라가 휴대전화의 소리 상태를 따르도록 설정합니다. 진동·무음 모드에서는 촬영음이 나지 않고, 소리 모드에서는 촬영음이 들릴 수 있습니다. 다만 소리 모드여도 설정의 [소리 및 진동 → 음량 → 시스템] 음량이 0이면 촬영음이 들리지 않을 수 있습니다."
     ),
     HelpQuestion(
         "wireless_debugging",
-        "왜 무선 디버깅이 필요한가요?",
-        "카메라 셔터음 강제 값은 일반 앱이 바로 변경할 수 없는 시스템 영역에 있습니다. ShutterSoundZero는 무선 디버깅을 통해 이 기기의 로컬 ADB에 연결해 최초 권한 연동을 하고, 카메라 값을 실제로 변경할 때 셸 명령을 실행합니다. 설정이 끝난 뒤에는 계속 켜둘 필요가 없습니다."
+        "왜 무선 디버깅을 잠깐 켜야 하나요?",
+        "처음 기기를 연결하거나 카메라 설정을 바꿀 때만 시스템 설정에 접근하기 위해 필요합니다. 설정이 끝나면 계속 켜둘 필요가 없으며, 앱은 작업이 끝난 뒤 무선 디버깅을 다시 끄려고 시도합니다."
     ),
     HelpQuestion(
         "software_update",
         "One UI·Android 업데이트 후 다시 설정해야 하나요?",
-        "항상 다시 설정할 필요는 없습니다. 소프트웨어 업데이트 후 카메라 셔터음 값이 그대로 유지될 수도 있고 기본값으로 초기화될 수도 있습니다. 앱은 실제 상태를 확인해 그대로 유지되면 아무 작업도 요구하지 않습니다. 값만 초기화되고 권한이 남아 있으면 [카메라 무음 다시 적용], 권한까지 사라졌다면 [1회 설정 시작]을 안내합니다."
+        "대부분은 그대로 사용할 수 있습니다. 업데이트 후 카메라 설정만 초기화되면 [카메라 무음 다시 적용]만 하면 되고, 기기 연결까지 풀린 경우에만 [1회 설정 시작]을 다시 안내합니다. 정상 상태라면 아무 작업도 요구하지 않습니다."
     ),
     HelpQuestion(
         "reboot",
         "휴대전화를 재부팅하면 설정이 유지되나요?",
-        "일반적인 재부팅에서는 카메라 셔터음 설정이 유지됩니다. ShutterSoundZero는 혹시 모를 상태 변화를 확인하기 위해 재부팅 후 실제 셔터음 설정값을 확인하며, 그대로 유지되어 있으면 아무 작업도 하지 않습니다."
+        "일반적인 재부팅에서는 설정이 유지됩니다. 앱은 재부팅 후 실제 상태를 확인하고, 다시 설정이 필요한 경우에만 안내합니다."
     ),
     HelpQuestion(
         "app_update",
-        "ShutterSoundZero 앱을 업데이트하면 다시 연동해야 하나요?",
-        "정상적인 앱 업데이트에서는 기존 권한 연동과 앱 설정이 유지됩니다. 앱 업데이트 직후에도 기존 보안 설정 권한이 실제로 유지됐는지 확인하며, 예상과 다르게 권한이 사라진 경우에만 [1회 설정 시작]을 다시 진행하도록 안내합니다."
+        "앱을 업데이트하면 다시 연결해야 하나요?",
+        "정상적인 앱 업데이트에서는 기존 연결과 앱 설정이 유지됩니다. 예상과 다르게 연결 권한이 사라진 경우에만 [1회 설정 시작]을 다시 안내합니다."
     ),
     HelpQuestion(
         "reapply_vs_setup",
-        "[카메라 무음 다시 적용]과 [1회 설정 시작]은 무엇이 다른가요?",
-        "기존 권한 연동은 남아 있는데 카메라 셔터음 값만 기본 상태로 돌아온 경우에는 [카메라 무음 다시 적용]만 하면 됩니다. WRITE_SECURE_SETTINGS 권한 자체가 없거나 사용자가 권한 연동을 해제했다면 [1회 설정 시작]으로 기기 연동부터 다시 진행해야 합니다."
+        "[다시 적용]과 [1회 설정 시작]은 무엇이 다른가요?",
+        "기기 연결은 남아 있고 카메라 설정만 풀린 경우에는 [다시 적용]만 하면 됩니다. 기기 연결 자체가 없을 때만 [1회 설정 시작]으로 처음 연결부터 진행합니다."
     ),
     HelpQuestion(
         "notifications",
         "알림은 언제 표시되나요?",
-        "One UI·Android 업데이트 후 카메라 셔터음 설정을 다시 적용해야 할 때, 또는 앱 업데이트 후 기존 권한 연동에 이상이 발견됐을 때처럼 사용자의 조치가 필요한 경우에 안내합니다. 정상 상태라면 별도의 조치 알림을 표시하지 않습니다."
+        "사용자가 조치해야 할 때만 안내합니다. 예를 들어 소프트웨어 업데이트 뒤 카메라 설정을 다시 적용해야 하거나, 앱 업데이트 뒤 기존 연결에 이상이 발견된 경우입니다. 정상 상태에서는 별도 조치 알림을 표시하지 않습니다."
     ),
     HelpQuestion(
-        "developer_options",
-        "개발자 옵션과 무선 디버깅을 계속 켜둬야 하나요?",
-        "아닙니다. 최초 연동이 끝난 뒤에는 무선 디버깅을 꺼도 이미 부여된 권한은 유지됩니다. 카메라 무음을 다시 적용하거나 원래대로 복원하는 등 시스템 값을 실제로 변경할 때만 잠시 켜면 됩니다. 작업이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다."
+        "legal",
+        "촬영 시 주의할 점이 있나요?",
+        "이 앱은 정숙이 필요한 장소나 반려동물·아기 촬영처럼 정당한 편의를 위한 도구입니다. 타인의 의사에 반하는 불법촬영, 성적 수치심을 유발하는 촬영, 사생활 침해 목적으로 사용할 수 없으며 모든 촬영 행위에 대한 법적 책임은 사용자 본인에게 있습니다."
     )
 )
 
@@ -99,16 +99,18 @@ fun SettingsHelpSection() {
     var diagnosticReport by remember { mutableStateOf<DiagnosticReportBuilder.Report?>(null) }
     var userDescription by rememberSaveable { mutableStateOf("") }
 
-    SectionLabel("도움말")
+    SectionLabel("도움말 및 지원")
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
-            helpQuestions.forEachIndexed { index, item ->
+            helpQuestions.forEach { item ->
                 HelpAccordionItem(
                     item = item,
                     expanded = expandedQuestionId == item.id,
@@ -116,55 +118,16 @@ fun SettingsHelpSection() {
                         expandedQuestionId = if (expandedQuestionId == item.id) null else item.id
                     }
                 )
-                if (index != helpQuestions.lastIndex) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 20.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        thickness = 0.5.dp
-                    )
-                }
-            }
-        }
-    }
-
-    Spacer(modifier = Modifier.height(24.dp))
-
-    SectionLabel("지원")
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    diagnosticReport = DiagnosticReportBuilder.build(context)
-                }
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "오류 신고",
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "진단 정보를 확인한 뒤 이메일로 개발자에게 보내기",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 20.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    thickness = 0.5.dp
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = "오류 신고 열기",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+
+            SupportRow(onClick = {
+                diagnosticReport = DiagnosticReportBuilder.build(context)
+            })
         }
     }
 
@@ -181,7 +144,7 @@ fun SettingsHelpSection() {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "아래 내용을 확인한 뒤 ${DiagnosticReportBuilder.SUPPORT_EMAIL}로 이메일을 보냅니다. 페어링 코드, IP 주소, Wi-Fi 이름, IMEI·일련번호, ADB 키는 진단 로그에 기록하지 않습니다.",
+                        text = "문제가 생기기 전에 한 작업을 적고, 아래 진단 정보를 확인한 뒤 이메일로 보낼 수 있습니다. 페어링 코드, Wi-Fi 이름·주소, 기기 식별 번호, 연결용 키는 진단 기록에 저장하지 않습니다.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -237,6 +200,38 @@ fun SettingsHelpSection() {
             },
             shape = RoundedCornerShape(20.dp),
             containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+}
+
+@Composable
+private fun SupportRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "문제가 해결되지 않나요?",
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "진단 정보를 확인하고 오류 신고 이메일 보내기",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = "오류 신고 열기",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -308,7 +303,11 @@ private fun HelpAccordionItem(item: HelpQuestion, expanded: Boolean, onToggle: (
             )
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
-                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                imageVector = if (expanded) {
+                    Icons.Default.KeyboardArrowUp
+                } else {
+                    Icons.Default.KeyboardArrowDown
+                },
                 contentDescription = if (expanded) "답변 접기" else "답변 펼치기",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
