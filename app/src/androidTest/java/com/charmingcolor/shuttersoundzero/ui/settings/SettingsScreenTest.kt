@@ -1,7 +1,6 @@
 package com.charmingcolor.shuttersoundzero.ui.settings
 
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import org.junit.Before
@@ -23,10 +22,10 @@ class SettingsScreenTest {
 
     @Test
     fun settings_areGroupedByUserGoal() {
-        composeTestRule.onNodeWithText("카메라 설정").assertExists()
-        composeTestRule.onNodeWithText("앱 동작").assertExists()
-        composeTestRule.onNodeWithText("업데이트").assertExists()
-        composeTestRule.onNodeWithText("도움말 및 지원").assertExists()
-        composeTestRule.onNodeWithText("정보").assertExists()
+        composeTestRule.onNodeWithText("카메라 설정").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("앱 동작").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("업데이트").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("도움말 및 지원").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("정보").fetchSemanticsNode()
     }
 }
