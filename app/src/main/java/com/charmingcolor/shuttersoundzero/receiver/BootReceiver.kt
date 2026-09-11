@@ -15,6 +15,8 @@ import androidx.core.content.ContextCompat
 import com.charmingcolor.shuttersoundzero.MainActivity
 import com.charmingcolor.shuttersoundzero.R
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.adb.AdbKeyHelper
+import com.charmingcolor.shuttersoundzero.core.adb.AdbStateCleanupPolicy
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 
 /**
@@ -41,9 +43,13 @@ class BootReceiver : BroadcastReceiver() {
         Log.i(TAG, "Received supported boot/update broadcast")
 
         val prefs = PreferencesRepository.getInstance(context)
+        val hasWritePermissionAtReceive = CscMuteManager.hasWritePermission(context)
+        prefs.ensureAdbLinkageHistoryMigration(hasWritePermissionAtReceive)
+
         val currentFingerprint = Build.FINGERPRINT
         val previousFingerprint = prefs.lastSoftwareFingerprint
         val updateCheckEnabled = prefs.isSoftwareUpdateCheckEnabled
+        val hadAdbLinkageEvidence = prefs.hasAdbLinkageHistory
         val isSoftwareUpdated = updateCheckEnabled &&
             previousFingerprint != null &&
             previousFingerprint != currentFingerprint
@@ -59,17 +65,87 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         if (isSoftwareUpdated) {
+            cleanupAdbStateAfterSoftwareUpdate(
+                context = context,
+                prefs = prefs,
+                hadAdbLinkageEvidence = hadAdbLinkageEvidence,
+                hasWritePermission = hasWritePermissionAtReceive
+            )
             handleDetectedSoftwareUpdate(context, prefs)
             return
         }
 
         if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            notifyIfPermissionLinkageLostAfterAppUpdate(context, prefs)
+            // 새 버전으로 넘어오는 시점에도 기존 연동 이력은 있는데 권한이 사라졌다면
+            // 이전 앱 버전에서 남은 ADB identity까지 정리해 fresh pairing으로 복구한다.
+            resetAdbIdentityIfUnexpectedPermissionLoss(
+                context = context,
+                prefs = prefs,
+                hadAdbLinkageEvidence = hadAdbLinkageEvidence,
+                hasWritePermission = hasWritePermissionAtReceive,
+                reason = "app update"
+            )
+            notifyIfPermissionLinkageLostAfterAppUpdate(
+                context = context,
+                prefs = prefs,
+                linkageExpected = hadAdbLinkageEvidence,
+                hasWritePermission = hasWritePermissionAtReceive
+            )
+            prefs.clearTransientAdbConnectionState()
+            Log.i(TAG, "Cleared stale ADB connect port after app update")
             return
         }
 
         if (isBootAction(action)) {
+            // connect 포트는 재부팅 뒤에도 그대로라는 보장이 없으므로 매 부팅마다 재탐색한다.
+            prefs.clearTransientAdbConnectionState()
+            Log.i(TAG, "Cleared stale ADB connect port after boot")
             notifyIfMuteNeedsReapplyAfterBoot(context, prefs)
+        }
+    }
+
+    private fun cleanupAdbStateAfterSoftwareUpdate(
+        context: Context,
+        prefs: PreferencesRepository,
+        hadAdbLinkageEvidence: Boolean,
+        hasWritePermission: Boolean
+    ) {
+        // 무선 ADB connect 포트는 새 소프트웨어 세션에서 재사용하지 않는다.
+        prefs.clearTransientAdbConnectionState()
+        Log.i(TAG, "Cleared stale ADB connect port after software update")
+
+        resetAdbIdentityIfUnexpectedPermissionLoss(
+            context = context,
+            prefs = prefs,
+            hadAdbLinkageEvidence = hadAdbLinkageEvidence,
+            hasWritePermission = hasWritePermission,
+            reason = "software update"
+        )
+    }
+
+    private fun resetAdbIdentityIfUnexpectedPermissionLoss(
+        context: Context,
+        prefs: PreferencesRepository,
+        hadAdbLinkageEvidence: Boolean,
+        hasWritePermission: Boolean,
+        reason: String
+    ) {
+        if (!AdbStateCleanupPolicy.shouldResetIdentityAfterUnexpectedPermissionLoss(
+                hadLinkageEvidence = hadAdbLinkageEvidence,
+                permissionRevokedByUser = prefs.isPermissionRevokedByUser,
+                hasWritePermission = hasWritePermission
+            )
+        ) {
+            return
+        }
+
+        try {
+            // 업데이트 경계에서 기존 연동 흔적은 있는데 권한이 실제로 사라졌다면,
+            // 다음 1회 설정이 재설치와 동일하게 새 로컬 ADB identity로 페어링되게 한다.
+            AdbKeyHelper.resetIdentity(context)
+            Log.i(TAG, "Reset local ADB identity after unexpected permission loss ($reason)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to reset local ADB identity after $reason (${e.javaClass.simpleName})")
         }
     }
 
@@ -117,22 +193,21 @@ class BootReceiver : BroadcastReceiver() {
      */
     private fun notifyIfPermissionLinkageLostAfterAppUpdate(
         context: Context,
-        prefs: PreferencesRepository
+        prefs: PreferencesRepository,
+        linkageExpected: Boolean,
+        hasWritePermission: Boolean
     ) {
         if (prefs.isPermissionRevokedByUser) {
             Log.i(TAG, "App updated; permission linkage was already revoked by user")
             return
         }
 
-        // shouldMuteOnBoot가 false여도 사용자가 카메라 셔터음을 원래대로 복원해 둔 상태일 수 있다.
-        // 성공한 로컬 ADB 연결 포트가 남아 있으면 이전 권한 연동 이력이 있었던 것으로 판단한다.
-        val linkageExpected = prefs.shouldMuteOnBoot || prefs.lastConnectPort > 0
         if (!linkageExpected) {
             Log.i(TAG, "App updated; no prior permission linkage evidence")
             return
         }
 
-        if (CscMuteManager.hasWritePermission(context)) {
+        if (hasWritePermission) {
             Log.i(TAG, "App updated; WRITE_SECURE_SETTINGS permission remained granted")
             return
         }
