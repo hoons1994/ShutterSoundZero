@@ -47,6 +47,30 @@ object AdbKeyHelper {
     private const val ENCRYPTED_KEY_MAGIC = 0x53535A31 // "SSZ1"
     private const val MAX_GCM_IV_BYTES = 32
 
+    /**
+     * 소프트웨어 업데이트 뒤 기존 연동 흔적은 있는데 권한이 사라진 예외 상황에서만
+     * 로컬 ADB identity 파일을 폐기한다. Android Keystore wrapping key 자체는 재사용해
+     * 불필요한 키스토어 churn 없이 다음 페어링에서 새 RSA identity를 만들게 한다.
+     */
+    @Synchronized
+    fun resetIdentity(context: Context) {
+        val files = listOf(
+            File(context.noBackupFilesDir, ENCRYPTED_PRIV_KEY_FILE),
+            File(context.noBackupFilesDir, "$ENCRYPTED_PRIV_KEY_FILE.tmp"),
+            File(context.noBackupFilesDir, LEGACY_PRIV_KEY_FILE),
+            File(context.noBackupFilesDir, CERT_FILE),
+            File(context.filesDir, LEGACY_PRIV_KEY_FILE),
+            File(context.filesDir, CERT_FILE)
+        )
+
+        val failed = files.filter { file -> file.exists() && !file.delete() }
+        if (failed.isNotEmpty()) {
+            throw IOException("Unable to clear persisted ADB identity files")
+        }
+
+        Log.i(TAG, "Cleared persisted ADB identity for fresh pairing")
+    }
+
     @Synchronized
     fun getOrCreateKeyPairAndCertificate(context: Context): Pair<PrivateKey, Certificate> {
         val privFile = File(context.noBackupFilesDir, ENCRYPTED_PRIV_KEY_FILE)

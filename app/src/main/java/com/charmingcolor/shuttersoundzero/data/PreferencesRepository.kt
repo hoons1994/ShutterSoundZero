@@ -57,13 +57,50 @@ class PreferencesRepository(context: Context) {
         }
     }
 
+    /**
+     * 과거 버전은 성공한 ADB connect 포트 자체를 연동 이력의 간접 증거로 사용했다.
+     * 이제 포트는 업데이트 때 안전하게 버릴 수 있도록 영구 연동 이력을 별도 키로 이전한다.
+     */
+    fun ensureAdbLinkageHistoryMigration(hasWritePermission: Boolean) {
+        if (prefs.contains(KEY_HAS_ADB_LINKAGE_HISTORY)) return
+        val explicitlyRevoked = prefs.getBoolean(KEY_PERMISSION_REVOKED_BY_USER, false)
+        val legacyEvidence = !explicitlyRevoked && (
+            prefs.getInt(KEY_LAST_CONNECT_PORT, -1) > 0 ||
+                prefs.getBoolean(KEY_SHOULD_MUTE_ON_BOOT, false) ||
+                hasWritePermission
+            )
+        prefs.edit { putBoolean(KEY_HAS_ADB_LINKAGE_HISTORY, legacyEvidence) }
+    }
+
+    var hasAdbLinkageHistory: Boolean
+        get() = prefs.getBoolean(KEY_HAS_ADB_LINKAGE_HISTORY, false)
+        set(value) = prefs.edit { putBoolean(KEY_HAS_ADB_LINKAGE_HISTORY, value) }
+
     var lastConnectPort: Int
         get() = prefs.getInt(KEY_LAST_CONNECT_PORT, -1)
-        set(value) = prefs.edit { putInt(KEY_LAST_CONNECT_PORT, value) }
+        set(value) = prefs.edit {
+            putInt(KEY_LAST_CONNECT_PORT, value)
+            if (value in 1..65535) {
+                putBoolean(KEY_HAS_ADB_LINKAGE_HISTORY, true)
+            }
+        }
+
+    /**
+     * 무선 ADB connect 포트는 무선 디버깅 재시작·재부팅·소프트웨어 업데이트 뒤 바뀔 수 있는
+     * 임시 값이다. 사용자 설정과 권한 연동 이력은 유지하면서 현재 세션의 연결 흔적만 폐기한다.
+     */
+    fun clearTransientAdbConnectionState() {
+        prefs.edit { remove(KEY_LAST_CONNECT_PORT) }
+    }
 
     var isPermissionRevokedByUser: Boolean
         get() = prefs.getBoolean(KEY_PERMISSION_REVOKED_BY_USER, false)
-        set(value) = prefs.edit { putBoolean(KEY_PERMISSION_REVOKED_BY_USER, value) }
+        set(value) = prefs.edit {
+            putBoolean(KEY_PERMISSION_REVOKED_BY_USER, value)
+            if (value) {
+                putBoolean(KEY_HAS_ADB_LINKAGE_HISTORY, false)
+            }
+        }
 
     var isAppLockEnabled: Boolean
         get() = prefs.getBoolean(KEY_APP_LOCK_ENABLED, false)
@@ -98,6 +135,7 @@ class PreferencesRepository(context: Context) {
         private const val KEY_LAST_SOFTWARE_FINGERPRINT = "last_firmware_fingerprint"
 
         private const val KEY_LAST_CONNECT_PORT = "last_connect_port"
+        private const val KEY_HAS_ADB_LINKAGE_HISTORY = "has_adb_linkage_history"
         private const val KEY_PERMISSION_REVOKED_BY_USER = "permission_revoked_by_user"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_APP_UPDATE_AUTO_CHECK = "app_update_auto_check"

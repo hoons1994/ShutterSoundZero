@@ -71,6 +71,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun startNotificationPairing(context: Context) {
+        // 1회 설정은 이전 무선 디버깅 세션의 저장 포트/mDNS 발견값을 재사용하지 않고
+        // 현재 기기가 게시하는 서비스만 새로 탐색해 시작한다.
+        prefs.clearTransientAdbConnectionState()
+        adbManager.lastDiscoveredPairingPort = null
+        adbManager.lastDiscoveredConnectPort = null
+
         // 사용자가 설정을 시작한 것만으로 권한 연동 상태를 성공으로 바꾸지 않는다.
         // 실제 pm grant와 CSC 적용이 완료된 뒤 StandaloneAdbManager가 이 값을 갱신한다.
         startPairingNow(context)
