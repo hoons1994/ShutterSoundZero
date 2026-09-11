@@ -1,12 +1,15 @@
 package com.charmingcolor.shuttersoundzero.ui.main
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.MediaStore
 import android.widget.Toast
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -25,7 +29,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,11 +36,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import com.charmingcolor.shuttersoundzero.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -53,18 +53,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import androidx.navigation3.runtime.NavKey
+import com.charmingcolor.shuttersoundzero.Settings
+import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.theme.BrandBlueLight
 import com.charmingcolor.shuttersoundzero.theme.StatusAmber
@@ -74,10 +71,21 @@ import com.charmingcolor.shuttersoundzero.update.AppUpdateManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-private val CardRadius = 20.dp
-private val CardPaddingH = 20.dp
-private val CardPaddingV = 16.dp
+private val CardRadius = 24.dp
+private val ScreenPadding = 20.dp
 private const val AccessLocalNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
+
+private enum class HomeStatus {
+    READY,
+    REAPPLY_REQUIRED,
+    SETUP_REQUIRED
+}
+
+private enum class StepVisualState {
+    COMPLETE,
+    CURRENT,
+    PENDING
+}
 
 @Composable
 fun MainScreen(
@@ -178,15 +186,19 @@ fun MainScreen(
         } else {
             Toast.makeText(
                 context,
-                "무선 ADB 연결을 위해 로컬 네트워크 권한이 필요합니다. [앱 설정]에서 허용해주세요.",
+                "기기 연결을 위해 로컬 네트워크 권한이 필요합니다. [앱 설정]에서 허용해 주세요.",
                 Toast.LENGTH_LONG
             ).show()
         }
     }
 
     val requestLocalNetworkAccess: () -> Unit = {
-        if (Build.VERSION.SDK_INT >= 37 &&
-            ContextCompat.checkSelfPermission(context, AccessLocalNetworkPermission) != PackageManager.PERMISSION_GRANTED
+        if (
+            Build.VERSION.SDK_INT >= 37 &&
+            ContextCompat.checkSelfPermission(
+                context,
+                AccessLocalNetworkPermission
+            ) != PackageManager.PERMISSION_GRANTED
         ) {
             localNetworkPermissionLauncher.launch(AccessLocalNetworkPermission)
         } else {
@@ -202,21 +214,29 @@ fun MainScreen(
         } else {
             Toast.makeText(
                 context,
-                "상단바 코드 입력을 위해 알림 권한이 필요합니다. [앱 설정]에서 알림을 켜주세요.",
+                "6자리 코드 입력을 위해 알림 권한이 필요합니다. [앱 설정]에서 알림을 켜 주세요.",
                 Toast.LENGTH_LONG
             ).show()
         }
     }
 
     val requestPairingNotification: () -> Unit = {
-        if (!com.charmingcolor.shuttersoundzero.core.CscMuteManager.isWifiConnected(context)) {
+        if (!CscMuteManager.isWifiConnected(context)) {
             showWifiRequiredDialog = true
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        } else if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else if (!PairingNotificationHelper.areNotificationsEnabled(context)) {
-            Toast.makeText(context, "알림이 차단되어 있습니다. 알림 설정을 켜주세요.", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                context,
+                "알림이 꺼져 있습니다. 코드 입력을 위해 알림을 켜 주세요.",
+                Toast.LENGTH_LONG
+            ).show()
             PairingNotificationHelper.openNotificationSettings(context)
         } else {
             requestLocalNetworkAccess()
@@ -236,7 +256,6 @@ fun MainScreen(
             return
         }
 
-        // 네트워크가 끊겨 있어도 앱을 다시 열 때마다 반복 요청하지 않도록 시도 시점을 먼저 기록한다.
         prefs.lastAppUpdateCheckAtMillis = now
         isSilentAppUpdateChecking = true
         updateScope.launch {
@@ -254,7 +273,7 @@ fun MainScreen(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                // 자동 확인은 알림/오류 팝업 없이 조용히 실패한다. 수동 확인은 설정 화면에서 항상 가능하다.
+                // 자동 확인은 조용히 실패한다. 수동 확인은 설정 화면에서 언제든 가능하다.
             } finally {
                 isSilentAppUpdateChecking = false
             }
@@ -289,7 +308,22 @@ fun MainScreen(
         }
     }
 
-    val hasEffectivePermission = uiState.hasCscPermission
+    val homeStatus = when {
+        uiState.isCscMuted && uiState.hasCscPermission -> HomeStatus.READY
+        uiState.hasCscPermission -> HomeStatus.REAPPLY_REQUIRED
+        else -> HomeStatus.SETUP_REQUIRED
+    }
+
+    val openCamera: () -> Unit = {
+        try {
+            val cameraIntent = Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(cameraIntent)
+        } catch (_: Exception) {
+            Toast.makeText(context, "기본 카메라 앱을 실행할 수 없습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -302,153 +336,54 @@ fun MainScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
-            AppHeader(
-                onSettingsClick = { onItemClick(Settings) }
-            )
+            AppHeader(onSettingsClick = { onItemClick(Settings) })
+            Spacer(modifier = Modifier.height(10.dp))
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            GroupLabel("현재 상태")
-            SettingsCard {
-                StatusRow(
-                    title = "카메라 무음 설정",
-                    valueText = when {
-                        uiState.isCscMuted -> "설정 완료"
-                        hasEffectivePermission -> "재적용 필요"
-                        else -> "1회 설정 필요"
-                    },
-                    valueColor = when {
-                        uiState.isCscMuted -> StatusGreen
-                        hasEffectivePermission -> StatusAmber
-                        else -> BrandBlueLight
-                    },
-                    onClick = null
-                )
-                RowDivider()
-                ActionRow(
-                    title = "카메라 열어서 테스트",
-                    onClick = {
-                        try {
-                            val cameraIntent = Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            StatusHeroCard(
+                status = homeStatus,
+                onPrimaryAction = when (homeStatus) {
+                    HomeStatus.READY -> openCamera
+                    HomeStatus.REAPPLY_REQUIRED -> { { viewModel.toggleCscMute(true) } }
+                    HomeStatus.SETUP_REQUIRED -> {
+                        {
+                            if (!CscMuteManager.isSamsungDevice()) {
+                                Toast.makeText(
+                                    context,
+                                    "이 앱은 삼성 갤럭시 전용 앱입니다.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                requestPairingNotification()
                             }
-                            context.startActivity(cameraIntent)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "기본 카메라 앱을 실행할 수 없습니다.", Toast.LENGTH_SHORT).show()
                         }
                     }
-                )
-                RowDivider()
-                InfoRow(
-                    title = when {
-                        uiState.isCscMuted -> "평소 사용 방법"
-                        hasEffectivePermission -> "재적용 안내"
-                        else -> "1회 설정 안내"
-                    },
-                    subtitle = when {
-                        uiState.isCscMuted ->
-                            "설정이 완료되면 앱을 계속 열어둘 필요가 없습니다. 평소에는 무선 디버깅을 꺼두고, 카메라 셔터음 설정을 바꿀 때만 잠시 켜면 됩니다."
-                        hasEffectivePermission ->
-                            "설정 → 카메라 설정에서 [카메라 무음 다시 적용]을 사용해 주세요. 적용할 때만 무선 디버깅을 잠시 켜면 됩니다."
-                        else ->
-                            "[1회 설정 시작]에서 6자리 페어링 코드를 입력하면 권한 연동과 무음 설정을 함께 진행합니다."
-                    }
+                },
+                onSecondaryAction = if (homeStatus == HomeStatus.READY) null else openCamera
+            )
+
+            if (homeStatus == HomeStatus.SETUP_REQUIRED) {
+                Spacer(modifier = Modifier.height(20.dp))
+                SetupProgressCard(uiState)
+            }
+
+            if (homeStatus == HomeStatus.REAPPLY_REQUIRED) {
+                Spacer(modifier = Modifier.height(20.dp))
+                RecoveryCard(
+                    wirelessDebuggingEnabled = uiState.isWirelessDebuggingEnabled,
+                    onReapply = { viewModel.toggleCscMute(true) }
                 )
             }
 
             availableAppUpdateVersion?.let { version ->
-                Spacer(modifier = Modifier.height(24.dp))
-
-                GroupLabel("앱 업데이트")
-                SettingsCard {
-                    ActionRow(
-                        title = if (isAppUpdatePreparing) {
-                            "v$version 업데이트 준비 중…"
-                        } else {
-                            "v$version 업데이트"
-                        },
-                        onClick = startHomeAppUpdate
-                    )
-                    RowDivider()
-                    InfoRow(
-                        title = "새 버전을 사용할 수 있습니다",
-                        subtitle = "[업데이트]를 누른 뒤에만 APK를 다운로드하고 SHA-256·패키지·버전·서명을 검증합니다. 검증이 끝나면 Android 설치 화면을 열며, 최종 설치는 사용자가 직접 확인합니다."
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            GroupLabel("초기 설정 및 복구")
-            SettingsCard {
-                PermissionSetupSection(
-                    hasPermission = hasEffectivePermission,
-                    onStartNotificationPairing = {
-                        if (!com.charmingcolor.shuttersoundzero.core.CscMuteManager.isSamsungDevice()) {
-                            Toast.makeText(
-                                context,
-                                "⚠️ 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        } else {
-                            requestPairingNotification()
-                        }
-                    },
-                    onResetPermission = { viewModel.resetPermission() }
+                Spacer(modifier = Modifier.height(20.dp))
+                UpdateCard(
+                    version = version,
+                    isPreparing = isAppUpdatePreparing,
+                    onUpdate = startHomeAppUpdate
                 )
             }
 
-            if (!hasEffectivePermission) {
-                Spacer(modifier = Modifier.height(24.dp))
-
-                GroupLabel("알림 설정 변경")
-                SettingsCard {
-                    NotificationSettingsChangeContent(
-                        onOpenNotificationSettings = {
-                            PairingNotificationHelper.openNotificationSettings(context)
-                        }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            GroupLabel("주의사항 및 법적 고지")
-            SettingsCard {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 18.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "⚖️",
-                            fontSize = 16.sp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "불법촬영 및 사생활 침해 금지 안내",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "본 앱은 도서관, 미술관, 학술대회, 강의실 등 정숙이 요구되는 공공장소나 반려동물·아기 촬영 등 정당한 편의를 위해 제공됩니다.\n\n" +
-                                "• 타인의 의사에 반하는 불법촬영, 성적 수치심을 유발하는 촬영, 사생활 침해 목적으로 절대 사용할 수 없습니다.\n" +
-                                "• 위반 시 「성폭력범죄의 처벌 등에 관한 특례법」(카메라등이용촬영죄) 등 관련 법률에 따라 엄중한 형사 처벌을 받을 수 있습니다.\n" +
-                                "• 모든 촬영 행위에 대한 법적 책임은 사용자 본인에게 있습니다.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(28.dp))
         }
     }
 
@@ -459,9 +394,9 @@ fun MainScreen(
             text = {
                 Text(
                     if (appUpdateProgress > 0) {
-                        "APK 다운로드 및 검증 중 · $appUpdateProgress%"
+                        "업데이트 파일을 확인하고 있습니다. · $appUpdateProgress%"
                     } else {
-                        "최신 정식 버전을 확인하고 업데이트를 준비하고 있습니다."
+                        "최신 버전을 확인하고 업데이트를 준비하고 있습니다."
                     }
                 )
             },
@@ -505,11 +440,11 @@ fun MainScreen(
         com.charmingcolor.shuttersoundzero.ui.components.ModernPromptDialog(
             eyebrow = "연결 확인",
             title = "Wi-Fi 연결이 필요해요",
-            message = "1회 설정을 진행하려면 기기가 Wi-Fi 네트워크에 연결되어 있어야 합니다.\n\nWi-Fi 설정에서 네트워크에 연결한 뒤 [1회 설정 시작]을 다시 눌러 주세요.",
+            message = "1회 설정을 진행하려면 Wi-Fi에 연결되어 있어야 합니다.\n\nWi-Fi에 연결한 뒤 다시 [1회 설정 시작]을 눌러 주세요.",
             primaryLabel = "Wi-Fi 설정 열기",
             onPrimary = {
                 showWifiRequiredDialog = false
-                com.charmingcolor.shuttersoundzero.core.CscMuteManager.openWifiSettings(context)
+                CscMuteManager.openWifiSettings(context)
             },
             secondaryLabel = "닫기",
             onSecondary = { showWifiRequiredDialog = false },
@@ -521,34 +456,27 @@ fun MainScreen(
         AlertDialog(
             onDismissRequest = { viewModel.dismissSwitchFailureHelp() },
             shape = RoundedCornerShape(24.dp),
-            title = {
-                Text(
-                    text = "무선 디버깅이 필요합니다",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            },
+            title = { Text("무선 디버깅을 켜 주세요") },
             text = {
                 Text(
-                    text = "카메라 셔터음 설정을 바꾸는 순간에만 [무선 디버깅]이 필요합니다.\n\n[무선 디버깅 켜기]에서 활성화한 뒤 앱으로 돌아와 다시 시도해 주세요. 설정 변경이 끝나면 앱이 무선 디버깅을 다시 끄려고 시도합니다. 이미 적용된 카메라 무음 설정은 무선 디버깅을 꺼도 유지됩니다.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
+                    "카메라 설정을 바꾸는 동안에만 무선 디버깅이 필요합니다.\n\n" +
+                        "무선 디버깅을 켠 뒤 앱으로 돌아와 [다시 적용하기]를 눌러 주세요. 완료 후에는 앱이 다시 끄려고 시도합니다."
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
                         viewModel.dismissSwitchFailureHelp()
-                        com.charmingcolor.shuttersoundzero.core.CscMuteManager.openWirelessDebuggingOrDevOptions(context)
+                        CscMuteManager.openWirelessDebuggingOrDevOptions(context)
                     },
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("무선 디버깅 켜기")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissSwitchFailureHelp() }) {
-                    Text("확인")
+                    Text("나중에")
                 }
             }
         )
@@ -561,19 +489,19 @@ fun MainScreen(
             title = { Text("무선 디버깅을 꺼 주세요") },
             text = {
                 Text(
-                    "카메라 무음 설정은 정상적으로 적용됐지만 이 기기에서는 무선 디버깅을 자동으로 끄지 못했습니다.\n\n" +
-                        "무선 디버깅을 계속 켜두면 Wi-Fi 연결 시 허용 여부를 묻는 시스템 알림이 다시 나타날 수 있습니다. 지금 무선 디버깅을 꺼 주세요."
+                    "카메라 무음 설정은 완료됐지만 이 기기에서는 무선 디버깅을 자동으로 끄지 못했습니다.\n\n" +
+                        "기기 설정에서 무선 디버깅을 직접 꺼 주세요."
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
                         viewModel.dismissWirelessDebuggingCleanupHelp()
-                        com.charmingcolor.shuttersoundzero.core.CscMuteManager.openWirelessDebuggingOrDevOptions(context)
+                        CscMuteManager.openWirelessDebuggingOrDevOptions(context)
                     },
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("무선 디버깅 설정 열기")
+                    Text("설정 열기")
                 }
             },
             dismissButton = {
@@ -590,27 +518,32 @@ private fun friendlyHomeUpdateError(error: Exception): String {
         ?: "업데이트를 준비하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요."
 }
 
-// ── 헤더 ──────────────────────────────────────
-
 @Composable
 private fun AppHeader(onSettingsClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = CardPaddingH)
-            .padding(top = 12.dp, bottom = 8.dp),
+            .padding(horizontal = ScreenPadding)
+            .padding(top = 14.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = "셔터음 제로",
-            style = MaterialTheme.typography.headlineLarge.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 30.sp,
-                letterSpacing = (-0.5).sp
-            ),
-            color = MaterialTheme.colorScheme.onBackground
-        )
+        Column {
+            Text(
+                text = "셔터음 제로",
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 30.sp,
+                    letterSpacing = (-0.5).sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = "필요한 상태만 한눈에 확인하세요",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         IconButton(onClick = onSettingsClick) {
             Icon(
                 imageVector = Icons.Default.Settings,
@@ -621,269 +554,315 @@ private fun AppHeader(onSettingsClick: () -> Unit) {
     }
 }
 
-// ── 공통 레이아웃 컴포넌트 ─────────────────────
-
 @Composable
-private fun GroupLabel(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelMedium.copy(
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.1.sp
-        ),
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = CardPaddingH + 4.dp, bottom = 6.dp)
-    )
-}
+private fun StatusHeroCard(
+    status: HomeStatus,
+    onPrimaryAction: () -> Unit,
+    onSecondaryAction: (() -> Unit)?
+) {
+    val title = when (status) {
+        HomeStatus.READY -> "카메라 무음 설정 완료"
+        HomeStatus.REAPPLY_REQUIRED -> "카메라 무음 다시 적용 필요"
+        HomeStatus.SETUP_REQUIRED -> "처음 한 번만 설정해 주세요"
+    }
+    val subtitle = when (status) {
+        HomeStatus.READY -> "진동·무음 모드에서 촬영음이 나지 않도록 설정되어 있습니다."
+        HomeStatus.REAPPLY_REQUIRED -> "기기 연결은 유지되어 있어 카메라 설정만 다시 적용하면 됩니다."
+        HomeStatus.SETUP_REQUIRED -> "3단계 안내에 따라 연결하면 이후에는 앱을 계속 열어둘 필요가 없습니다."
+    }
+    val badgeText = when (status) {
+        HomeStatus.READY -> "정상"
+        HomeStatus.REAPPLY_REQUIRED -> "조치 필요"
+        HomeStatus.SETUP_REQUIRED -> "설정 필요"
+    }
+    val badgeColor = when (status) {
+        HomeStatus.READY -> StatusGreen
+        HomeStatus.REAPPLY_REQUIRED -> StatusAmber
+        HomeStatus.SETUP_REQUIRED -> BrandBlueLight
+    }
+    val primaryLabel = when (status) {
+        HomeStatus.READY -> "카메라 열어서 확인"
+        HomeStatus.REAPPLY_REQUIRED -> "다시 적용하기"
+        HomeStatus.SETUP_REQUIRED -> "1회 설정 시작"
+    }
 
-@Composable
-private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = CardPaddingH),
+            .padding(horizontal = ScreenPadding),
         shape = RoundedCornerShape(CardRadius),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column { content() }
-    }
-}
-
-@Composable
-private fun RowDivider() {
-    HorizontalDivider(
-        modifier = Modifier.padding(start = CardPaddingH),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        thickness = 0.5.dp
-    )
-}
-
-@Composable
-private fun SwitchRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = CardPaddingH, vertical = CardPaddingV),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = badgeText,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = badgeColor
+            )
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 20.sp
             )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = MaterialTheme.colorScheme.primary
-            )
-        )
-    }
-}
 
-@Composable
-private fun StatusRow(
-    title: String,
-    valueText: String,
-    valueColor: Color,
-    onClick: (() -> Unit)?
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-            .padding(horizontal = CardPaddingH, vertical = CardPaddingV),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = valueText,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = valueColor
-        )
-    }
-}
+            if (status == HomeStatus.READY) {
+                Text(
+                    text = "앱을 종료해도 설정은 유지됩니다. 소리 모드에서는 시스템 음량에 따라 촬영음이 들릴 수 있습니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 18.sp
+                )
+            }
 
-@Composable
-private fun ActionRow(title: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = CardPaddingH, vertical = CardPaddingV),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "›",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun InfoRow(title: String, subtitle: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = CardPaddingH, vertical = CardPaddingV)
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = 18.sp
-        )
-    }
-}
-
-@Composable
-private fun NotificationSettingsChangeContent(
-    onOpenNotificationSettings: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = CardPaddingH, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text = "알림 팝업 안내",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "ShutterSoundZero를 [자세한 팝업]으로 설정하면 페어링 알림에서 [코드 입력] 버튼을 바로 사용할 수 있습니다.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = 19.sp
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Button(
-            onClick = onOpenNotificationSettings,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
-        ) {
-            Text(
-                text = "앱 알림 설정 열기",
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        }
-    }
-}
-
-// ── 권한 설정 통합 섹션 ──────────────────────
-
-@Composable
-private fun PermissionSetupSection(
-    hasPermission: Boolean,
-    onStartNotificationPairing: () -> Unit,
-    onResetPermission: () -> Unit
-) {
-    StatusRow(
-        title = "시스템 보안 설정 권한",
-        valueText = if (hasPermission) "연동 완료" else "1회 설정 필요",
-        valueColor = if (hasPermission) StatusGreen else BrandBlueLight,
-        onClick = if (!hasPermission) onStartNotificationPairing else null
-    )
-
-    RowDivider()
-
-    if (!hasPermission) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = CardPaddingH, vertical = 12.dp)
-        ) {
+            Spacer(modifier = Modifier.height(2.dp))
             Button(
-                onClick = onStartNotificationPairing,
+                onClick = onPrimaryAction,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
             ) {
                 Text(
-                    text = "1회 설정 시작",
+                    text = primaryLabel,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
             }
+
+            onSecondaryAction?.let { action ->
+                OutlinedButton(
+                    onClick = action,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text("카메라 열어보기")
+                }
+            }
         }
+    }
+}
 
-        RowDivider()
+@Composable
+private fun SetupProgressCard(uiState: MainUiState) {
+    val wirelessComplete = uiState.isWirelessDebuggingEnabled
+    val pairingComplete = uiState.hasCscPermission
+    val applyComplete = uiState.isCscMuted
 
-        InfoRow(
-            title = "1회 설정 안내",
-            subtitle = "개발자 옵션의 [페어링 코드로 기기 페어링] 화면에서 상단바를 내려 6자리 숫자만 입력하면 됩니다. 앱이 권한 연동과 무음 설정을 적용한 뒤 무선 디버깅 자동 종료를 시도합니다."
-        )
-    } else {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = ScreenPadding),
+        shape = RoundedCornerShape(CardRadius),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = CardPaddingH, vertical = 12.dp)
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            OutlinedButton(
-                onClick = onResetPermission,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
+            Text(
+                text = "1회 설정 진행",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "지금 필요한 단계만 따라가면 됩니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            SetupStepRow(
+                number = 1,
+                title = "무선 디버깅 켜기",
+                subtitle = "1회 설정 시작을 누르면 필요한 설정 화면을 엽니다.",
+                state = when {
+                    wirelessComplete -> StepVisualState.COMPLETE
+                    else -> StepVisualState.CURRENT
+                }
+            )
+            SetupStepRow(
+                number = 2,
+                title = "6자리 코드 입력",
+                subtitle = "상단 알림의 [코드 입력]에서 화면에 보이는 숫자 6자리를 입력합니다.",
+                state = when {
+                    pairingComplete -> StepVisualState.COMPLETE
+                    wirelessComplete -> StepVisualState.CURRENT
+                    else -> StepVisualState.PENDING
+                }
+            )
+            SetupStepRow(
+                number = 3,
+                title = "카메라 무음 적용",
+                subtitle = "연결에 성공하면 앱이 자동으로 적용하고 마무리합니다.",
+                state = when {
+                    applyComplete -> StepVisualState.COMPLETE
+                    pairingComplete -> StepVisualState.CURRENT
+                    else -> StepVisualState.PENDING
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SetupStepRow(
+    number: Int,
+    title: String,
+    subtitle: String,
+    state: StepVisualState
+) {
+    val markerColor = when (state) {
+        StepVisualState.COMPLETE -> StatusGreen
+        StepVisualState.CURRENT -> BrandBlueLight
+        StepVisualState.PENDING -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val titleColor = when (state) {
+        StepVisualState.PENDING -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Card(
+            modifier = Modifier.size(30.dp),
+            shape = CircleShape,
+            colors = CardDefaults.cardColors(containerColor = markerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "권한 재설정 (연동 해제)",
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.error
+                    text = if (state == StepVisualState.COMPLETE) "✓" else number.toString(),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (state == StepVisualState.PENDING) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        Color.White
+                    }
                 )
             }
         }
-
-        RowDivider()
-
-        InfoRow(
-            title = "설정 변경 및 복구 안내",
-            subtitle = "권한 연동은 완료되어 있습니다. 카메라 무음 상태를 다시 적용하거나 원래대로 복원할 때만 설정 → 카메라 설정에서 무선 디버깅을 잠시 켜면 됩니다."
-        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = titleColor
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = when (state) {
+                    StepVisualState.COMPLETE -> "완료"
+                    else -> subtitle
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state == StepVisualState.COMPLETE) {
+                    StatusGreen
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                lineHeight = 18.sp
+            )
+        }
     }
+}
 
-    RowDivider()
+@Composable
+private fun RecoveryCard(
+    wirelessDebuggingEnabled: Boolean,
+    onReapply: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = ScreenPadding),
+        shape = RoundedCornerShape(CardRadius),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "복구 안내",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = if (wirelessDebuggingEnabled) {
+                    "무선 디버깅이 켜져 있습니다. 아래 버튼을 누르면 카메라 무음 설정을 바로 다시 적용합니다."
+                } else {
+                    "기기 연결은 남아 있습니다. 다시 적용할 때만 무선 디버깅을 잠시 켜면 됩니다."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp
+            )
+            OutlinedButton(
+                onClick = onReapply,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("카메라 무음 다시 적용")
+            }
+        }
+    }
+}
 
-    InfoRow(
-        title = "소프트웨어 업데이트 안내",
-        subtitle = "One UI 또는 Android 업데이트 후 셔터음 설정이 그대로면 아무 작업이 필요 없습니다. 셔터음이 다시 들릴 때만 [카메라 무음 다시 적용]을 사용하고, [1회 설정 필요]가 표시된 경우에만 기기 연동을 다시 진행하면 됩니다."
-    )
+@Composable
+private fun UpdateCard(
+    version: String,
+    isPreparing: Boolean,
+    onUpdate: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = ScreenPadding),
+        shape = RoundedCornerShape(CardRadius),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "새 버전 v$version",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "변경 내용을 확인하고 안전하게 업데이트할 수 있습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(
+                onClick = onUpdate,
+                enabled = !isPreparing,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(if (isPreparing) "업데이트 준비 중…" else "업데이트")
+            }
+        }
+    }
 }
