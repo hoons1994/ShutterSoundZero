@@ -325,20 +325,24 @@ fun MainScreen(
         }
     }
 
+    val reapplyAction: () -> Unit = {
+        viewModel.toggleCscMute(true)
+    }
+    val setupAction: () -> Unit = {
+        if (!CscMuteManager.isSamsungDevice()) {
+            Toast.makeText(
+                context,
+                "이 앱은 삼성 갤럭시 전용 앱입니다.",
+                Toast.LENGTH_LONG
+            ).show()
+        } else {
+            requestPairingNotification()
+        }
+    }
     val primaryAction: () -> Unit = when (homeStatus) {
         HomeStatus.READY -> openCamera
-        HomeStatus.REAPPLY_REQUIRED -> { viewModel.toggleCscMute(true) }
-        HomeStatus.SETUP_REQUIRED -> {
-            if (!CscMuteManager.isSamsungDevice()) {
-                Toast.makeText(
-                    context,
-                    "이 앱은 삼성 갤럭시 전용 앱입니다.",
-                    Toast.LENGTH_LONG
-                ).show()
-            } else {
-                requestPairingNotification()
-            }
-        }
+        HomeStatus.REAPPLY_REQUIRED -> reapplyAction
+        HomeStatus.SETUP_REQUIRED -> setupAction
     }
 
     Scaffold(
