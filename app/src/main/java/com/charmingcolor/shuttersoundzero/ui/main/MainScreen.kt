@@ -325,6 +325,24 @@ fun MainScreen(
         }
     }
 
+    val primaryAction: () -> Unit = when (homeStatus) {
+        HomeStatus.READY -> openCamera
+        HomeStatus.REAPPLY_REQUIRED -> { { viewModel.toggleCscMute(true) } }
+        HomeStatus.SETUP_REQUIRED -> {
+            {
+                if (!CscMuteManager.isSamsungDevice()) {
+                    Toast.makeText(
+                        context,
+                        "이 앱은 삼성 갤럭시 전용 앱입니다.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    requestPairingNotification()
+                }
+            }
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         modifier = modifier.fillMaxSize(),
@@ -341,23 +359,7 @@ fun MainScreen(
 
             StatusHeroCard(
                 status = homeStatus,
-                onPrimaryAction = when (homeStatus) {
-                    HomeStatus.READY -> openCamera
-                    HomeStatus.REAPPLY_REQUIRED -> { { viewModel.toggleCscMute(true) } }
-                    HomeStatus.SETUP_REQUIRED -> {
-                        {
-                            if (!CscMuteManager.isSamsungDevice()) {
-                                Toast.makeText(
-                                    context,
-                                    "이 앱은 삼성 갤럭시 전용 앱입니다.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            } else {
-                                requestPairingNotification()
-                            }
-                        }
-                    }
-                },
+                onPrimaryAction = primaryAction,
                 onSecondaryAction = if (homeStatus == HomeStatus.READY) null else openCamera
             )
 
