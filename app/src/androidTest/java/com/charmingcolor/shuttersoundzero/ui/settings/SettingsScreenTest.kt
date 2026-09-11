@@ -4,7 +4,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollTo
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -27,7 +26,7 @@ class SettingsScreenTest {
         composeTestRule.onNodeWithText("카메라 설정").assertExists()
         composeTestRule.onNodeWithText("앱 동작").assertExists()
         composeTestRule.onNodeWithText("업데이트").assertExists()
-        composeTestRule.onNodeWithText("도움말 및 지원").performScrollTo().assertExists()
-        composeTestRule.onNodeWithText("정보").performScrollTo().assertExists()
+        composeTestRule.onNodeWithText("도움말 및 지원").assertExists()
+        composeTestRule.onNodeWithText("정보").assertExists()
     }
 }
