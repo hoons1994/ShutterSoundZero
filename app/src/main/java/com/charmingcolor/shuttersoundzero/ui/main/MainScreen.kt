@@ -549,10 +549,9 @@ private fun AppHeader(onSettingsClick: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = ScreenPadding)
             .padding(top = 14.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "셔터음 제로",
                 style = MaterialTheme.typography.headlineLarge.copy(
@@ -568,6 +567,7 @@ private fun AppHeader(onSettingsClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        Spacer(modifier = Modifier.width(8.dp))
         IconButton(onClick = onSettingsClick) {
             Icon(
                 imageVector = Icons.Default.Settings,

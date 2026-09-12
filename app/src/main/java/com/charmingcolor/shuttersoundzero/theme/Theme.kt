@@ -1,7 +1,9 @@
 package com.charmingcolor.shuttersoundzero.theme
 
 import android.app.Activity
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -27,21 +29,44 @@ private val ShutterZeroLightColorScheme = lightColorScheme(
     surfaceContainerLowest = ScreenBgLight
 )
 
+private val ShutterZeroDarkColorScheme = darkColorScheme(
+    primary = BrandBlueDark,
+    onPrimary = Color(0xFF001B3D),
+    primaryContainer = Color(0xFF173A63),
+    onPrimaryContainer = Color(0xFFD6E8FF),
+    secondary = Color(0xFF9CCAFF),
+    onSecondary = Color(0xFF002F5C),
+    background = ScreenBgDark,
+    onBackground = TextPrimaryDark,
+    surface = SurfaceDark,
+    onSurface = TextPrimaryDark,
+    surfaceVariant = SurfaceVariantDark,
+    onSurfaceVariant = TextSecondaryDark,
+    surfaceContainer = SurfaceDark,
+    surfaceContainerHigh = SurfaceVariantDark,
+    surfaceContainerLowest = ScreenBgDark
+)
+
 @Composable
 fun ShutterSoundZeroTheme(
-    darkTheme: Boolean = false,
+    darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = ShutterZeroLightColorScheme
+    val colorScheme = if (darkTheme) {
+        ShutterZeroDarkColorScheme
+    } else {
+        ShutterZeroLightColorScheme
+    }
 
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window
             if (window != null) {
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
-                WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = true
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
             }
         }
     }
