@@ -25,6 +25,12 @@ object PairingNotificationHelper {
     const val ACTION_SUBMIT_PAIRING_CODE = "com.charmingcolor.shuttersoundzero.ACTION_SUBMIT_PAIRING_CODE"
     const val ACTION_CANCEL_PAIRING = "com.charmingcolor.shuttersoundzero.ACTION_CANCEL_PAIRING"
 
+    private data class PairingNotificationCopy(
+        val title: String,
+        val summaryText: String,
+        val bigText: String
+    )
+
     fun areNotificationsEnabled(context: Context): Boolean {
         return NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
@@ -59,14 +65,13 @@ object PairingNotificationHelper {
 
     /**
      * 6자리 코드 입력이 끝날 때까지 유지되는 1회 설정 알림.
-     * 내부 연결 정보는 사용자 문구에 노출하지 않고, 현재 필요한 행동만 안내한다.
+     * 서비스는 [PairingNotificationState]만 전달하고, 사용자 문구는 이 계층에서 결정한다.
      */
     fun buildPairingNotification(
         context: Context,
         pairingPort: Int? = null,
-        statusMessage: String? = null,
-        isDevOptionsOff: Boolean = false,
-        statusDetail: String? = null
+        state: PairingNotificationState? = null,
+        isDevOptionsOff: Boolean = false
     ): Notification {
         createNotificationChannel(context)
 
@@ -109,38 +114,16 @@ object PairingNotificationHelper {
             cancelPendingIntent
         ).build()
 
-        val userStatusMessage = statusMessage?.let(::userFacingStatusMessage)
-        val userStatusDetail = statusDetail?.let(::userFacingStatusDetail)
-
-        val title = when {
-            userStatusMessage != null -> userStatusMessage
-            isDevOptionsOff -> "1회 설정 준비"
-            pairingPort != null -> "6자리 코드 입력"
-            else -> "1회 설정 진행"
-        }
-        val summaryText = when {
-            userStatusDetail != null -> userStatusDetail
-            isDevOptionsOff -> "[소프트웨어 정보]에서 [빌드번호]를 7번 눌러 개발자 옵션을 켜 주세요."
-            pairingPort != null -> "화면에 표시된 6자리 코드를 [코드 입력]에 입력해 주세요."
-            else -> "무선 디버깅에서 [페어링 코드로 기기 페어링]을 열어 주세요."
-        }
-        val bigText = when {
-            userStatusDetail != null -> userStatusDetail
-            userStatusMessage != null && pairingPort != null ->
-                "[코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요."
-            userStatusMessage != null -> "홈 화면의 안내에 따라 1회 설정을 계속해 주세요."
-            isDevOptionsOff ->
-                "휴대전화 정보의 [소프트웨어 정보]에서 [빌드번호]를 7번 눌러 개발자 옵션을 켜 주세요."
-            pairingPort != null ->
-                "연결 화면을 찾았습니다. 화면에 표시된 6자리 코드를 아래 [코드 입력]에 입력해 주세요."
-            else ->
-                "[무선 디버깅] → [페어링 코드로 기기 페어링] 화면을 연 뒤 상단 알림의 [코드 입력]을 사용해 주세요."
-        }
+        val copy = resolvePairingNotificationCopy(
+            pairingPort = pairingPort,
+            state = state,
+            isDevOptionsOff = isDevOptionsOff
+        )
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(summaryText)
+            .setContentTitle(copy.title)
+            .setContentText(copy.summaryText)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -151,9 +134,9 @@ object PairingNotificationHelper {
             .setOnlyAlertOnce(false)
 
         // Plain setup notifications intentionally stay on the standard template so One UI can
-        // expose the RemoteInput action naturally. Status/error messages use expanded text.
-        if (userStatusMessage != null) {
-            builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+        // expose the RemoteInput action naturally. State/error messages use expanded text.
+        if (state != null) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(copy.bigText))
         }
 
         if (pairingPort != null) builder.addAction(replyAction)
@@ -168,45 +151,74 @@ object PairingNotificationHelper {
         return notification
     }
 
-    private fun userFacingStatusMessage(message: String): String {
-        return when (message) {
-            "개발자 옵션 활성화 완료" -> "개발자 옵션 준비 완료"
-            "⚠️ 무선 페어링 탐색을 시작할 수 없습니다." -> "⚠️ 1회 설정을 시작하지 못했습니다."
-            "⏳ 포트 탐색 대기 중: 화면의 6자리 코드를 다시 입력해 주세요." ->
-                "⏳ 연결 화면을 찾고 있습니다. 6자리 코드를 다시 입력해 주세요."
-            "⚠️ 페어링은 완료됐지만 무음 설정 적용에 실패했습니다. 무선 디버깅 상태를 확인한 뒤 다시 시도해 주세요." ->
-                "⚠️ 기기 연결은 완료됐지만 카메라 무음 설정을 적용하지 못했습니다."
-            "❌ 페어링에 실패했습니다. 화면의 6자리 코드를 확인해 다시 입력해 주세요." ->
-                "❌ 기기 연결에 실패했습니다. 6자리 코드를 확인해 다시 입력해 주세요."
-            "⏱️ 시간 초과: 코드를 다시 입력해 주세요." ->
-                "⏱️ 입력 시간이 초과되었습니다. 6자리 코드를 다시 입력해 주세요."
-            "❌ 페어링 중 오류가 발생했습니다. 무선 디버깅 상태를 확인하고 다시 시도해 주세요." ->
-                "❌ 기기 연결 중 문제가 발생했습니다. 홈 화면의 안내를 확인해 주세요."
-            else -> message
+    private fun resolvePairingNotificationCopy(
+        pairingPort: Int?,
+        state: PairingNotificationState?,
+        isDevOptionsOff: Boolean
+    ): PairingNotificationCopy {
+        val defaultSummary = when {
+            isDevOptionsOff -> "[소프트웨어 정보]에서 [빌드번호]를 7번 눌러 개발자 옵션을 켜 주세요."
+            pairingPort != null -> "화면에 표시된 6자리 코드를 [코드 입력]에 입력해 주세요."
+            else -> "무선 디버깅에서 [페어링 코드로 기기 페어링]을 열어 주세요."
         }
-    }
+        val defaultBigText = when {
+            isDevOptionsOff ->
+                "휴대전화 정보의 [소프트웨어 정보]에서 [빌드번호]를 7번 눌러 개발자 옵션을 켜 주세요."
+            pairingPort != null ->
+                "연결 화면을 찾았습니다. 화면에 표시된 6자리 코드를 아래 [코드 입력]에 입력해 주세요."
+            else ->
+                "[무선 디버깅] → [페어링 코드로 기기 페어링] 화면을 연 뒤 상단 알림의 [코드 입력]을 사용해 주세요."
+        }
 
-    private fun userFacingStatusDetail(detail: String): String {
-        return when (detail) {
-            "앱으로 돌아가 [권한 요청]을 누르세요." ->
-                "무선 디버깅을 켠 뒤 [페어링 코드로 기기 페어링]을 열어 주세요."
-            else -> detail
+        if (state == null) {
+            val title = when {
+                isDevOptionsOff -> "1회 설정 준비"
+                pairingPort != null -> "6자리 코드 입력"
+                else -> "1회 설정 진행"
+            }
+            return PairingNotificationCopy(title, defaultSummary, defaultBigText)
         }
+
+        val stateTitle = when (state) {
+            PairingNotificationState.DEVELOPER_OPTIONS_READY -> "개발자 옵션 준비 완료"
+            PairingNotificationState.DISCOVERY_START_FAILED -> "⚠️ 1회 설정을 시작하지 못했습니다."
+            PairingNotificationState.INVALID_PAIRING_CODE -> "⚠️ 숫자 6자리 페어링 코드를 정확히 입력해 주세요."
+            PairingNotificationState.DISCOVERY_WAITING ->
+                "⏳ 연결 화면을 찾고 있습니다. 6자리 코드를 다시 입력해 주세요."
+            PairingNotificationState.CAMERA_APPLY_FAILED ->
+                "⚠️ 기기 연결은 완료됐지만 카메라 무음 설정을 적용하지 못했습니다."
+            PairingNotificationState.PAIRING_FAILED ->
+                "❌ 기기 연결에 실패했습니다. 6자리 코드를 확인해 다시 입력해 주세요."
+            PairingNotificationState.PAIRING_TIMEOUT ->
+                "⏱️ 입력 시간이 초과되었습니다. 6자리 코드를 다시 입력해 주세요."
+            PairingNotificationState.PAIRING_ERROR ->
+                "❌ 기기 연결 중 문제가 발생했습니다. 홈 화면의 안내를 확인해 주세요."
+        }
+
+        if (state == PairingNotificationState.DEVELOPER_OPTIONS_READY) {
+            val nextStep = "무선 디버깅을 켠 뒤 [페어링 코드로 기기 페어링]을 열어 주세요."
+            return PairingNotificationCopy(stateTitle, nextStep, nextStep)
+        }
+
+        val bigText = if (pairingPort != null) {
+            "[코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요."
+        } else {
+            "홈 화면의 안내에 따라 1회 설정을 계속해 주세요."
+        }
+        return PairingNotificationCopy(stateTitle, defaultSummary, bigText)
     }
 
     fun showPairingNotification(
         context: Context,
         pairingPort: Int? = null,
-        statusMessage: String? = null,
-        isDevOptionsOff: Boolean = false,
-        statusDetail: String? = null
+        state: PairingNotificationState? = null,
+        isDevOptionsOff: Boolean = false
     ) {
         val notification = buildPairingNotification(
-            context,
-            pairingPort,
-            statusMessage,
-            isDevOptionsOff,
-            statusDetail
+            context = context,
+            pairingPort = pairingPort,
+            state = state,
+            isDevOptionsOff = isDevOptionsOff
         )
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
