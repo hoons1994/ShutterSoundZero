@@ -268,7 +268,7 @@ object PairingNotificationHelper {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("셔터음 제로: 설정 완료 ✨")
+            .setContentTitle("${context.getString(R.string.app_name)}: 설정 완료 ✨")
             .setContentText(
                 if (wirelessDebuggingDisabled) {
                     "카메라 무음 설정이 완료되었습니다. 앱을 계속 열어둘 필요가 없습니다."

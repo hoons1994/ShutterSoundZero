@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 셔터음 제로 자체 무선 디버깅(On-Device Wireless ADB) 매니저
+ * 셔터사운드 제로 자체 무선 디버깅(On-Device Wireless ADB) 매니저
  * PC나 외부 앱 없이 앱 단독으로 로컬 adbd와 TLS 페어링 및 셸 명령어 실행
  */
 class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
