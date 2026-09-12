@@ -7,14 +7,9 @@
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
 [![Version](https://img.shields.io/badge/Version-1.4.10-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
-```mermaid
-flowchart LR
-    A["① 무선 디버깅 켜기"] --> B["② 6자리 코드 입력"]
-    B --> C["③ 카메라 무음 적용"]
-    C --> D["완료 · 평소에는 앱을 계속 열 필요 없음"]
-```
-
-> One UI에서 간략한 팝업을 사용한다면 2단계의 **[알림 팝업 설정 열기]**로 ShutterSoundZero만 자세한 팝업으로 바꿀 수 있습니다.
+<div align="center">
+  <img src="ShutterSoundZero_Infographic.png" alt="셔터음 제로 안내 인포그래픽" width="720" />
+</div>
 
 ---
 
