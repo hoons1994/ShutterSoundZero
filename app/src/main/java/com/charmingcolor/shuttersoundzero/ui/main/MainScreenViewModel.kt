@@ -10,6 +10,7 @@ import com.charmingcolor.shuttersoundzero.core.CscTogglePersistencePolicy
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
+import com.charmingcolor.shuttersoundzero.data.SetupIssue
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ data class MainUiState(
     val isCscMuted: Boolean = false,
     val hasCscPermission: Boolean = false,
     val isWirelessDebuggingEnabled: Boolean = false,
+    val setupIssue: SetupIssue? = null,
     val adbGrantCommand: String = "",
     val adbDirectSetCommand: String = "",
     val adbCheckCommand: String = "",
@@ -50,6 +52,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
             isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
+            setupIssue = prefs.lastSetupIssue,
             adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
             adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
             adbCheckCommand = CscMuteManager.getAdbCheckCommand()
@@ -61,11 +64,16 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val perm = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
         val isMuted = CscMuteManager.isCscShutterSoundMuted(app)
 
+        if (perm && isMuted && prefs.lastSetupIssue != null) {
+            prefs.lastSetupIssue = null
+        }
+
         _uiState.update { current ->
             current.copy(
                 isCscMuted = isMuted,
                 hasCscPermission = perm,
                 isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
+                setupIssue = prefs.lastSetupIssue,
                 adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
                 adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
                 adbCheckCommand = CscMuteManager.getAdbCheckCommand()
@@ -77,8 +85,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         // 1회 설정은 이전 무선 디버깅 세션의 저장 포트/mDNS 발견값을 재사용하지 않고
         // 현재 기기가 게시하는 서비스만 새로 탐색해 시작한다.
         prefs.clearTransientAdbConnectionState()
+        prefs.lastSetupIssue = null
         adbManager.lastDiscoveredPairingPort = null
         adbManager.lastDiscoveredConnectPort = null
+        _uiState.update { it.copy(setupIssue = null) }
 
         // 사용자가 설정을 시작한 것만으로 권한 연동 상태를 성공으로 바꾸지 않는다.
         // 실제 pm grant와 CSC 적용이 완료된 뒤 StandaloneAdbManager가 이 값을 갱신한다.
@@ -151,10 +161,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             )
 
             if (actualStateMatchesRequest) {
+                if (enableMute) {
+                    prefs.lastSetupIssue = null
+                }
                 val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(app)
                 _uiState.update {
                     it.copy(
                         isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
+                        setupIssue = prefs.lastSetupIssue,
                         infoMessage = when {
                             enableMute && wirelessCleanup.isSuccess ->
                                 "카메라 무음 설정을 적용했고 무선 디버깅도 껐습니다."
@@ -200,10 +214,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun resetPermission() {
         viewModelScope.launch {
             val result = adbManager.revokePermissionViaAdb()
+            if (result.isSuccess) {
+                prefs.lastSetupIssue = null
+            }
             refreshState()
             _uiState.update {
                 if (result.isSuccess) {
                     it.copy(
+                        setupIssue = null,
                         infoMessage = "권한 연동이 해제되었습니다. 다시 연동하려면 아래 버튼을 눌러주세요.",
                         errorMessage = null
                     )
