@@ -1,6 +1,7 @@
 package com.charmingcolor.shuttersoundzero.ui.main
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -33,6 +34,8 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("무선 디버깅 켜기").fetchSemanticsNode()
         composeTestRule.onNodeWithText("6자리 코드 입력").fetchSemanticsNode()
         composeTestRule.onNodeWithText("카메라 무음 적용").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("간략한 팝업을 사용 중인가요?").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("알림 팝업 설정 열기").assertHasClickAction()
     }
 
     @Test
@@ -52,6 +55,9 @@ class MainScreenTest {
         )
         assertTrue(
             composeTestRule.onAllNodesWithText("1회 설정 시작").fetchSemanticsNodes().isEmpty()
+        )
+        assertTrue(
+            composeTestRule.onAllNodesWithText("알림 팝업 설정 열기").fetchSemanticsNodes().isEmpty()
         )
     }
 
@@ -90,6 +96,7 @@ class MainScreenTest {
         composeTestRule.onNodeWithText(
             "코드가 만료되었거나 일치하지 않았습니다. 새 6자리 코드를 확인해 다시 입력해 주세요."
         ).fetchSemanticsNode()
+        composeTestRule.onNodeWithText("알림 팝업 설정 열기").assertHasClickAction()
     }
 
     @Test
@@ -103,6 +110,9 @@ class MainScreenTest {
         composeTestRule.onNodeWithText(
             "기기 연결은 됐지만 카메라 설정을 적용하지 못했습니다. 무선 디버깅을 켠 상태에서 다시 시도해 주세요."
         ).fetchSemanticsNode()
+        assertTrue(
+            composeTestRule.onAllNodesWithText("알림 팝업 설정 열기").fetchSemanticsNodes().isEmpty()
+        )
     }
 
     @Test

@@ -685,6 +685,7 @@ private fun StatusHeroCard(
 
 @Composable
 private fun SetupProgressCard(uiState: MainUiState) {
+    val context = LocalContext.current
     val issue = uiState.setupIssue
     val wirelessComplete = uiState.isWirelessDebuggingEnabled || issue != null
     val pairingComplete = uiState.hasCscPermission || issue == SetupIssue.CAMERA_APPLY
@@ -753,6 +754,13 @@ private fun SetupProgressCard(uiState: MainUiState) {
                 state = step2State,
                 errorText = pairingErrorText
             )
+            if (!pairingComplete) {
+                NotificationPopupStyleHint(
+                    onOpenSettings = {
+                        PairingNotificationHelper.openNotificationSettings(context)
+                    }
+                )
+            }
             SetupStepRow(
                 number = 3,
                 title = "카메라 무음 적용",
@@ -764,6 +772,46 @@ private fun SetupProgressCard(uiState: MainUiState) {
                     null
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun NotificationPopupStyleHint(
+    onOpenSettings: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 42.dp, top = 2.dp, bottom = 6.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "간략한 팝업을 사용 중인가요?",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "ShutterSoundZero만 [자세한 팝업]으로 바꾸면 6자리 [코드 입력] 버튼을 바로 사용할 수 있습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp
+            )
+            OutlinedButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("알림 팝업 설정 열기")
+            }
         }
     }
 }
