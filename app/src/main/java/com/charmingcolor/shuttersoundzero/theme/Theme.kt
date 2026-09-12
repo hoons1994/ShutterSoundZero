@@ -50,7 +50,6 @@ private val ShutterZeroDarkColorScheme = darkColorScheme(
 @Composable
 fun ShutterSoundZeroTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = if (darkTheme) {
