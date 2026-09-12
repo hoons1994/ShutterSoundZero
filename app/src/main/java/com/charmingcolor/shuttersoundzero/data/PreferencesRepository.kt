@@ -102,6 +102,18 @@ class PreferencesRepository(context: Context) {
             }
         }
 
+    /**
+     * 마지막 1회 설정 실패 위치. 성공하거나 사용자가 다시 시작하면 비운다.
+     */
+    var lastSetupIssue: SetupIssue?
+        get() = prefs.getString(KEY_LAST_SETUP_ISSUE, null)?.let { stored ->
+            runCatching { SetupIssue.valueOf(stored) }.getOrNull()
+        }
+        set(value) = prefs.edit {
+            if (value == null) remove(KEY_LAST_SETUP_ISSUE)
+            else putString(KEY_LAST_SETUP_ISSUE, value.name)
+        }
+
     var isAppLockEnabled: Boolean
         get() = prefs.getBoolean(KEY_APP_LOCK_ENABLED, false)
         set(value) = prefs.edit { putBoolean(KEY_APP_LOCK_ENABLED, value) }
@@ -137,6 +149,7 @@ class PreferencesRepository(context: Context) {
         private const val KEY_LAST_CONNECT_PORT = "last_connect_port"
         private const val KEY_HAS_ADB_LINKAGE_HISTORY = "has_adb_linkage_history"
         private const val KEY_PERMISSION_REVOKED_BY_USER = "permission_revoked_by_user"
+        private const val KEY_LAST_SETUP_ISSUE = "last_setup_issue"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_APP_UPDATE_AUTO_CHECK = "app_update_auto_check"
         private const val KEY_LAST_APP_UPDATE_CHECK_AT = "last_app_update_check_at"
