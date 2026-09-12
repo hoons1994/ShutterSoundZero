@@ -17,6 +17,8 @@ import com.charmingcolor.shuttersoundzero.MainActivity
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
+import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
+import com.charmingcolor.shuttersoundzero.data.SetupIssue
 import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticLogger
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -87,6 +89,7 @@ class PairingForegroundService : Service() {
     }
 
     private val adbManager by lazy { StandaloneAdbManager.getInstance(this) }
+    private val prefs by lazy { PreferencesRepository.getInstance(this) }
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pairingJob: Job? = null
     private var isDeveloperOptionsObserverRegistered = false
@@ -123,6 +126,7 @@ class PairingForegroundService : Service() {
     }
 
     private fun startPairing(isDevOptionsOff: Boolean) {
+        prefs.lastSetupIssue = null
         DiagnosticLogger.record(
             this,
             DiagnosticLogger.Stage.PAIRING_DISCOVERY,
@@ -161,6 +165,7 @@ class PairingForegroundService : Service() {
                 }
             )
         } catch (e: Exception) {
+            prefs.lastSetupIssue = SetupIssue.PAIRING_DISCOVERY
             DiagnosticLogger.record(
                 this,
                 DiagnosticLogger.Stage.PAIRING_DISCOVERY,
@@ -179,6 +184,7 @@ class PairingForegroundService : Service() {
         val pairingPort = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
 
         if (code.length != 6 || !code.all(Char::isDigit)) {
+            prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
             DiagnosticLogger.record(
                 this,
                 DiagnosticLogger.Stage.PAIRING_CODE_SUBMITTED,
@@ -199,6 +205,7 @@ class PairingForegroundService : Service() {
 
         if (pairingJob?.isActive == true) return
 
+        prefs.lastSetupIssue = null
         DiagnosticLogger.record(
             this,
             DiagnosticLogger.Stage.PAIRING_CODE_SUBMITTED,
@@ -225,6 +232,7 @@ class PairingForegroundService : Service() {
                     }
 
                     if (port == null) {
+                        prefs.lastSetupIssue = SetupIssue.PAIRING_DISCOVERY
                         DiagnosticLogger.record(
                             this@PairingForegroundService,
                             DiagnosticLogger.Stage.PAIRING_DISCOVERY,
@@ -263,6 +271,7 @@ class PairingForegroundService : Service() {
                         )
                         val muteResult = adbManager.applyCameraMuteViaAdb()
                         if (muteResult.isSuccess) {
+                            prefs.lastSetupIssue = null
                             DiagnosticLogger.record(
                                 this@PairingForegroundService,
                                 DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
@@ -329,6 +338,7 @@ class PairingForegroundService : Service() {
                                 logFailure("Background activity launch restricted", e)
                             }
                         } else {
+                            prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
                             DiagnosticLogger.record(
                                 this@PairingForegroundService,
                                 DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
@@ -345,6 +355,7 @@ class PairingForegroundService : Service() {
                             )
                         }
                     } else {
+                        prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
                         DiagnosticLogger.record(
                             this@PairingForegroundService,
                             DiagnosticLogger.Stage.PAIRING,
@@ -364,6 +375,7 @@ class PairingForegroundService : Service() {
                 }
 
                 if (timedResult == null) {
+                    prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
                     DiagnosticLogger.record(
                         this@PairingForegroundService,
                         DiagnosticLogger.Stage.PAIRING_WORKFLOW,
@@ -383,6 +395,7 @@ class PairingForegroundService : Service() {
                 Log.i(TAG, "Pairing workflow cancelled during service shutdown")
                 throw e
             } catch (e: Exception) {
+                prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
                 DiagnosticLogger.record(
                     this@PairingForegroundService,
                     DiagnosticLogger.Stage.PAIRING_WORKFLOW,
