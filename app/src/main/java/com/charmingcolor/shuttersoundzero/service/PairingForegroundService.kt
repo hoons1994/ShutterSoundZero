@@ -21,6 +21,7 @@ import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.data.SetupIssue
 import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticLogger
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
+import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -100,9 +101,8 @@ class PairingForegroundService : Service() {
 
             PairingNotificationHelper.showPairingNotification(
                 this@PairingForegroundService,
-                statusMessage = "개발자 옵션 활성화 완료",
-                isDevOptionsOff = true,
-                statusDetail = "앱으로 돌아가 [권한 요청]을 누르세요."
+                state = PairingNotificationState.DEVELOPER_OPTIONS_READY,
+                isDevOptionsOff = true
             )
             unregisterDeveloperOptionsObserver()
         }
@@ -175,7 +175,7 @@ class PairingForegroundService : Service() {
             Log.w(TAG, "Unable to start pairing discovery (${e.javaClass.simpleName})")
             PairingNotificationHelper.showPairingNotification(
                 this,
-                statusMessage = "⚠️ 무선 페어링 탐색을 시작할 수 없습니다."
+                state = PairingNotificationState.DISCOVERY_START_FAILED
             )
         }
     }
@@ -193,7 +193,7 @@ class PairingForegroundService : Service() {
             val notification = PairingNotificationHelper.buildPairingNotification(
                 this,
                 pairingPort = pairingPort,
-                statusMessage = "⚠️ 숫자 6자리 페어링 코드를 정확히 입력해 주세요."
+                state = PairingNotificationState.INVALID_PAIRING_CODE
             )
             startForeground(
                 PairingNotificationHelper.NOTIFICATION_ID,
@@ -240,8 +240,7 @@ class PairingForegroundService : Service() {
                         )
                         PairingNotificationHelper.showPairingNotification(
                             this@PairingForegroundService,
-                            null,
-                            "⏳ 포트 탐색 대기 중: 화면의 6자리 코드를 다시 입력해 주세요."
+                            state = PairingNotificationState.DISCOVERY_WAITING
                         )
                         return@withTimeoutOrNull true
                     }
@@ -350,8 +349,7 @@ class PairingForegroundService : Service() {
                             } ?: Log.w(TAG, "Mute apply failed after pairing")
                             PairingNotificationHelper.showPairingNotification(
                                 this@PairingForegroundService,
-                                null,
-                                "⚠️ 페어링은 완료됐지만 무음 설정 적용에 실패했습니다. 무선 디버깅 상태를 확인한 뒤 다시 시도해 주세요."
+                                state = PairingNotificationState.CAMERA_APPLY_FAILED
                             )
                         }
                     } else {
@@ -367,8 +365,8 @@ class PairingForegroundService : Service() {
                         } ?: Log.w(TAG, "Pairing failed")
                         PairingNotificationHelper.showPairingNotification(
                             this@PairingForegroundService,
-                            port,
-                            "❌ 페어링에 실패했습니다. 화면의 6자리 코드를 확인해 다시 입력해 주세요."
+                            pairingPort = port,
+                            state = PairingNotificationState.PAIRING_FAILED
                         )
                     }
                     true
@@ -384,8 +382,7 @@ class PairingForegroundService : Service() {
                     Log.w(TAG, "Pairing timed out after 25 seconds")
                     PairingNotificationHelper.showPairingNotification(
                         this@PairingForegroundService,
-                        null,
-                        "⏱️ 시간 초과: 코드를 다시 입력해 주세요."
+                        state = PairingNotificationState.PAIRING_TIMEOUT
                     )
                 }
             } catch (e: java.util.concurrent.CancellationException) {
@@ -405,8 +402,7 @@ class PairingForegroundService : Service() {
                 logFailure("Pairing error", e)
                 PairingNotificationHelper.showPairingNotification(
                     this@PairingForegroundService,
-                    null,
-                    "❌ 페어링 중 오류가 발생했습니다. 무선 디버깅 상태를 확인하고 다시 시도해 주세요."
+                    state = PairingNotificationState.PAIRING_ERROR
                 )
             } finally {
                 pairingJob = null

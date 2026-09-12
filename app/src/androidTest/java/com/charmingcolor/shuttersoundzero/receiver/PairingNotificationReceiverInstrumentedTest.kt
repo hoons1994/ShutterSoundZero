@@ -11,6 +11,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
+import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -107,12 +108,11 @@ class PairingNotificationReceiverInstrumentedTest {
     }
 
     @Test
-    fun setupNotification_replacesLegacyButtonNameWithCurrentNextStep() {
+    fun developerOptionsReadyState_exposesCurrentNextStepWithoutLegacyCopy() {
         val notification = PairingNotificationHelper.buildPairingNotification(
             baseContext,
-            statusMessage = "개발자 옵션 활성화 완료",
-            isDevOptionsOff = true,
-            statusDetail = "앱으로 돌아가 [권한 요청]을 누르세요."
+            state = PairingNotificationState.DEVELOPER_OPTIONS_READY,
+            isDevOptionsOff = true
         )
 
         val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
@@ -124,6 +124,24 @@ class PairingNotificationReceiverInstrumentedTest {
             text
         )
         assertFalse(text.contains("권한 요청"))
+    }
+
+    @Test
+    fun pairingFailureState_keepsCodeEntryActionWithoutInternalJargon() {
+        val notification = PairingNotificationHelper.buildPairingNotification(
+            baseContext,
+            pairingPort = 37123,
+            state = PairingNotificationState.PAIRING_FAILED
+        )
+
+        val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
+        val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+
+        assertEquals("❌ 기기 연결에 실패했습니다. 6자리 코드를 확인해 다시 입력해 주세요.", title)
+        assertEquals("화면에 표시된 6자리 코드를 [코드 입력]에 입력해 주세요.", text)
+        assertFalse(title.contains("포트"))
+        assertFalse(text.contains("포트"))
+        assertTrue(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
     }
 
     @Test
