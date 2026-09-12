@@ -1,5 +1,6 @@
 package com.charmingcolor.shuttersoundzero.receiver
 
+import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
 import android.content.ContextWrapper
@@ -11,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.charmingcolor.shuttersoundzero.service.PairingForegroundService
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -85,6 +87,54 @@ class PairingNotificationReceiverInstrumentedTest {
             completeIntent.action
         )
         assertTrue(completeIntent.getBooleanExtra("wireless_debugging_disabled", false))
+    }
+
+    @Test
+    fun pairingNotification_hidesInternalPortAndFocusesOnCodeEntry() {
+        val notification = PairingNotificationHelper.buildPairingNotification(
+            baseContext,
+            pairingPort = 37123
+        )
+
+        val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
+        val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+
+        assertEquals("6자리 코드 입력", title)
+        assertEquals("화면에 표시된 6자리 코드를 [코드 입력]에 입력해 주세요.", text)
+        assertFalse(title.contains("포트"))
+        assertFalse(text.contains("포트"))
+        assertTrue(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
+    }
+
+    @Test
+    fun setupNotification_replacesLegacyButtonNameWithCurrentNextStep() {
+        val notification = PairingNotificationHelper.buildPairingNotification(
+            baseContext,
+            statusMessage = "개발자 옵션 활성화 완료",
+            isDevOptionsOff = true,
+            statusDetail = "앱으로 돌아가 [권한 요청]을 누르세요."
+        )
+
+        val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
+        val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+
+        assertEquals("개발자 옵션 준비 완료", title)
+        assertEquals(
+            "무선 디버깅을 켠 뒤 [페어링 코드로 기기 페어링]을 열어 주세요.",
+            text
+        )
+        assertFalse(text.contains("권한 요청"))
+    }
+
+    @Test
+    fun progressNotification_avoidsPermissionLinkageJargon() {
+        val notification = PairingNotificationHelper.buildProgressNotification(baseContext)
+        val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
+        val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+
+        assertEquals("카메라 무음 설정 적용 중 ⏳", title)
+        assertFalse(text.contains("권한 연동"))
+        assertTrue(text.contains("카메라 설정"))
     }
 
     private class RecordingContext(base: Context) : ContextWrapper(base) {
