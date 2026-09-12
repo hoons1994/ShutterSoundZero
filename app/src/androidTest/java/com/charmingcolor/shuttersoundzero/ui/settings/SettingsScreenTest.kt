@@ -1,6 +1,7 @@
 package com.charmingcolor.shuttersoundzero.ui.settings
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import org.junit.Before
@@ -27,5 +28,11 @@ class SettingsScreenTest {
         composeTestRule.onNodeWithText("업데이트").fetchSemanticsNode()
         composeTestRule.onNodeWithText("도움말 및 지원").fetchSemanticsNode()
         composeTestRule.onNodeWithText("정보").fetchSemanticsNode()
+    }
+
+    @Test
+    fun detailedPopupSetting_isAvailableFromHelpSection() {
+        composeTestRule.onNodeWithText("알림 팝업 자세히 보기")
+            .assertHasClickAction()
     }
 }

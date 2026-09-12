@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticLogger
 import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticReportBuilder
+import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
 
 private data class HelpQuestion(val id: String, val question: String, val answer: String)
 
@@ -110,6 +111,15 @@ fun SettingsHelpSection() {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
+            NotificationPopupSettingsRow(
+                onClick = { PairingNotificationHelper.openNotificationSettings(context) }
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                thickness = 0.5.dp
+            )
+
             helpQuestions.forEach { item ->
                 HelpAccordionItem(
                     item = item,
@@ -200,6 +210,39 @@ fun SettingsHelpSection() {
             },
             shape = RoundedCornerShape(20.dp),
             containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+}
+
+@Composable
+private fun NotificationPopupSettingsRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "알림 팝업 자세히 보기",
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "간략한 팝업을 사용 중이라면 ShutterSoundZero만 자세한 팝업으로 바꿔 6자리 코드 입력을 더 편하게 사용할 수 있습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 19.sp
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = "앱 알림 설정 열기",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
