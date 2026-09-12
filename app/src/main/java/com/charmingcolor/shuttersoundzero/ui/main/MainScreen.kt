@@ -63,6 +63,7 @@ import androidx.navigation3.runtime.NavKey
 import com.charmingcolor.shuttersoundzero.Settings
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
+import com.charmingcolor.shuttersoundzero.data.SetupIssue
 import com.charmingcolor.shuttersoundzero.theme.BrandBlueLight
 import com.charmingcolor.shuttersoundzero.theme.StatusAmber
 import com.charmingcolor.shuttersoundzero.theme.StatusGreen
@@ -75,16 +76,23 @@ private val CardRadius = 24.dp
 private val ScreenPadding = 20.dp
 private const val AccessLocalNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
 
-private enum class HomeStatus {
+internal enum class HomeStatus {
     READY,
     REAPPLY_REQUIRED,
     SETUP_REQUIRED
 }
 
-private enum class StepVisualState {
+internal enum class StepVisualState {
     COMPLETE,
     CURRENT,
+    ERROR,
     PENDING
+}
+
+internal fun resolveHomeStatus(uiState: MainUiState): HomeStatus = when {
+    uiState.isCscMuted && uiState.hasCscPermission -> HomeStatus.READY
+    uiState.hasCscPermission -> HomeStatus.REAPPLY_REQUIRED
+    else -> HomeStatus.SETUP_REQUIRED
 }
 
 @Composable
@@ -308,12 +316,6 @@ fun MainScreen(
         }
     }
 
-    val homeStatus = when {
-        uiState.isCscMuted && uiState.hasCscPermission -> HomeStatus.READY
-        uiState.hasCscPermission -> HomeStatus.REAPPLY_REQUIRED
-        else -> HomeStatus.SETUP_REQUIRED
-    }
-
     val openCamera: () -> Unit = {
         try {
             val cameraIntent = Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).apply {
@@ -339,56 +341,23 @@ fun MainScreen(
             requestPairingNotification()
         }
     }
-    val primaryAction: () -> Unit = when (homeStatus) {
-        HomeStatus.READY -> openCamera
-        HomeStatus.REAPPLY_REQUIRED -> reapplyAction
-        HomeStatus.SETUP_REQUIRED -> setupAction
-    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-        ) {
-            AppHeader(onSettingsClick = { onItemClick(Settings) })
-            Spacer(modifier = Modifier.height(10.dp))
-
-            StatusHeroCard(
-                status = homeStatus,
-                onPrimaryAction = primaryAction,
-                onSecondaryAction = if (homeStatus == HomeStatus.READY) null else openCamera
-            )
-
-            if (homeStatus == HomeStatus.SETUP_REQUIRED) {
-                Spacer(modifier = Modifier.height(20.dp))
-                SetupProgressCard(uiState)
-            }
-
-            if (homeStatus == HomeStatus.REAPPLY_REQUIRED) {
-                Spacer(modifier = Modifier.height(20.dp))
-                RecoveryCard(
-                    wirelessDebuggingEnabled = uiState.isWirelessDebuggingEnabled,
-                    onReapply = { viewModel.toggleCscMute(true) }
-                )
-            }
-
-            availableAppUpdateVersion?.let { version ->
-                Spacer(modifier = Modifier.height(20.dp))
-                UpdateCard(
-                    version = version,
-                    isPreparing = isAppUpdatePreparing,
-                    onUpdate = startHomeAppUpdate
-                )
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-        }
+        HomeContent(
+            uiState = uiState,
+            availableAppUpdateVersion = availableAppUpdateVersion,
+            isAppUpdatePreparing = isAppUpdatePreparing,
+            onSettingsClick = { onItemClick(Settings) },
+            onSetup = setupAction,
+            onReapply = reapplyAction,
+            onOpenCamera = openCamera,
+            onUpdate = startHomeAppUpdate,
+            modifier = Modifier.padding(innerPadding)
+        )
     }
 
     if (isAppUpdatePreparing) {
@@ -517,6 +486,57 @@ fun MainScreen(
     }
 }
 
+@Composable
+internal fun HomeContent(
+    uiState: MainUiState,
+    availableAppUpdateVersion: String? = null,
+    isAppUpdatePreparing: Boolean = false,
+    onSettingsClick: () -> Unit = {},
+    onSetup: () -> Unit = {},
+    onReapply: () -> Unit = {},
+    onOpenCamera: () -> Unit = {},
+    onUpdate: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val homeStatus = resolveHomeStatus(uiState)
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+    ) {
+        AppHeader(onSettingsClick = onSettingsClick)
+        Spacer(modifier = Modifier.height(10.dp))
+
+        StatusHeroCard(
+            status = homeStatus,
+            setupIssue = uiState.setupIssue,
+            onPrimaryAction = when (homeStatus) {
+                HomeStatus.READY -> null
+                HomeStatus.REAPPLY_REQUIRED -> onReapply
+                HomeStatus.SETUP_REQUIRED -> onSetup
+            },
+            onCameraAction = onOpenCamera
+        )
+
+        if (homeStatus == HomeStatus.SETUP_REQUIRED) {
+            Spacer(modifier = Modifier.height(20.dp))
+            SetupProgressCard(uiState)
+        }
+
+        availableAppUpdateVersion?.let { version ->
+            Spacer(modifier = Modifier.height(20.dp))
+            UpdateCard(
+                version = version,
+                isPreparing = isAppUpdatePreparing,
+                onUpdate = onUpdate
+            )
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+    }
+}
+
 private fun friendlyHomeUpdateError(error: Exception): String {
     return error.message?.trim().takeUnless { it.isNullOrBlank() }
         ?: "업데이트를 준비하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요."
@@ -561,33 +581,43 @@ private fun AppHeader(onSettingsClick: () -> Unit) {
 @Composable
 private fun StatusHeroCard(
     status: HomeStatus,
-    onPrimaryAction: () -> Unit,
-    onSecondaryAction: (() -> Unit)?
+    setupIssue: SetupIssue?,
+    onPrimaryAction: (() -> Unit)?,
+    onCameraAction: () -> Unit
 ) {
+    val hasSetupIssue = status == HomeStatus.SETUP_REQUIRED && setupIssue != null
     val title = when (status) {
         HomeStatus.READY -> "카메라 무음 설정 완료"
         HomeStatus.REAPPLY_REQUIRED -> "카메라 무음 다시 적용 필요"
-        HomeStatus.SETUP_REQUIRED -> "처음 한 번만 설정해 주세요"
+        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
+            "1회 설정을 다시 진행해 주세요"
+        } else {
+            "처음 한 번만 설정해 주세요"
+        }
     }
     val subtitle = when (status) {
         HomeStatus.READY -> "진동·무음 모드에서 촬영음이 나지 않도록 설정되어 있습니다."
-        HomeStatus.REAPPLY_REQUIRED -> "기기 연결은 유지되어 있어 카메라 설정만 다시 적용하면 됩니다."
-        HomeStatus.SETUP_REQUIRED -> "3단계 안내에 따라 연결하면 이후에는 앱을 계속 열어둘 필요가 없습니다."
+        HomeStatus.REAPPLY_REQUIRED -> "기기 연결은 유지되어 있습니다. 다시 적용하면 필요한 설정을 안내합니다."
+        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
+            "문제가 생긴 단계를 아래에 표시했습니다. 해당 단계부터 다시 진행하면 됩니다."
+        } else {
+            "3단계 안내에 따라 연결하면 이후에는 앱을 계속 열어둘 필요가 없습니다."
+        }
     }
     val badgeText = when (status) {
         HomeStatus.READY -> "정상"
         HomeStatus.REAPPLY_REQUIRED -> "조치 필요"
-        HomeStatus.SETUP_REQUIRED -> "설정 필요"
+        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "확인 필요" else "설정 필요"
     }
     val badgeColor = when (status) {
         HomeStatus.READY -> StatusGreen
         HomeStatus.REAPPLY_REQUIRED -> StatusAmber
-        HomeStatus.SETUP_REQUIRED -> BrandBlueLight
+        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) StatusAmber else BrandBlueLight
     }
     val primaryLabel = when (status) {
-        HomeStatus.READY -> "카메라 열어서 확인"
+        HomeStatus.READY -> null
         HomeStatus.REAPPLY_REQUIRED -> "다시 적용하기"
-        HomeStatus.SETUP_REQUIRED -> "1회 설정 시작"
+        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "1회 설정 다시 시작" else "1회 설정 시작"
     }
 
     Card(
@@ -626,29 +656,27 @@ private fun StatusHeroCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 18.sp
                 )
-            }
-
-            Spacer(modifier = Modifier.height(2.dp))
-            Button(
-                onClick = onPrimaryAction,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
-            ) {
-                Text(
-                    text = primaryLabel,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-
-            onSecondaryAction?.let { action ->
+                Spacer(modifier = Modifier.height(2.dp))
                 OutlinedButton(
-                    onClick = action,
+                    onClick = onCameraAction,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Text("카메라 열어보기")
+                }
+            } else {
+                Spacer(modifier = Modifier.height(2.dp))
+                Button(
+                    onClick = { onPrimaryAction?.invoke() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
+                ) {
+                    Text(
+                        text = primaryLabel.orEmpty(),
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
             }
         }
@@ -657,9 +685,32 @@ private fun StatusHeroCard(
 
 @Composable
 private fun SetupProgressCard(uiState: MainUiState) {
-    val wirelessComplete = uiState.isWirelessDebuggingEnabled
-    val pairingComplete = uiState.hasCscPermission
+    val issue = uiState.setupIssue
+    val wirelessComplete = uiState.isWirelessDebuggingEnabled || issue != null
+    val pairingComplete = uiState.hasCscPermission || issue == SetupIssue.CAMERA_APPLY
     val applyComplete = uiState.isCscMuted
+
+    val step1State = if (wirelessComplete) StepVisualState.COMPLETE else StepVisualState.CURRENT
+    val step2State = when {
+        issue == SetupIssue.PAIRING_DISCOVERY || issue == SetupIssue.PAIRING_CODE -> StepVisualState.ERROR
+        pairingComplete -> StepVisualState.COMPLETE
+        wirelessComplete -> StepVisualState.CURRENT
+        else -> StepVisualState.PENDING
+    }
+    val step3State = when {
+        issue == SetupIssue.CAMERA_APPLY -> StepVisualState.ERROR
+        applyComplete -> StepVisualState.COMPLETE
+        pairingComplete -> StepVisualState.CURRENT
+        else -> StepVisualState.PENDING
+    }
+
+    val pairingErrorText = when (issue) {
+        SetupIssue.PAIRING_DISCOVERY ->
+            "기기를 찾지 못했습니다. 무선 디버깅 화면을 다시 연 뒤 새 6자리 코드를 입력해 주세요."
+        SetupIssue.PAIRING_CODE ->
+            "코드가 만료되었거나 일치하지 않았습니다. 새 6자리 코드를 확인해 다시 입력해 주세요."
+        else -> null
+    }
 
     Card(
         modifier = Modifier
@@ -679,7 +730,11 @@ private fun SetupProgressCard(uiState: MainUiState) {
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "지금 필요한 단계만 따라가면 됩니다.",
+                text = if (issue == null) {
+                    "지금 필요한 단계만 따라가면 됩니다."
+                } else {
+                    "문제가 생긴 단계부터 다시 진행해 주세요."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -689,29 +744,24 @@ private fun SetupProgressCard(uiState: MainUiState) {
                 number = 1,
                 title = "무선 디버깅 켜기",
                 subtitle = "1회 설정 시작을 누르면 필요한 설정 화면을 엽니다.",
-                state = when {
-                    wirelessComplete -> StepVisualState.COMPLETE
-                    else -> StepVisualState.CURRENT
-                }
+                state = step1State
             )
             SetupStepRow(
                 number = 2,
                 title = "6자리 코드 입력",
                 subtitle = "상단 알림의 [코드 입력]에서 화면에 보이는 숫자 6자리를 입력합니다.",
-                state = when {
-                    pairingComplete -> StepVisualState.COMPLETE
-                    wirelessComplete -> StepVisualState.CURRENT
-                    else -> StepVisualState.PENDING
-                }
+                state = step2State,
+                errorText = pairingErrorText
             )
             SetupStepRow(
                 number = 3,
                 title = "카메라 무음 적용",
                 subtitle = "연결에 성공하면 앱이 자동으로 적용하고 마무리합니다.",
-                state = when {
-                    applyComplete -> StepVisualState.COMPLETE
-                    pairingComplete -> StepVisualState.CURRENT
-                    else -> StepVisualState.PENDING
+                state = step3State,
+                errorText = if (issue == SetupIssue.CAMERA_APPLY) {
+                    "기기 연결은 됐지만 카메라 설정을 적용하지 못했습니다. 무선 디버깅을 켠 상태에서 다시 시도해 주세요."
+                } else {
+                    null
                 }
             )
         }
@@ -723,16 +773,29 @@ private fun SetupStepRow(
     number: Int,
     title: String,
     subtitle: String,
-    state: StepVisualState
+    state: StepVisualState,
+    errorText: String? = null
 ) {
     val markerColor = when (state) {
         StepVisualState.COMPLETE -> StatusGreen
         StepVisualState.CURRENT -> BrandBlueLight
+        StepVisualState.ERROR -> MaterialTheme.colorScheme.error
         StepVisualState.PENDING -> MaterialTheme.colorScheme.surfaceVariant
     }
     val titleColor = when (state) {
+        StepVisualState.ERROR -> MaterialTheme.colorScheme.error
         StepVisualState.PENDING -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.onSurface
+    }
+    val detailText = when (state) {
+        StepVisualState.COMPLETE -> "완료"
+        StepVisualState.ERROR -> errorText ?: "이 단계를 다시 확인해 주세요."
+        else -> subtitle
+    }
+    val detailColor = when (state) {
+        StepVisualState.COMPLETE -> StatusGreen
+        StepVisualState.ERROR -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Row(
@@ -753,7 +816,11 @@ private fun SetupStepRow(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = if (state == StepVisualState.COMPLETE) "✓" else number.toString(),
+                    text = when (state) {
+                        StepVisualState.COMPLETE -> "✓"
+                        StepVisualState.ERROR -> "!"
+                        else -> number.toString()
+                    },
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = if (state == StepVisualState.PENDING) {
                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -772,61 +839,11 @@ private fun SetupStepRow(
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = when (state) {
-                    StepVisualState.COMPLETE -> "완료"
-                    else -> subtitle
-                },
+                text = detailText,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (state == StepVisualState.COMPLETE) {
-                    StatusGreen
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                color = detailColor,
                 lineHeight = 18.sp
             )
-        }
-    }
-}
-
-@Composable
-private fun RecoveryCard(
-    wirelessDebuggingEnabled: Boolean,
-    onReapply: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = ScreenPadding),
-        shape = RoundedCornerShape(CardRadius),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                text = "복구 안내",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = if (wirelessDebuggingEnabled) {
-                    "무선 디버깅이 켜져 있습니다. 아래 버튼을 누르면 카메라 무음 설정을 바로 다시 적용합니다."
-                } else {
-                    "기기 연결은 남아 있습니다. 다시 적용할 때만 무선 디버깅을 잠시 켜면 됩니다."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 18.sp
-            )
-            OutlinedButton(
-                onClick = onReapply,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Text("카메라 무음 다시 적용")
-            }
         }
     }
 }
