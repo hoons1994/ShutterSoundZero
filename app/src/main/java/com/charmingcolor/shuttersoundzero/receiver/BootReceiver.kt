@@ -264,7 +264,7 @@ class BootReceiver : BroadcastReceiver() {
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_qs_camera_mute)
-                .setContentTitle("셔터음 제로")
+                .setContentTitle(context.getString(R.string.app_name))
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)

@@ -755,7 +755,7 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "Shutter Sound Zero (셔터음 제로)\nCopyright (C) 2026 charmingcolor",
+                            text = "Shutter Sound Zero (셔터사운드 제로)\nCopyright (C) 2026 charmingcolor",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
