@@ -27,7 +27,7 @@ class MainScreenTest {
     fun setupRequiredHome_focusesOnCurrentAction() {
         showHome(MainUiState())
 
-        composeTestRule.onNodeWithText("셔터음 제로").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("셔터사운드 제로").fetchSemanticsNode()
         composeTestRule.onNodeWithText("처음 한 번만 설정해 주세요").fetchSemanticsNode()
         composeTestRule.onNodeWithText("1회 설정 시작").fetchSemanticsNode()
         composeTestRule.onNodeWithText("1회 설정 진행").fetchSemanticsNode()

@@ -1,4 +1,4 @@
-# 셔터음 제로 (Shutter Sound Zero)
+# 셔터사운드 제로 (Shutter Sound Zero)
 
 > 삼성 갤럭시폰을 위한 카메라 셔터음 설정 도구
 
@@ -8,14 +8,14 @@
 [![Version](https://img.shields.io/badge/Version-1.4.10-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
-  <img src="ShutterSoundZero_Infographic.png" alt="셔터음 제로 안내 인포그래픽" width="720" />
+  <img src="ShutterSoundZero_Infographic.png" alt="셔터사운드 제로 안내 인포그래픽" width="720" />
 </div>
 
 ---
 
 ## 📖 소개
 
-**셔터음 제로(Shutter Sound Zero)**는 삼성 갤럭시의 순정 시스템(CSC) 설정을 이용해 카메라 셔터음 동작을 관리하는 오픈소스 안드로이드 앱입니다.
+**셔터사운드 제로(Shutter Sound Zero)**는 삼성 갤럭시의 순정 시스템(CSC) 설정을 이용해 카메라 셔터음 동작을 관리하는 오픈소스 안드로이드 앱입니다.
 
 접근성 서비스를 이용해 화면이나 카메라 실행을 상시 감시하지 않습니다. 최초 1회 로컬 무선 ADB로 `WRITE_SECURE_SETTINGS` 권한을 연동한 뒤, 필요할 때만 무선 디버깅을 켜서 실제 CSC 값을 변경합니다.
 
