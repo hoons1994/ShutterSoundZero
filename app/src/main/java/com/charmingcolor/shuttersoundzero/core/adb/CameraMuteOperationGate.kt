@@ -38,9 +38,12 @@ internal object CameraMuteOperationGate {
      * 무선 디버깅 종료 사이에 새 작업이 끼어드는 경쟁이 발생하지 않는다.
      */
     fun runCleanupIfIdle(block: () -> Unit): Boolean = coordinationLock.withLock {
-        if (pendingOperations > 0) return false
-        block()
-        true
+        if (pendingOperations > 0) {
+            false
+        } else {
+            block()
+            true
+        }
     }
 
     internal fun resetForTest() {
