@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.5.0-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.5.1-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터사운드 제로 안내 인포그래픽" width="720" />
@@ -19,7 +19,7 @@
 
 접근성 서비스를 이용해 화면이나 카메라 실행을 상시 감시하지 않습니다. 최초 1회 로컬 무선 ADB로 `WRITE_SECURE_SETTINGS` 권한을 연동한 뒤, 필요할 때만 무선 디버깅을 켜서 실제 CSC 값을 변경합니다.
 
-현재 최신 안정 버전은 **v1.5.0**입니다.
+현재 최신 안정 버전은 **v1.5.1**입니다.
 
 ## 📱 다운로드
 
@@ -39,7 +39,7 @@
 - **시스템 다크 모드 연동** — 휴대전화의 라이트/다크 모드 설정을 자동으로 따라가며 상태바와 내비게이션바 아이콘도 함께 전환합니다.
 - **큰 글자·작은 화면 대응** — 큰 글자 설정과 좁은 화면에서도 핵심 상태와 설정 버튼, 주 동작을 스크롤로 접근할 수 있도록 구성합니다.
 - **첫 실행 중요 안내 / 도움말** — 신규 설치에서는 핵심 안내를 먼저 보여주고, 자세한 설명은 설정의 질문형 도움말에서 확인할 수 있습니다.
-- **앱 잠금** — 생체인증 또는 기기 PIN·패턴·비밀번호로 앱 접근을 보호할 수 있습니다.
+- **앱 잠금** — 생체인증 또는 기기 PIN·패턴·비밀번호로 앱 접근을 보호하며, 잠금이 켜진 동안 최근 앱 미리보기와 스크린샷 노출도 차단합니다.
 - **반자동 앱 업데이트** — GitHub Releases에서 새 버전을 확인하고, APK의 SHA-256·패키지명·버전·서명 인증서를 검증한 뒤 Android 설치 화면으로 전달합니다.
 - **상주 감시 서비스 없음** — 카메라 권한이나 접근성 기반 상주 서비스를 사용하지 않습니다.
 
@@ -50,6 +50,8 @@
 1. **무선 디버깅 켜기** — Wi-Fi에 연결한 뒤 Android 개발자 옵션의 무선 디버깅을 켭니다.
 2. **6자리 코드 입력** — **[페어링 코드로 기기 페어링]** 화면을 열고, 상단 ShutterSoundZero 알림의 **[코드 입력]**에 화면의 6자리 숫자를 입력합니다.
 3. **카메라 무음 적용** — 연결에 성공하면 앱이 권한 연동과 카메라 설정을 적용하고 마무리합니다.
+
+Android 17 이상에서는 무선 ADB의 로컬 mDNS/TCP 연결을 위해 **로컬 네트워크 권한**을 요청합니다. 기존 연동 상태를 유지한 채 Android 17로 업데이트한 경우에도 앱이 필요한 권한을 다시 확인해 안내합니다.
 
 One UI의 알림 팝업 스타일이 **간략히 보기**라서 코드 입력이 불편하다면, 2단계 아래의 **[알림 팝업 설정 열기]**를 눌러 ShutterSoundZero만 **자세한 팝업**으로 바꿀 수 있습니다. 변경하지 않아도 알림을 펼쳐 같은 코드 입력 동작을 사용할 수 있습니다.
 

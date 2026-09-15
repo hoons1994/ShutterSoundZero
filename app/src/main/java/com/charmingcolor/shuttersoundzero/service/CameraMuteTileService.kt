@@ -10,6 +10,7 @@ import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
 import com.charmingcolor.shuttersoundzero.core.CscTogglePersistencePolicy
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
+import com.charmingcolor.shuttersoundzero.core.adb.LocalNetworkAccess
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import kotlinx.coroutines.CoroutineScope
@@ -58,6 +59,16 @@ class CameraMuteTileService : TileService() {
             Toast.makeText(
                 context,
                 "권한 연동이 해제되어 있습니다. 앱을 열어 다시 연동해 주세요.",
+                Toast.LENGTH_LONG
+            ).show()
+            updateTileState()
+            return
+        }
+
+        if (!LocalNetworkAccess.isGranted(context)) {
+            Toast.makeText(
+                context,
+                "Android 17에서 기기 연결을 위해 로컬 네트워크 권한이 필요합니다. 앱을 열어 권한을 허용해 주세요.",
                 Toast.LENGTH_LONG
             ).show()
             updateTileState()
@@ -136,7 +147,8 @@ class CameraMuteTileService : TileService() {
         val context = applicationContext
         val prefs = PreferencesRepository.getInstance(context)
         val hasUsablePermission = !prefs.isPermissionRevokedByUser &&
-            CscMuteManager.hasWritePermission(context)
+            CscMuteManager.hasWritePermission(context) &&
+            LocalNetworkAccess.isGranted(context)
         val isMuted = hasUsablePermission && CscMuteManager.isCscShutterSoundMuted(context)
 
         // Refresh the icon explicitly so existing tiles do not remain stuck on a cached launcher icon.
