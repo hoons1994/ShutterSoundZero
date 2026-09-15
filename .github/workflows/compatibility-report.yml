@@ -6,6 +6,7 @@ on:
       - opened
 
 permissions:
+  actions: write
   contents: write
   issues: write
   pull-requests: write
@@ -18,7 +19,7 @@ jobs:
   register:
     if: contains(github.event.issue.body, '<!-- shuttersoundzero-compatibility-report:v1 -->')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 70
 
     steps:
       - name: Checkout main
@@ -154,24 +155,83 @@ jobs:
           echo 'changed=true' >> "$GITHUB_OUTPUT"
 
       - name: Open protected-main pull request
+        id: pull_request
         if: steps.commit.outputs.changed == 'true'
+        env:
+          PR_TOKEN: ${{ secrets.COMPATIBILITY_PR_TOKEN || github.token }}
+          COMMENT_TOKEN: ${{ github.token }}
+          REPORT_BRANCH: ${{ steps.commit.outputs.branch }}
+        shell: bash
+        run: |
+          PR_BODY="$(cat <<EOF
+          앱에서 제출된 호환성 데이터 #${{ github.event.issue.number }}를 문서에 반영합니다.
+
+          Closes #${{ github.event.issue.number }}
+          EOF
+          )"
+
+          if PR_URL="$(GH_TOKEN="$PR_TOKEN" gh pr create \
+            --repo '${{ github.repository }}' \
+            --base main \
+            --head "$REPORT_BRANCH" \
+            --title 'docs: 호환성 제보 #${{ github.event.issue.number }} 등록' \
+            --body "$PR_BODY")"; then
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            COMMENT_BODY="$(cat <<EOF
+          호환성 문서 반영용 PR을 생성했습니다: $PR_URL
+
+          저장소의 필수 검증을 자동 실행합니다. 모두 통과하면 PR을 병합하고 이 제보를 닫습니다.
+          EOF
+          )"
+            GH_TOKEN="$COMMENT_TOKEN" gh issue comment '${{ github.event.issue.number }}' \
+              --repo '${{ github.repository }}' \
+              --body "$COMMENT_BODY"
+          else
+            GH_TOKEN="$COMMENT_TOKEN" gh issue comment '${{ github.event.issue.number }}' \
+              --repo '${{ github.repository }}' \
+              --body "호환성 데이터 검증과 문서 변경 브랜치 생성은 완료했지만, GitHub Actions의 PR 생성 권한이 비활성화되어 자동 PR을 만들지 못했습니다. 브랜치: $REPORT_BRANCH"
+            exit 1
+          fi
+
+      - name: Run required checks on report branch
+        if: steps.pull_request.outputs.pr_url != ''
         env:
           GH_TOKEN: ${{ github.token }}
           REPORT_BRANCH: ${{ steps.commit.outputs.branch }}
         shell: bash
         run: |
-          if PR_URL="$(gh pr create \
+          gh workflow run android-ci.yml \
             --repo '${{ github.repository }}' \
-            --base main \
-            --head "$REPORT_BRANCH" \
-            --title 'docs: 호환성 제보 #${{ github.event.issue.number }} 등록' \
-            --body '앱에서 제출된 호환성 데이터 #${{ github.event.issue.number }}를 문서에 반영합니다.\n\nCloses #${{ github.event.issue.number }}')"; then
-            gh issue comment '${{ github.event.issue.number }}' \
-              --repo '${{ github.repository }}' \
-              --body "호환성 문서 반영용 PR을 생성했습니다: $PR_URL\n\n저장소의 필수 검증을 통과해 병합되면 docs/COMPATIBILITY.md에 등록되고 이 제보는 자동으로 닫힙니다."
-          else
-            gh issue comment '${{ github.event.issue.number }}' \
-              --repo '${{ github.repository }}' \
-              --body "호환성 데이터 검증과 문서 변경 브랜치 생성은 완료했지만, GitHub Actions의 PR 생성 권한이 비활성화되어 자동 PR을 만들지 못했습니다. 브랜치: $REPORT_BRANCH"
-            exit 1
-          fi
+            --ref "$REPORT_BRANCH"
+          gh workflow run codeql.yml \
+            --repo '${{ github.repository }}' \
+            --ref "$REPORT_BRANCH"
+          gh workflow run dependency-review.yml \
+            --repo '${{ github.repository }}' \
+            --ref "$REPORT_BRANCH"
+
+      - name: Wait for required checks
+        if: steps.pull_request.outputs.pr_url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ steps.pull_request.outputs.pr_url }}
+        shell: bash
+        run: |
+          sleep 20
+          gh pr checks "$PR_URL" \
+            --repo '${{ github.repository }}' \
+            --required \
+            --watch \
+            --interval 20
+
+      - name: Merge verified compatibility report
+        if: steps.pull_request.outputs.pr_url != ''
+        env:
+          GH_TOKEN: ${{ secrets.COMPATIBILITY_PR_TOKEN || github.token }}
+          PR_URL: ${{ steps.pull_request.outputs.pr_url }}
+        shell: bash
+        run: |
+          gh pr merge "$PR_URL" \
+            --repo '${{ github.repository }}' \
+            --squash \
+            --delete-branch
