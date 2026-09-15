@@ -20,7 +20,7 @@ jobs:
   verify:
     name: Build, Test & Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout source
@@ -80,7 +80,7 @@ jobs:
       - name: Run Android Lint
         run: ./gradlew lintDebug --no-daemon --stacktrace
 
-      - name: Install emulator image
+      - name: Install Android 15 emulator image
         shell: bash
         run: |
           sdkmanager --channel=0 emulator 'system-images;android-35;default;x86_64'
@@ -98,7 +98,7 @@ jobs:
           echo "ANDROID_AVD_HOME=$RUNNER_TEMP/android-avd" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/android-avd"
 
-      - name: Create Android emulator
+      - name: Create Android 15 emulator
         shell: bash
         run: |
           echo no | avdmanager create avd \
@@ -112,7 +112,7 @@ jobs:
           "$EMULATOR" -list-avds
           "$EMULATOR" -list-avds | grep -Fxq 'shuttersoundzero-ci'
 
-      - name: Start Android emulator
+      - name: Start Android 15 emulator
         shell: bash
         run: |
           EMULATOR="$ANDROID_SDK_ROOT/emulator/emulator"
@@ -128,28 +128,29 @@ jobs:
             -no-boot-anim \
             -no-snapshot \
             -gpu swiftshader_indirect \
-            > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/emulator.pid"
+            > "$RUNNER_TEMP/emulator-api35.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/emulator-api35.pid"
 
-      - name: Wait for emulator boot
+      - name: Wait for Android 15 emulator boot
         shell: bash
         run: |
-          EMULATOR_PID="$(cat "$RUNNER_TEMP/emulator.pid")"
+          EMULATOR_PID="$(cat "$RUNNER_TEMP/emulator-api35.pid")"
 
           for _ in $(seq 1 120); do
             if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
-              echo 'Android emulator process exited before boot completed.'
-              cat "$RUNNER_TEMP/emulator.log" || true
+              echo 'Android 15 emulator process exited before boot completed.'
+              cat "$RUNNER_TEMP/emulator-api35.log" || true
               exit 1
             fi
 
-            if adb devices | grep -qE '^emulator-[0-9]+[[:space:]]+device$'; then
-              BOOT_COMPLETED="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+            SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+            if [ -n "$SERIAL" ]; then
+              BOOT_COMPLETED="$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
               if [[ "$BOOT_COMPLETED" == "1" ]]; then
-                adb shell input keyevent 82 || true
-                adb shell settings put global window_animation_scale 0
-                adb shell settings put global transition_animation_scale 0
-                adb shell settings put global animator_duration_scale 0
+                adb -s "$SERIAL" shell input keyevent 82 || true
+                adb -s "$SERIAL" shell settings put global window_animation_scale 0
+                adb -s "$SERIAL" shell settings put global transition_animation_scale 0
+                adb -s "$SERIAL" shell settings put global animator_duration_scale 0
                 exit 0
               fi
             fi
@@ -157,13 +158,120 @@ jobs:
             sleep 2
           done
 
-          echo 'Android emulator did not finish booting within 4 minutes.'
+          echo 'Android 15 emulator did not finish booting within 4 minutes.'
           adb devices -l || true
-          cat "$RUNNER_TEMP/emulator.log" || true
+          cat "$RUNNER_TEMP/emulator-api35.log" || true
           exit 1
 
-      - name: Run instrumented tests
+      - name: Run Android 15 instrumented tests
         run: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+
+      - name: Stop Android 15 emulator
+        if: always()
+        shell: bash
+        run: |
+          SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+          if [ -n "$SERIAL" ]; then
+            adb -s "$SERIAL" emu kill || true
+          fi
+          if [ -f "$RUNNER_TEMP/emulator-api35.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/emulator-api35.pid")" 2>/dev/null || true
+          fi
+          for _ in $(seq 1 30); do
+            if ! adb devices | grep -qE '^emulator-[0-9]+[[:space:]]+(device|offline)$'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          adb devices -l || true
+
+      - name: Resolve and install Android 17 emulator image
+        shell: bash
+        run: |
+          for candidate in \
+            'system-images;android-37.0;google_apis;x86_64' \
+            'system-images;android-CinnamonBun;google_apis;x86_64' \
+            'system-images;android-37;google_apis;x86_64' \
+            'system-images;android-37.0;google_apis_playstore;x86_64'; do
+            if grep -Fq "$candidate" sdk-packages.txt; then
+              IMAGE_PACKAGE="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "${IMAGE_PACKAGE:-}" ]; then
+            echo 'Android 17 x86_64 system image was not found.'
+            grep -E 'system-images;android-(CinnamonBun|37)' sdk-packages.txt || true
+            exit 1
+          fi
+
+          echo "Installing $IMAGE_PACKAGE"
+          sdkmanager --channel=3 emulator "$IMAGE_PACKAGE"
+          echo "ANDROID17_IMAGE_PACKAGE=$IMAGE_PACKAGE" >> "$GITHUB_ENV"
+
+      - name: Create Android 17 emulator
+        shell: bash
+        run: |
+          echo no | avdmanager create avd \
+            --force \
+            --name shuttersoundzero-api37 \
+            --package "$ANDROID17_IMAGE_PACKAGE" \
+            --device pixel
+
+      - name: Start Android 17 emulator
+        shell: bash
+        run: |
+          EMULATOR="$ANDROID_SDK_ROOT/emulator/emulator"
+          nohup "$EMULATOR" -avd shuttersoundzero-api37 \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot \
+            -gpu swiftshader_indirect \
+            > "$RUNNER_TEMP/emulator-api37.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/emulator-api37.pid"
+
+      - name: Wait for Android 17 emulator boot
+        shell: bash
+        run: |
+          EMULATOR_PID="$(cat "$RUNNER_TEMP/emulator-api37.pid")"
+
+          for _ in $(seq 1 150); do
+            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
+              echo 'Android 17 emulator process exited before boot completed.'
+              cat "$RUNNER_TEMP/emulator-api37.log" || true
+              exit 1
+            fi
+
+            SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+            if [ -n "$SERIAL" ]; then
+              BOOT_COMPLETED="$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+              if [[ "$BOOT_COMPLETED" == "1" ]]; then
+                SDK_LEVEL="$(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')"
+                if [ "$SDK_LEVEL" -lt 37 ]; then
+                  echo "Expected API 37+, got API $SDK_LEVEL."
+                  exit 1
+                fi
+                adb -s "$SERIAL" shell input keyevent 82 || true
+                adb -s "$SERIAL" shell settings put global window_animation_scale 0
+                adb -s "$SERIAL" shell settings put global transition_animation_scale 0
+                adb -s "$SERIAL" shell settings put global animator_duration_scale 0
+                exit 0
+              fi
+            fi
+
+            sleep 2
+          done
+
+          echo 'Android 17 emulator did not finish booting within 5 minutes.'
+          adb devices -l || true
+          cat "$RUNNER_TEMP/emulator-api37.log" || true
+          exit 1
+
+      - name: Run Android 17 fresh-install local-network E2E
+        run: >-
+          ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+          -Pandroid.testInstrumentationRunnerArguments.class=com.charmingcolor.shuttersoundzero.core.adb.LocalNetworkAccessInstrumentedTest
 
       - name: Upload instrumented test reports
         if: always()
@@ -173,7 +281,8 @@ jobs:
           path: |
             app/build/reports/androidTests/connected/**
             app/build/outputs/androidTest-results/connected/**
-            ${{ runner.temp }}/emulator.log
+            ${{ runner.temp }}/emulator-api35.log
+            ${{ runner.temp }}/emulator-api37.log
           if-no-files-found: warn
           retention-days: 14
 
