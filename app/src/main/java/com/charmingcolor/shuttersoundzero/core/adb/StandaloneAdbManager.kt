@@ -3,18 +3,21 @@ package com.charmingcolor.shuttersoundzero.core.adb
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
-import io.github.muntashirakon.adb.android.AdbMdns
+import io.github.muntashirakon.adb.PairingConnectionCtx
 import io.github.muntashirakon.adb.android.AndroidUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.InetAddress
@@ -36,6 +39,11 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
     companion object {
         private const val TAG = "StandaloneAdbManager"
         private const val DEVICE_NAME = "ShutterSoundZero"
+        private const val SERVICE_TYPE_TLS_PAIRING = "adb-tls-pairing"
+        private const val SERVICE_TYPE_TLS_CONNECT = "adb-tls-connect"
+        private const val ADB_CONNECTION_TIMEOUT_MS = 8_000L
+        private const val PAIRING_OPERATION_TIMEOUT_MS = 12_000L
+        private const val SHELL_COMMAND_TOTAL_TIMEOUT_MS = 6_000L
         private const val SHELL_COMMAND_TIMEOUT_MS = 5_000L
         private const val SHELL_COMMAND_POLL_INTERVAL_MS = 20L
         private const val MAX_SHELL_OUTPUT_BYTES = 64 * 1024
@@ -77,6 +85,10 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
     }
 
     init {
+        // libadb의 기본 연결 대기는 Long.MAX_VALUE이므로 앱 수명보다 긴 연결 대기를 허용하지 않는다.
+        setApi(Build.VERSION.SDK_INT)
+        setTimeout(ADB_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+
         try {
             java.security.Security.insertProviderAt(org.conscrypt.Conscrypt.newProvider(), 1)
             Log.i(TAG, "Conscrypt security provider registered at position 1")
@@ -109,8 +121,8 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         )
     }
     private var pairingMulticastLease: MulticastLockLeaseManager.Lease? = null
-    private var pairingMdns: AdbMdns? = null
-    private var pairingConnectMdns: AdbMdns? = null
+    private var pairingMdns: SafeAdbMdnsDiscovery? = null
+    private var pairingConnectMdns: SafeAdbMdnsDiscovery? = null
 
     @Volatile
     private var isPairingDiscoveryActive = false
@@ -124,13 +136,14 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         LocalNetworkAccess.requireGranted(context)
         stopPairingDiscovery()
         isPairingDiscoveryActive = true
-        pairingMulticastLease = multicastLeaseManager.acquire()
 
         try {
-            pairingMdns = startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_PAIRING) { _, port ->
+            // 실제 MulticastLock 획득이 확인된 뒤에만 discovery를 시작한다.
+            pairingMulticastLease = multicastLeaseManager.acquire()
+            pairingMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_PAIRING) { _, port ->
                 if (isPairingDiscoveryActive) onPairingPortDiscovered(port)
             }
-            pairingConnectMdns = startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_CONNECT) { _, port ->
+            pairingConnectMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT) { _, port ->
                 if (isPairingDiscoveryActive) onConnectPortDiscovered(port)
             }
         } catch (e: Exception) {
@@ -143,16 +156,30 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
     @Synchronized
     fun stopPairingDiscovery() {
         isPairingDiscoveryActive = false
-        try {
-            pairingMdns?.stop()
-            pairingConnectMdns?.stop()
-        } catch (e: Exception) {
-            logFailure("Failed to stop pairing discovery", e)
-        }
+
+        val pairingDiscovery = pairingMdns
+        val connectDiscovery = pairingConnectMdns
         pairingMdns = null
         pairingConnectMdns = null
-        pairingMulticastLease?.close()
-        pairingMulticastLease = null
+
+        try {
+            pairingDiscovery?.stop()
+        } catch (e: Exception) {
+            logFailure("Failed to stop pairing mDNS discovery", e)
+        }
+        try {
+            connectDiscovery?.stop()
+        } catch (e: Exception) {
+            logFailure("Failed to stop connect mDNS discovery", e)
+        }
+
+        try {
+            pairingMulticastLease?.close()
+        } catch (e: Exception) {
+            logFailure("Failed to release pairing multicast lease", e)
+        } finally {
+            pairingMulticastLease = null
+        }
     }
 
     /**
@@ -162,41 +189,55 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
     private fun startMdnsDiscovery(
         serviceType: String,
         onDiscovered: (InetAddress, Int) -> Unit
-    ): AdbMdns {
+    ): SafeAdbMdnsDiscovery {
         LocalNetworkAccess.requireGranted(context)
-        val mdns = AdbMdns(context, serviceType) { address, port ->
-            if (address != null) {
-                if (LocalAdbEndpointPolicy.isLocalDeviceAddress(address) && port in 1..65535) {
-                    Log.i(TAG, "Local mDNS service discovered")
-                    logSensitive { "Local mDNS endpoint: $address:$port for $serviceType" }
-                    if (serviceType == AdbMdns.SERVICE_TYPE_TLS_PAIRING) {
-                        lastDiscoveredPairingPort = port
-                    } else if (serviceType == AdbMdns.SERVICE_TYPE_TLS_CONNECT) {
-                        lastDiscoveredConnectPort = port
-                    }
-                    onDiscovered(address, port)
-                } else {
-                    Log.w(TAG, "Ignoring invalid or non-local mDNS service")
-                    logSensitive { "Rejected mDNS endpoint: $address:$port for $serviceType" }
+        val mdns = SafeAdbMdnsDiscovery(context, serviceType) { address, port ->
+            if (LocalAdbEndpointPolicy.isLocalDeviceAddress(address) && port in 1..65535) {
+                Log.i(TAG, "Local mDNS service discovered")
+                logSensitive { "Local mDNS endpoint: $address:$port for $serviceType" }
+                if (serviceType == SERVICE_TYPE_TLS_PAIRING) {
+                    lastDiscoveredPairingPort = port
+                } else if (serviceType == SERVICE_TYPE_TLS_CONNECT) {
+                    lastDiscoveredConnectPort = port
                 }
+                onDiscovered(address, port)
+            } else {
+                Log.w(TAG, "Ignoring invalid or non-local mDNS service")
+                logSensitive { "Rejected mDNS endpoint: $address:$port for $serviceType" }
             }
         }
         mdns.start()
         return mdns
     }
 
-    private fun acquireMulticastLockResource() {
-        try {
-            if (multicastLock == null || !multicastLock!!.isHeld) {
-                val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
-                multicastLock = wifi?.createMulticastLock("ShutterSoundZeroMdns")?.apply {
+    private fun acquireMulticastLockResource(): Boolean {
+        return try {
+            multicastLock?.takeIf { it.isHeld }?.let { return true }
+            multicastLock = null
+
+            val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE)
+                as? android.net.wifi.WifiManager
+            if (wifi == null) {
+                Log.w(TAG, "WifiManager unavailable; cannot acquire MulticastLock")
+                false
+            } else {
+                val lock = wifi.createMulticastLock("ShutterSoundZeroMdns").apply {
                     setReferenceCounted(false)
                     acquire()
                 }
-                Log.d(TAG, "Acquired WifiManager.MulticastLock for mDNS discovery")
+                if (!lock.isHeld) {
+                    Log.w(TAG, "WifiManager.MulticastLock acquisition was not confirmed")
+                    false
+                } else {
+                    multicastLock = lock
+                    Log.d(TAG, "Acquired WifiManager.MulticastLock for mDNS discovery")
+                    true
+                }
             }
         } catch (e: Exception) {
+            multicastLock = null
             logFailure("Failed to acquire MulticastLock", e)
+            false
         }
     }
 
@@ -205,10 +246,11 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
             multicastLock?.let {
                 if (it.isHeld) it.release()
             }
-            multicastLock = null
-            Log.d(TAG, "Released WifiManager MulticastLock")
+            Log.d(TAG, "Released WifiManager.MulticastLock")
         } catch (e: Exception) {
             logFailure("Failed to release MulticastLock", e)
+        } finally {
+            multicastLock = null
         }
     }
 
@@ -228,9 +270,35 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 val multicastLease = multicastLeaseManager.acquire()
                 try {
                     val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
+                    val privateKey = getPrivateKey()
+                    val certificate = getCertificate()
                     Log.i(TAG, "Attempting local ADB pairing")
                     logSensitive { "Pairing endpoint: $host:$port" }
-                    val success = pair(host, port, pairingCode)
+
+                    // libadb의 pair()는 manager 내부 lock과 무기한 socket/TLS 대기를 함께 잡을 수 있다.
+                    // 독립 PairingConnectionCtx를 제한시간 worker에서 실행해 caller와 manager lock을 보호한다.
+                    val success = runInterruptible(Dispatchers.IO) {
+                        BoundedBlockingOperation.run(
+                            timeoutMillis = PAIRING_OPERATION_TIMEOUT_MS,
+                            threadName = "SSZ-AdbPairing"
+                        ) {
+                            val pairingClient = PairingConnectionCtx(
+                                host,
+                                port,
+                                pairingCode.toByteArray(Charsets.UTF_8),
+                                privateKey,
+                                certificate,
+                                DEVICE_NAME
+                            )
+                            try {
+                                pairingClient.start()
+                                true
+                            } finally {
+                                runCatching { pairingClient.close() }
+                            }
+                        }
+                    }
+
                     if (success) {
                         Log.i(TAG, "Pairing successful")
                         Result.success(Unit)
@@ -239,6 +307,9 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                     }
                 } catch (e: CancellationException) {
                     throw e
+                } catch (e: BlockingOperationTimeoutException) {
+                    logFailure("Pairing timed out", e)
+                    Result.failure(IOException("페어링 응답 시간이 초과되었습니다. 다시 시도해 주세요.", e))
                 } catch (e: Exception) {
                     logFailure("Pairing failed", e)
                     Result.failure(IOException("페어링 중 오류가 발생했습니다. 무선 디버깅 상태와 코드를 확인해 주세요."))
@@ -277,7 +348,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                         try {
                             Log.i(TAG, "Attempting direct ADB connect")
                             logSensitive { "Direct connect port: $requestedPort" }
-                            connected = connect(host, requestedPort)
+                            connected = connectInterruptibly(host, requestedPort)
                             if (connected) rememberConnectedPort(requestedPort)
                         } catch (e: CancellationException) {
                             throw e
@@ -293,7 +364,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                         try {
                             Log.i(TAG, "Attempting cached ADB connect")
                             logSensitive { "Cached connect port: $cachedPort" }
-                            connected = connect(host, cachedPort)
+                            connected = connectInterruptibly(host, cachedPort)
                             if (connected) rememberConnectedPort(cachedPort)
                         } catch (e: CancellationException) {
                             throw e
@@ -381,7 +452,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                     var connected = isConnected
                     if (!connected && savedPort != null) {
                         try {
-                            connected = connect(host, savedPort)
+                            connected = connectInterruptibly(host, savedPort)
                             if (connected) rememberConnectedPort(savedPort)
                         } catch (e: CancellationException) {
                             throw e
@@ -517,7 +588,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                         try {
                             Log.i(TAG, "Attempting fast ADB reconnect")
                             logSensitive { "Saved reconnect port: $savedPort" }
-                            connected = connect(host, savedPort)
+                            connected = connectInterruptibly(host, savedPort)
                             if (connected) rememberConnectedPort(savedPort)
                         } catch (e: CancellationException) {
                             throw e
@@ -593,18 +664,26 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         logSensitive { "Saved active ADB connect port: $port" }
     }
 
-    private fun connectLocalTls(timeoutMs: Long): Boolean {
+    private suspend fun connectInterruptibly(host: String, port: Int): Boolean =
+        runInterruptible(Dispatchers.IO) {
+            connect(host, port)
+        }
+
+    private suspend fun connectLocalTls(timeoutMs: Long): Boolean {
         LocalNetworkAccess.requireGranted(context)
         val endpoint = AtomicReference<Pair<InetAddress, Int>?>(null)
         val discovered = CountDownLatch(1)
-        val mdns = startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_CONNECT) { address, port ->
+        val mdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT) { address, port ->
             if (endpoint.compareAndSet(null, address to port)) {
                 discovered.countDown()
             }
         }
 
         return try {
-            if (!discovered.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+            val found = runInterruptible(Dispatchers.IO) {
+                discovered.await(timeoutMs, TimeUnit.MILLISECONDS)
+            }
+            if (!found) {
                 Log.w(TAG, "Timed out waiting for this device's TLS ADB service")
                 false
             } else {
@@ -613,7 +692,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                 Log.i(TAG, "Connecting to discovered local TLS ADB service")
                 logSensitive { "Discovered TLS endpoint: $address:$port" }
                 val hostAddress = address.hostAddress ?: return false
-                val connected = connect(hostAddress, port)
+                val connected = connectInterruptibly(hostAddress, port)
                 if (connected) rememberConnectedPort(port)
                 connected
             }
@@ -622,7 +701,16 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         }
     }
 
-    private fun executeShellCommand(cmd: String): String {
+    private suspend fun executeShellCommand(cmd: String): String {
+        val result = withTimeoutOrNull(SHELL_COMMAND_TOTAL_TIMEOUT_MS) {
+            runInterruptible(Dispatchers.IO) {
+                executeShellCommandBlocking(cmd)
+            }
+        }
+        return result ?: throw IOException("ADB 명령 전체 응답 시간이 초과되었습니다.")
+    }
+
+    private fun executeShellCommandBlocking(cmd: String): String {
         val marker = "__SSZ_EXIT_${SystemClock.elapsedRealtimeNanos()}_${shellCommandSequence.incrementAndGet()}__"
         val wrappedCommand = "$cmd; printf '\n$marker:%d\n' \$?"
         val output = ByteArrayOutputStream()
