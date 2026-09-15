@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
+import com.charmingcolor.shuttersoundzero.core.adb.CameraMuteOperationGate
 
 /**
  * 앱 설정이 끝난 뒤 개발자 옵션과 ADB 디버깅을 안전하게 종료한다.
@@ -37,8 +38,18 @@ object DeveloperOptionsManager {
      *
      * 개발자 옵션 전체나 USB 디버깅은 건드리지 않는다. 이미 부여된
      * WRITE_SECURE_SETTINGS 권한과 적용된 CSC 값도 유지된다.
+     *
+     * 다른 카메라 설정 변경이 실행 중이거나 ADB mutex를 기다리는 동안에는
+     * 해당 작업의 연결을 끊지 않도록 정리를 건너뛴다. 마지막 작업의 후처리가
+     * 다시 호출되므로 현재 사용자 요청을 방해하는 것보다 안전하다.
      */
     fun disableWirelessDebugging(context: Context): Result<Unit> {
+        if (CameraMuteOperationGate.hasPendingOperations()) {
+            return Result.failure(
+                IllegalStateException("카메라 설정 변경 작업이 진행 중입니다.")
+            )
+        }
+
         if (!canDisableDirectly(context)) {
             return Result.failure(
                 SecurityException("WRITE_SECURE_SETTINGS 권한이 필요합니다.")

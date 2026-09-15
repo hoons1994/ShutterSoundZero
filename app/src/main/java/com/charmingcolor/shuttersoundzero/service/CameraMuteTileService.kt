@@ -8,7 +8,6 @@ import android.widget.Toast
 import com.charmingcolor.shuttersoundzero.R
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
-import com.charmingcolor.shuttersoundzero.core.CscTogglePersistencePolicy
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
 import com.charmingcolor.shuttersoundzero.core.adb.LocalNetworkAccess
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
@@ -87,9 +86,9 @@ class CameraMuteTileService : TileService() {
 
         val currentMuted = CscMuteManager.isCscShutterSoundMuted(context)
         val targetMuted = !currentMuted
-        val previousDesiredMute = prefs.shouldMuteOnBoot
 
-        // 빠른 체감을 위한 낙관적 타일 업데이트. 작업이 끝나면 실제 CSC 값으로 다시 확정한다.
+        // 빠른 체감을 위한 낙관적 타일 업데이트. 영구 상태는 실제 적용을 확인한
+        // StandaloneAdbManager만 저장한다.
         qsTile?.let { tile ->
             tile.icon = Icon.createWithResource(this, R.drawable.ic_qs_camera_mute)
             tile.state = if (targetMuted) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
@@ -103,11 +102,6 @@ class CameraMuteTileService : TileService() {
             val stateApplied = result.isSuccess && CscStateVerifier.waitFor(targetMuted) {
                 CscMuteManager.isCscShutterSoundMuted(context)
             }
-            prefs.shouldMuteOnBoot = CscTogglePersistencePolicy.resolve(
-                previousDesiredMute = previousDesiredMute,
-                targetMuted = targetMuted,
-                stateApplied = stateApplied
-            )
 
             if (stateApplied) {
                 val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
@@ -123,7 +117,6 @@ class CameraMuteTileService : TileService() {
                 }
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             } else {
-                // 명령이 성공으로 끝났더라도 실제 CSC 값이 바뀌지 않았다면 실패로 처리한다.
                 Log.w(
                     TAG,
                     if (result.isSuccess) {
