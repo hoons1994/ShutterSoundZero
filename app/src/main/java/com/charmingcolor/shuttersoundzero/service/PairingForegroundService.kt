@@ -23,6 +23,7 @@ import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticLogger
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -92,6 +93,7 @@ class PairingForegroundService : Service() {
     private val adbManager by lazy { StandaloneAdbManager.getInstance(this) }
     private val prefs by lazy { PreferencesRepository.getInstance(this) }
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val pairingGeneration = OperationGeneration()
     private var pairingJob: Job? = null
     private var isDeveloperOptionsObserverRegistered = false
 
@@ -218,7 +220,8 @@ class PairingForegroundService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
         )
 
-        pairingJob = serviceScope.launch {
+        val generation = pairingGeneration.next()
+        val job = serviceScope.launch(start = CoroutineStart.LAZY) {
             try {
                 val timedResult = withTimeoutOrNull(25_000) {
                     var port = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
@@ -386,9 +389,6 @@ class PairingForegroundService : Service() {
                     )
                 }
             } catch (e: java.util.concurrent.CancellationException) {
-                // Successful completion stops the foreground service, which cancels its coroutine
-                // scope. Cancellation during that shutdown is expected and must not overwrite the
-                // success notification with a false pairing-error notification.
                 Log.i(TAG, "Pairing workflow cancelled during service shutdown")
                 throw e
             } catch (e: Exception) {
@@ -405,9 +405,14 @@ class PairingForegroundService : Service() {
                     state = PairingNotificationState.PAIRING_ERROR
                 )
             } finally {
-                pairingJob = null
+                // 이전 세대의 늦은 finally가 새 pairingJob 참조를 지우지 못하게 한다.
+                if (pairingGeneration.isCurrent(generation) && pairingJob === coroutineContext[Job]) {
+                    pairingJob = null
+                }
             }
         }
+        pairingJob = job
+        job.start()
     }
 
     private fun logFailure(summary: String, error: Throwable) {
@@ -421,6 +426,7 @@ class PairingForegroundService : Service() {
 
     private fun stopPairing(showSuccess: Boolean, wirelessDebuggingDisabled: Boolean) {
         unregisterDeveloperOptionsObserver()
+        pairingGeneration.invalidate()
         pairingJob?.cancel()
         pairingJob = null
         adbManager.stopPairingDiscovery()
@@ -436,6 +442,7 @@ class PairingForegroundService : Service() {
 
     override fun onDestroy() {
         unregisterDeveloperOptionsObserver()
+        pairingGeneration.invalidate()
         pairingJob?.cancel()
         pairingJob = null
         serviceScope.cancel()
