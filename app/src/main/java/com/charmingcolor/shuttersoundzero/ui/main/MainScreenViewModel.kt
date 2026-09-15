@@ -8,6 +8,7 @@ import com.charmingcolor.shuttersoundzero.core.CscMuteManager
 import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
 import com.charmingcolor.shuttersoundzero.core.CscTogglePersistencePolicy
 import com.charmingcolor.shuttersoundzero.core.DeveloperOptionsManager
+import com.charmingcolor.shuttersoundzero.core.adb.LocalNetworkAccess
 import com.charmingcolor.shuttersoundzero.core.adb.StandaloneAdbManager
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.data.SetupIssue
@@ -130,6 +131,17 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
+        if (!LocalNetworkAccess.isGranted(app)) {
+            _uiState.update {
+                it.copy(
+                    showSwitchFailureHelp = false,
+                    infoMessage = null,
+                    errorMessage = "Android 17에서 무선 ADB를 사용하려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용해 주세요."
+                )
+            }
+            return
+        }
+
         if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(app)) {
             _uiState.update {
                 it.copy(
@@ -212,6 +224,17 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
      * 권한 연동 해제 및 초기화
      */
     fun resetPermission() {
+        val app = getApplication<Application>()
+        if (!LocalNetworkAccess.isGranted(app)) {
+            _uiState.update {
+                it.copy(
+                    infoMessage = null,
+                    errorMessage = "Android 17에서 권한 연동을 해제하려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용해 주세요."
+                )
+            }
+            return
+        }
+
         viewModelScope.launch {
             val result = adbManager.revokePermissionViaAdb()
             if (result.isSuccess) {

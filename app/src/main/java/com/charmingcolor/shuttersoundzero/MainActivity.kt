@@ -1,6 +1,7 @@
 package com.charmingcolor.shuttersoundzero
 
 import android.Manifest
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -30,6 +31,7 @@ import com.charmingcolor.shuttersoundzero.ui.onboarding.FirstRunNoticeDialog
 class MainActivity : ComponentActivity() {
 
     private lateinit var prefs: PreferencesRepository
+    private var appLockPreferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     private var isAppUnlocked by mutableStateOf(true)
     private var authenticationInProgress = false
     private var autoPromptPending = false
@@ -60,6 +62,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         prefs = PreferencesRepository.getInstance(this)
+        appLockPreferenceListener = prefs.registerAppLockChangeListener {
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    updateWindowSecurity()
+                }
+            }
+        }
         prefs.ensureInitialNoticeMigration()
         showInitialNotice = !prefs.hasSeenInitialNotice
         prefs.ensureSoftwareUpdateBaseline(Build.FINGERPRINT)
@@ -158,6 +167,14 @@ class MainActivity : ComponentActivity() {
             unlockErrorMessage = null
         }
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (::prefs.isInitialized) {
+            appLockPreferenceListener?.let(prefs::unregisterAppLockChangeListener)
+        }
+        appLockPreferenceListener = null
+        super.onDestroy()
     }
 
     private fun requestAppUnlock() {

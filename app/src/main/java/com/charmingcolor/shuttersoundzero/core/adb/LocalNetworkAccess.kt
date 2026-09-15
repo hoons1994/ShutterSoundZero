@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import java.io.IOException
 
 /**
  * Android 17(API 37)+ 로컬 네트워크 런타임 권한을 한 곳에서 판단한다.
@@ -17,6 +18,12 @@ internal object LocalNetworkAccess {
     fun isGranted(context: Context): Boolean {
         return !requiresRuntimePermission(Build.VERSION.SDK_INT) ||
             ContextCompat.checkSelfPermission(context, PERMISSION) == PackageManager.PERMISSION_GRANTED
+    }
+
+    fun requireGranted(context: Context) {
+        if (!isGranted(context)) {
+            throw LocalNetworkPermissionRequiredException()
+        }
     }
 
     internal fun requiresRuntimePermission(sdkInt: Int): Boolean = sdkInt >= 37
@@ -33,3 +40,7 @@ internal object LocalNetworkAccess {
             !permissionGranted
     }
 }
+
+internal class LocalNetworkPermissionRequiredException : IOException(
+    "Android 17에서 무선 ADB를 사용하려면 로컬 네트워크 권한이 필요합니다."
+)

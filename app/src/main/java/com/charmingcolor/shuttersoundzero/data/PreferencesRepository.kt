@@ -118,6 +118,24 @@ class PreferencesRepository(context: Context) {
         get() = prefs.getBoolean(KEY_APP_LOCK_ENABLED, false)
         set(value) = prefs.edit { putBoolean(KEY_APP_LOCK_ENABLED, value) }
 
+    fun registerAppLockChangeListener(
+        onChanged: (Boolean) -> Unit
+    ): SharedPreferences.OnSharedPreferenceChangeListener {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_APP_LOCK_ENABLED) {
+                onChanged(isAppLockEnabled)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        return listener
+    }
+
+    fun unregisterAppLockChangeListener(
+        listener: SharedPreferences.OnSharedPreferenceChangeListener
+    ) {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+    }
+
     /**
      * 앱을 열었을 때 최신 정식 버전을 조용히 확인할지 여부.
      * APK 다운로드와 설치는 항상 사용자가 [업데이트]를 누른 뒤에만 시작한다.

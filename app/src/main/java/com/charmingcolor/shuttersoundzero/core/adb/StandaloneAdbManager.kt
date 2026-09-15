@@ -67,6 +67,14 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         }
     }
 
+    private fun localNetworkPermissionFailure(): Result<Unit>? {
+        return if (LocalNetworkAccess.isGranted(context)) {
+            null
+        } else {
+            Result.failure(LocalNetworkPermissionRequiredException())
+        }
+    }
+
     init {
         try {
             java.security.Security.insertProviderAt(org.conscrypt.Conscrypt.newProvider(), 1)
@@ -105,6 +113,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         onPairingPortDiscovered: (Int) -> Unit,
         onConnectPortDiscovered: (Int) -> Unit
     ) {
+        LocalNetworkAccess.requireGranted(context)
         stopPairingDiscovery()
         isPairingDiscoveryActive = true
 
@@ -143,6 +152,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         serviceType: String,
         onDiscovered: (InetAddress, Int) -> Unit
     ): AdbMdns {
+        LocalNetworkAccess.requireGranted(context)
         acquireMulticastLock()
         val mdns = AdbMdns(context, serviceType) { address, port ->
             if (address != null) {
@@ -173,7 +183,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                     setReferenceCounted(false)
                     acquire()
                 }
-                Log.d(TAG, "Acquired WifiManager MulticastLock for mDNS discovery")
+                Log.d(TAG, "Acquired WifiManager.MulticastLock for mDNS discovery")
             }
         } catch (e: Exception) {
             logFailure("Failed to acquire MulticastLock", e)
@@ -194,6 +204,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
      * 6자리 페어링 코드로 로컬 기기와 페어링 수행
      */
     suspend fun pairLocal(port: Int, pairingCode: String): Result<Unit> = withContext(Dispatchers.IO) {
+        localNetworkPermissionFailure()?.let { return@withContext it }
         adbOperationMutex.lock()
         try {
             if (port !in 1..65535) {
@@ -227,6 +238,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
      * 무선 디버깅 포트로 연결하여 권한 부여 및 셔터음 무음화 명령어 실행
      */
     suspend fun applyCameraMuteViaAdb(connectPort: Int? = null): Result<Unit> = withContext(Dispatchers.IO) {
+        localNetworkPermissionFailure()?.let { return@withContext it }
         adbOperationMutex.lock()
         try {
             acquireMulticastLock()
@@ -321,6 +333,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
      * 권한 연동 해제 (WRITE_SECURE_SETTINGS 회수 및 셔터음 소리 기본값 복원)
      */
     suspend fun revokePermissionViaAdb(): Result<Unit> = withContext(Dispatchers.IO) {
+        localNetworkPermissionFailure()?.let { return@withContext it }
         adbOperationMutex.lock()
         try {
             acquireMulticastLock()
@@ -415,6 +428,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
      * 무선 디버깅 셸을 통해 CSC 셔터음 키(0 또는 1)를 직접 변경
      */
     suspend fun setCameraMute(enableMute: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        localNetworkPermissionFailure()?.let { return@withContext it }
         adbOperationMutex.lock()
         try {
             acquireMulticastLock()
@@ -519,6 +533,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
     }
 
     private fun connectLocalTls(timeoutMs: Long): Boolean {
+        LocalNetworkAccess.requireGranted(context)
         val endpoint = AtomicReference<Pair<InetAddress, Int>?>(null)
         val discovered = CountDownLatch(1)
         val mdns = startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_CONNECT) { address, port ->
