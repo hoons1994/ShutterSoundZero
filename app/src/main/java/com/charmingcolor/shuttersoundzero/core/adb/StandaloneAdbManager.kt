@@ -428,85 +428,90 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
      * 무선 디버깅 셸을 통해 CSC 셔터음 키(0 또는 1)를 직접 변경
      */
     suspend fun setCameraMute(enableMute: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
-        localNetworkPermissionFailure()?.let { return@withContext it }
-        adbOperationMutex.lock()
+        CameraMuteOperationGate.enter()
         try {
-            acquireMulticastLock()
+            localNetworkPermissionFailure()?.let { return@withContext it }
+            adbOperationMutex.lock()
             try {
-                val targetVal = if (enableMute) "0" else "1"
-                val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
-                val prefs = PreferencesRepository.getInstance(context)
+                acquireMulticastLock()
+                try {
+                    val targetVal = if (enableMute) "0" else "1"
+                    val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
+                    val prefs = PreferencesRepository.getInstance(context)
 
-                // 1. 이미 연결되어 있는 세션이 있다면 즉시 재사용
-                if (isConnected) {
-                    try {
-                        executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
-                        if (!CscStateVerifier.waitFor(enableMute) {
-                                CscMuteManager.isCscShutterSoundMuted(context)
+                    // 1. 이미 연결되어 있는 세션이 있다면 즉시 재사용
+                    if (isConnected) {
+                        try {
+                            executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
+                            if (!CscStateVerifier.waitFor(enableMute) {
+                                    CscMuteManager.isCscShutterSoundMuted(context)
+                                }
+                            ) {
+                                throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
                             }
-                        ) {
-                            throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
+                            prefs.shouldMuteOnBoot = enableMute
+                            Log.i(TAG, "Reused active ADB session for camera setting")
+                            disconnectAfterSuccessfulCommand("reused camera setting session")
+                            return@withContext Result.success(Unit)
+                        } catch (e: Exception) {
+                            logFailure("Active ADB session failed; reconnecting", e)
+                            try { disconnect() } catch (_: Exception) {}
                         }
-                        prefs.shouldMuteOnBoot = enableMute
-                        Log.i(TAG, "Reused active ADB session for camera setting")
-                        disconnectAfterSuccessfulCommand("reused camera setting session")
-                        return@withContext Result.success(Unit)
-                    } catch (e: Exception) {
-                        logFailure("Active ADB session failed; reconnecting", e)
-                        try { disconnect() } catch (_: Exception) {}
                     }
-                }
 
-                var connected = false
-                val savedPort = (lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 })
-                    ?.takeIf { it in 1..65535 }
+                    var connected = false
+                    val savedPort = (lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 })
+                        ?.takeIf { it in 1..65535 }
 
-                // 2. 저장된 포트로 초고속 직접 연결 시도
-                if (savedPort != null) {
-                    try {
-                        Log.i(TAG, "Attempting fast ADB reconnect")
-                        logSensitive { "Saved reconnect port: $savedPort" }
-                        connected = connect(host, savedPort)
-                        if (connected) rememberConnectedPort(savedPort)
-                    } catch (e: Exception) {
-                        logFailure("Fast ADB reconnect failed", e)
+                    // 2. 저장된 포트로 초고속 직접 연결 시도
+                    if (savedPort != null) {
+                        try {
+                            Log.i(TAG, "Attempting fast ADB reconnect")
+                            logSensitive { "Saved reconnect port: $savedPort" }
+                            connected = connect(host, savedPort)
+                            if (connected) rememberConnectedPort(savedPort)
+                        } catch (e: Exception) {
+                            logFailure("Fast ADB reconnect failed", e)
+                        }
                     }
-                }
 
-                // 3. 현재 기기의 mDNS 서비스만 탐색하여 TLS 연결
-                if (!connected) {
-                    try {
-                        Log.i(TAG, "Attempting local-only TLS discovery with 4s timeout")
-                        connected = connectLocalTls(4000)
-                    } catch (e: Exception) {
-                        logFailure("Local-only TLS discovery failed", e)
+                    // 3. 현재 기기의 mDNS 서비스만 탐색하여 TLS 연결
+                    if (!connected) {
+                        try {
+                            Log.i(TAG, "Attempting local-only TLS discovery with 4s timeout")
+                            connected = connectLocalTls(4000)
+                        } catch (e: Exception) {
+                            logFailure("Local-only TLS discovery failed", e)
+                        }
                     }
-                }
 
-                if (!connected && !isConnected) {
-                    return@withContext Result.failure(IOException("무선 디버깅에 연결할 수 없습니다."))
-                }
-
-                executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
-                if (!CscStateVerifier.waitFor(enableMute) {
-                        CscMuteManager.isCscShutterSoundMuted(context)
+                    if (!connected && !isConnected) {
+                        return@withContext Result.failure(IOException("무선 디버깅에 연결할 수 없습니다."))
                     }
-                ) {
-                    throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
+
+                    executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $targetVal")
+                    if (!CscStateVerifier.waitFor(enableMute) {
+                            CscMuteManager.isCscShutterSoundMuted(context)
+                        }
+                    ) {
+                        throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
+                    }
+                    prefs.shouldMuteOnBoot = enableMute
+                    Log.i(TAG, "Camera setting updated successfully via ADB")
+                    disconnectAfterSuccessfulCommand("camera setting update")
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    logFailure("Failed to update camera setting via ADB", e)
+                    try { disconnect() } catch (_: Exception) {}
+                    Result.failure(IOException("셔터음 설정 변경 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
+                } finally {
+                    releaseMulticastLock()
                 }
-                prefs.shouldMuteOnBoot = enableMute
-                Log.i(TAG, "Camera setting updated successfully via ADB")
-                disconnectAfterSuccessfulCommand("camera setting update")
-                Result.success(Unit)
-            } catch (e: Exception) {
-                logFailure("Failed to update camera setting via ADB", e)
-                try { disconnect() } catch (_: Exception) {}
-                Result.failure(IOException("셔터음 설정 변경 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
             } finally {
-                releaseMulticastLock()
+                adbOperationMutex.unlock()
             }
         } finally {
-            adbOperationMutex.unlock()
+            CameraMuteOperationGate.exit()
         }
     }
 
