@@ -2,6 +2,7 @@ package com.charmingcolor.shuttersoundzero.core.adb
 
 import android.content.Context
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -56,13 +57,11 @@ class LocalNetworkAccessInstrumentedTest {
     private fun setPermissionGranted(granted: Boolean) {
         val action = if (granted) "grant" else "revoke"
         val command = "pm $action ${context.packageName} ${LocalNetworkAccess.PERMISSION}"
-        InstrumentationRegistry.getInstrumentation().uiAutomation
+        val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation
             .executeShellCommand(command)
-            .use { descriptor ->
-                java.io.FileInputStream(descriptor.fileDescriptor).use { input ->
-                    input.readBytes()
-                }
-            }
+        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { input ->
+            input.readBytes()
+        }
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
     }
 }
