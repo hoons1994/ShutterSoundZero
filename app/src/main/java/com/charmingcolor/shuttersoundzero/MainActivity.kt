@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +18,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import com.charmingcolor.shuttersoundzero.core.CscMuteManager
+import com.charmingcolor.shuttersoundzero.core.adb.LocalNetworkAccess
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.security.AppLockAuthenticator
 import com.charmingcolor.shuttersoundzero.security.AppLockSession
@@ -30,12 +33,27 @@ class MainActivity : ComponentActivity() {
     private var isAppUnlocked by mutableStateOf(true)
     private var authenticationInProgress = false
     private var autoPromptPending = false
+    private var localNetworkPermissionRequestInProgress = false
+    private var localNetworkPermissionDeniedThisSession = false
     private var unlockErrorMessage by mutableStateOf<String?>(null)
     private var showInitialNotice by mutableStateOf(false)
 
     private val requestNotificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
-            // 알림 권한 허용 여부 처리 (필요시 추가 콜백)
+            requestLocalNetworkPermissionForExistingLinkageIfNeeded()
+        }
+
+    private val requestLocalNetworkPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            localNetworkPermissionRequestInProgress = false
+            localNetworkPermissionDeniedThisSession = !isGranted
+            if (!isGranted) {
+                android.widget.Toast.makeText(
+                    this,
+                    "Android 17에서 무선 ADB 재적용을 사용하려면 로컬 네트워크 권한이 필요합니다. [앱 설정]에서 허용해 주세요.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,9 +65,10 @@ class MainActivity : ComponentActivity() {
         prefs.ensureSoftwareUpdateBaseline(Build.FINGERPRINT)
         isAppUnlocked = !prefs.isAppLockEnabled || AppLockSession.isUnlocked
         autoPromptPending = prefs.isAppLockEnabled && !isAppUnlocked
+        updateWindowSecurity()
 
         // 삼성 갤럭시 기기 여부 확인 - 갤럭시가 아닌 기기일 경우 안내 토스트 표시
-        if (!com.charmingcolor.shuttersoundzero.core.CscMuteManager.isSamsungDevice()) {
+        if (!CscMuteManager.isSamsungDevice()) {
             android.widget.Toast.makeText(
                 this,
                 "⚠️ 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.",
@@ -58,7 +77,7 @@ class MainActivity : ComponentActivity() {
         }
 
         if (!prefs.isAppLockEnabled && !showInitialNotice) {
-            requestNotificationPermissionIfNeeded()
+            requestRuntimePermissionsIfNeeded()
         }
 
         enableEdgeToEdge()
@@ -82,7 +101,7 @@ class MainActivity : ComponentActivity() {
                                     onConfirm = {
                                         prefs.hasSeenInitialNotice = true
                                         showInitialNotice = false
-                                        requestNotificationPermissionIfNeeded()
+                                        requestRuntimePermissionsIfNeeded()
                                     }
                                 )
                             }
@@ -95,6 +114,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        updateWindowSecurity()
         if (
             ::prefs.isInitialized &&
             autoPromptPending &&
@@ -109,6 +129,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        if (
+            ::prefs.isInitialized &&
+            (!prefs.isAppLockEnabled || isAppUnlocked) &&
+            !authenticationInProgress
+        ) {
+            requestLocalNetworkPermissionForExistingLinkageIfNeeded()
+        }
+    }
+
+    override fun onPause() {
+        // 앱 잠금이 방금 켜진 경우에도 최근 앱 스냅샷을 만들기 전에 FLAG_SECURE를 반영한다.
+        updateWindowSecurity()
+        super.onPause()
     }
 
     override fun onStop() {
@@ -151,7 +185,7 @@ class MainActivity : ComponentActivity() {
                 AppLockSession.unlock()
                 isAppUnlocked = true
                 if (!showInitialNotice) {
-                    requestNotificationPermissionIfNeeded()
+                    requestRuntimePermissionsIfNeeded()
                 }
             },
             onCancelled = {
@@ -164,13 +198,45 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
-                requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+    private fun requestRuntimePermissionsIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            requestLocalNetworkPermissionForExistingLinkageIfNeeded()
+        }
+    }
+
+    private fun requestLocalNetworkPermissionForExistingLinkageIfNeeded() {
+        if (
+            !::prefs.isInitialized ||
+            localNetworkPermissionRequestInProgress ||
+            localNetworkPermissionDeniedThisSession
+        ) {
+            return
+        }
+
+        val permissionGranted = LocalNetworkAccess.isGranted(this)
+        val shouldRequest = LocalNetworkAccess.shouldRequestForExistingLinkage(
+            sdkInt = Build.VERSION.SDK_INT,
+            linkageExpected = CscMuteManager.hasWritePermission(this),
+            permissionRevokedByUser = prefs.isPermissionRevokedByUser,
+            permissionGranted = permissionGranted
+        )
+        if (!shouldRequest) return
+
+        localNetworkPermissionRequestInProgress = true
+        requestLocalNetworkPermissionLauncher.launch(LocalNetworkAccess.PERMISSION)
+    }
+
+    private fun updateWindowSecurity() {
+        if (!::prefs.isInitialized) return
+        if (prefs.isAppLockEnabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 }

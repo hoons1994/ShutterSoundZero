@@ -1,6 +1,7 @@
 package com.charmingcolor.shuttersoundzero
 
 import android.content.Context
+import android.view.WindowManager
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -55,6 +56,36 @@ class MainActivityAppLockInstrumentedTest {
             scenario.recreate()
 
             assertTrue(AppLockSession.isUnlocked)
+        }
+    }
+
+    @Test
+    fun appLockEnabled_setsSecureWindowFlag() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue(
+                    activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
+                )
+            }
+        }
+    }
+
+    @Test
+    fun appLockDisabled_clearsSecureWindowFlag() {
+        clearPreferences()
+        PreferencesRepository(context).apply {
+            // 첫 실행 안내를 남겨 시스템 알림 권한 다이얼로그가 테스트를 방해하지 않게 한다.
+            hasSeenInitialNotice = false
+            isAppLockEnabled = false
+        }
+        AppLockSession.unlock()
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertFalse(
+                    activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
+                )
+            }
         }
     }
 

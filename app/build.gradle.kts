@@ -21,8 +21,8 @@ android {
         applicationId = "com.charmingcolor.shuttersoundzero"
         minSdk = 30
         targetSdk = 37
-        versionCode = 151
-        versionName = "1.5.0"
+        versionCode = 152
+        versionName = "1.5.1"
     }
 
     signingConfigs {
@@ -134,4 +134,3 @@ dependencies {
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 }
-
