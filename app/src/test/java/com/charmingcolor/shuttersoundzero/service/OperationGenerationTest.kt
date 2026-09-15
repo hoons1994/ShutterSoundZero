@@ -24,4 +24,25 @@ class OperationGenerationTest {
         generation.invalidate()
         assertFalse(generation.isCurrent(token))
     }
+
+    @Test
+    fun runIfCurrent_executesOnlyForCurrentGeneration() {
+        val generation = OperationGeneration()
+        val stale = generation.next()
+        val current = generation.next()
+        var staleRan = false
+        var currentRan = false
+
+        val staleAccepted = generation.runIfCurrent(stale) {
+            staleRan = true
+        }
+        val currentAccepted = generation.runIfCurrent(current) {
+            currentRan = true
+        }
+
+        assertFalse(staleAccepted)
+        assertFalse(staleRan)
+        assertTrue(currentAccepted)
+        assertTrue(currentRan)
+    }
 }
