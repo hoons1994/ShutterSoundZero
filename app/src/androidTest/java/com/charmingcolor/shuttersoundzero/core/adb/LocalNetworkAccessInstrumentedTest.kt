@@ -2,7 +2,6 @@ package com.charmingcolor.shuttersoundzero.core.adb
 
 import android.content.Context
 import android.os.Build
-import android.os.ParcelFileDescriptor
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -26,42 +25,23 @@ class LocalNetworkAccessInstrumentedTest {
     }
 
     @Test
-    fun runtimePermission_reflectsActualGrantAndRevokeState() {
-        val wasGranted = LocalNetworkAccess.isGranted(context)
-        try {
-            setPermissionGranted(false)
-            assertFalse(LocalNetworkAccess.isGranted(context))
+    fun deniedByDefault_failsClosedThenGrantIsReflected() = runBlocking {
+        // 새 AVD의 새 설치 상태에서는 Android 17 로컬 네트워크 런타임 권한이 허용되지 않는다.
+        assertFalse(LocalNetworkAccess.isGranted(context))
 
-            setPermissionGranted(true)
-            assertTrue(LocalNetworkAccess.isGranted(context))
-        } finally {
-            setPermissionGranted(wasGranted)
-        }
-    }
+        // 권한이 없으면 ADB 네트워크 접근을 시작하기 전에 명확한 typed failure로 중단한다.
+        val deniedResult = StandaloneAdbManager(context).setCameraMute(true)
+        assertTrue(deniedResult.isFailure)
+        assertTrue(deniedResult.exceptionOrNull() is LocalNetworkPermissionRequiredException)
 
-    @Test
-    fun adbManager_failsClosedBeforeNetworkAccessWhenPermissionDenied() = runBlocking {
-        val wasGranted = LocalNetworkAccess.isGranted(context)
-        try {
-            setPermissionGranted(false)
-
-            val result = StandaloneAdbManager(context).setCameraMute(true)
-
-            assertTrue(result.isFailure)
-            assertTrue(result.exceptionOrNull() is LocalNetworkPermissionRequiredException)
-        } finally {
-            setPermissionGranted(wasGranted)
-        }
-    }
-
-    private fun setPermissionGranted(granted: Boolean) {
-        val action = if (granted) "grant" else "revoke"
-        val command = "pm $action ${context.packageName} ${LocalNetworkAccess.PERMISSION}"
-        val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation
-            .executeShellCommand(command)
-        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { input ->
-            input.readBytes()
-        }
+        // revoke는 실행 중인 앱 프로세스를 종료할 수 있으므로, disposable AVD의 기본 거부 상태에서
+        // grant 전환만 검증한다. 실제 OS permission state가 LocalNetworkAccess에 즉시 반영돼야 한다.
+        InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
+            context.packageName,
+            LocalNetworkAccess.PERMISSION
+        )
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+        assertTrue(LocalNetworkAccess.isGranted(context))
     }
 }
