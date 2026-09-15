@@ -287,6 +287,23 @@ jobs:
             exit 1
           fi
 
+      - name: Resolve curated release notes
+        shell: bash
+        run: |
+          RELEASE_NOTES_FILE=".github/release-notes/${RELEASE_TAG}.md"
+
+          if [ ! -f "$RELEASE_NOTES_FILE" ]; then
+            echo "::error::Curated release notes are required: $RELEASE_NOTES_FILE"
+            exit 1
+          fi
+
+          if ! grep -q '[^[:space:]]' "$RELEASE_NOTES_FILE"; then
+            echo "::error::Curated release notes are empty: $RELEASE_NOTES_FILE"
+            exit 1
+          fi
+
+          echo "RELEASE_NOTES_FILE=$RELEASE_NOTES_FILE" >> "$GITHUB_ENV"
+
       - name: Ensure release does not already exist
         shell: bash
         env:
@@ -443,7 +460,7 @@ jobs:
             "${RELEASE_APK}.sha256" \
             "${RELEASE_APK}.sigstore.json" \
             --verify-tag \
-            --generate-notes \
+            --notes-file "$RELEASE_NOTES_FILE" \
             --title "$RELEASE_TAG"
 
       - name: Verify published release is immutable
