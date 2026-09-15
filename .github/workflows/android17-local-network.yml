@@ -55,10 +55,10 @@ jobs:
           fi
 
           for candidate in \
-            'system-images;android-CinnamonBun;default;x86_64' \
-            'system-images;android-37;default;x86_64' \
+            'system-images;android-37.0;google_apis;x86_64' \
             'system-images;android-CinnamonBun;google_apis;x86_64' \
-            'system-images;android-37;google_apis;x86_64'; do
+            'system-images;android-37;google_apis;x86_64' \
+            'system-images;android-37.0;google_apis_playstore;x86_64'; do
             if grep -Fq "$candidate" sdk-packages.txt; then
               IMAGE_PACKAGE="$candidate"
               break
