@@ -60,4 +60,11 @@ class LocalNetworkAccessTest {
             )
         )
     }
+
+    @Test
+    fun permissionRequiredException_hasActionableMessage() {
+        assertTrue(
+            LocalNetworkPermissionRequiredException().message.orEmpty().contains("로컬 네트워크 권한")
+        )
+    }
 }

@@ -6,6 +6,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import com.charmingcolor.shuttersoundzero.security.AppLockSession
 import org.junit.After
@@ -81,6 +82,39 @@ class MainActivityAppLockInstrumentedTest {
         AppLockSession.unlock()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertFalse(
+                    activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
+                )
+            }
+        }
+    }
+
+    @Test
+    fun appLockPreferenceChange_updatesSecureWindowFlagImmediately() {
+        clearPreferences()
+        PreferencesRepository(context).apply {
+            // 런타임 플래그 전환만 검증하도록 권한 다이얼로그를 피한다.
+            hasSeenInitialNotice = false
+            isAppLockEnabled = false
+        }
+        AppLockSession.unlock()
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertFalse(
+                    activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
+                )
+                PreferencesRepository.getInstance(activity).isAppLockEnabled = true
+            }
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            scenario.onActivity { activity ->
+                assertTrue(
+                    activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
+                )
+                PreferencesRepository.getInstance(activity).isAppLockEnabled = false
+            }
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             scenario.onActivity { activity ->
                 assertFalse(
                     activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
