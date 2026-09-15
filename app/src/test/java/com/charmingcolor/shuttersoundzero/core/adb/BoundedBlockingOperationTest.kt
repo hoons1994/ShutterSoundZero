@@ -17,13 +17,15 @@ class BoundedBlockingOperationTest {
                     timeoutMillis = 50,
                     threadName = "timeout-test"
                 ) {
-                    while (true) {
+                    var released = false
+                    while (!released) {
                         try {
-                            if (release.await(20, TimeUnit.MILLISECONDS)) return@run true
+                            released = release.await(20, TimeUnit.MILLISECONDS)
                         } catch (_: InterruptedException) {
                             // 외부 라이브러리가 interrupt를 무시하는 상황을 재현한다.
                         }
                     }
+                    true
                 }
             }
         } finally {
