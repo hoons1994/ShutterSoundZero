@@ -23,7 +23,7 @@ internal object BoundedBlockingOperation {
         require(timeoutMillis > 0L) { "timeoutMillis must be positive" }
 
         val task = FutureTask(Callable(block))
-        val worker = Thread(task, threadName).apply {
+        Thread(task, threadName).apply {
             isDaemon = true
             start()
         }
