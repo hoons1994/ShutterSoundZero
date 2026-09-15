@@ -2,9 +2,13 @@ package com.charmingcolor.shuttersoundzero.core.adb
 
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
+import android.view.accessibility.AccessibilityNodeInfo
+import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.charmingcolor.shuttersoundzero.debug.LocalNetworkPermissionProbeActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -25,8 +29,8 @@ class LocalNetworkAccessInstrumentedTest {
     }
 
     @Test
-    fun deniedByDefault_failsClosedThenGrantIsReflected() = runBlocking {
-        // 새 AVD의 새 설치 상태에서는 Android 17 로컬 네트워크 런타임 권한이 허용되지 않는다.
+    fun freshInstall_failsClosedThenRuntimePermissionFlowGrantsAccess() = runBlocking {
+        // Disposable API 37 AVD의 새 설치 상태에서는 ACCESS_LOCAL_NETWORK가 기본 거부다.
         assertFalse(LocalNetworkAccess.isGranted(context))
 
         // 권한이 없으면 ADB 네트워크 접근을 시작하기 전에 명확한 typed failure로 중단한다.
@@ -34,14 +38,61 @@ class LocalNetworkAccessInstrumentedTest {
         assertTrue(deniedResult.isFailure)
         assertTrue(deniedResult.exceptionOrNull() is LocalNetworkPermissionRequiredException)
 
-        // revoke는 실행 중인 앱 프로세스를 종료할 수 있으므로, disposable AVD의 기본 거부 상태에서
-        // grant 전환만 검증한다. 실제 OS permission state가 LocalNetworkAccess에 즉시 반영돼야 한다.
-        InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
-            context.packageName,
-            LocalNetworkAccess.PERMISSION
-        )
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        // 실제 ActivityResultContracts.RequestPermission 경로로 Android 17 시스템 권한창을 열고
+        // permission controller의 허용 버튼을 눌러 앱 콜백과 OS permission state까지 확인한다.
+        ActivityScenario.launch(LocalNetworkPermissionProbeActivity::class.java).use { scenario ->
+            assertTrue("Android 17 local-network permission dialog was not shown", clickSystemAllowButton())
 
-        assertTrue(LocalNetworkAccess.isGranted(context))
+            var callbackResult: Boolean? = null
+            val deadline = SystemClock.elapsedRealtime() + 5_000L
+            while (SystemClock.elapsedRealtime() < deadline && callbackResult == null) {
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+                scenario.onActivity { activity ->
+                    callbackResult = activity.permissionResult
+                }
+                if (callbackResult == null) SystemClock.sleep(100L)
+            }
+
+            assertTrue("Permission result callback did not report granted", callbackResult == true)
+            assertTrue(LocalNetworkAccess.isGranted(context))
+        }
+    }
+
+    private fun clickSystemAllowButton(): Boolean {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val uiAutomation = instrumentation.uiAutomation
+        val deadline = SystemClock.elapsedRealtime() + 5_000L
+
+        while (SystemClock.elapsedRealtime() < deadline) {
+            val root = uiAutomation.rootInActiveWindow
+            val allowButton = root?.let(::findAllowButton)
+            if (allowButton?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) {
+                instrumentation.waitForIdleSync()
+                return true
+            }
+            SystemClock.sleep(100L)
+        }
+        return false
+    }
+
+    private fun findAllowButton(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val viewId = node.viewIdResourceName.orEmpty()
+        val text = node.text?.toString().orEmpty()
+        val description = node.contentDescription?.toString().orEmpty()
+        val looksLikeAllow =
+            viewId.contains("permission_allow", ignoreCase = true) ||
+                text.equals("Allow", ignoreCase = true) ||
+                text.contains("while using", ignoreCase = true) ||
+                text.contains("허용") ||
+                description.equals("Allow", ignoreCase = true) ||
+                description.contains("허용")
+
+        if (looksLikeAllow && node.isClickable && node.isEnabled) return node
+
+        for (index in 0 until node.childCount) {
+            val child = node.getChild(index) ?: continue
+            findAllowButton(child)?.let { return it }
+        }
+        return null
     }
 }
