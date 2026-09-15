@@ -88,7 +88,7 @@ fun CompatibilityReportRow() {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "아래 정보만 공개 GitHub 이슈로 제출됩니다. GitHub에서 최종 제출하면 프로젝트의 호환성 문서에 사용자 제출 데이터로 자동 등록됩니다.",
+                        text = "아래 정보만 공개 GitHub 이슈로 제출됩니다. GitHub에서 최종 제출하면 문서 반영용 변경이 자동 생성되며, 저장소의 필수 검증을 통과해 병합된 뒤 호환성 문서의 사용자 제출 데이터에 등록됩니다.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 19.sp
