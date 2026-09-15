@@ -1,0 +1,155 @@
+name: Compatibility Report
+
+on:
+  issues:
+    types:
+      - opened
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: compatibility-report-document
+  cancel-in-progress: false
+
+jobs:
+  register:
+    if: contains(github.event.issue.body, '<!-- shuttersoundzero-compatibility-report:v1 -->')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+
+      - name: Validate report and update compatibility document
+        shell: bash
+        run: |
+          python3 <<'PY'
+          import html
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          MARKER = "<!-- shuttersoundzero-compatibility-report:v1 -->"
+          START = "<!-- APP_SUBMISSIONS_START -->"
+          DOC_PATH = Path("docs/COMPATIBILITY.md")
+
+          with open(os.environ["GITHUB_EVENT_PATH"], "r", encoding="utf-8") as handle:
+              event = json.load(handle)
+
+          issue = event["issue"]
+          body = issue.get("body") or ""
+          if MARKER not in body:
+              raise SystemExit("Compatibility marker not found")
+
+          match = re.search(r"```json\s*(\{.*?\})\s*```", body, flags=re.DOTALL)
+          if not match:
+              raise SystemExit("Compatibility JSON block not found")
+
+          try:
+              data = json.loads(match.group(1))
+          except json.JSONDecodeError as error:
+              raise SystemExit(f"Invalid compatibility JSON: {error}") from error
+
+          expected_keys = {
+              "schemaVersion",
+              "manufacturer",
+              "model",
+              "androidVersion",
+              "sdkInt",
+              "oneUiVersion",
+              "securityPatch",
+              "appVersion",
+              "setupPermissionGranted",
+              "cameraMuteApplied",
+          }
+          if set(data) != expected_keys:
+              raise SystemExit("Unexpected compatibility report fields")
+          if data["schemaVersion"] != 1:
+              raise SystemExit("Unsupported compatibility schema version")
+
+          def require_text(key: str, max_length: int) -> str:
+              value = data.get(key)
+              if not isinstance(value, str):
+                  raise SystemExit(f"{key} must be a string")
+              value = value.strip()
+              if not value or len(value) > max_length:
+                  raise SystemExit(f"{key} length is invalid")
+              if any(ord(char) < 32 and char not in "\t" for char in value):
+                  raise SystemExit(f"{key} contains control characters")
+              return value
+
+          manufacturer = require_text("manufacturer", 40)
+          model = require_text("model", 80)
+          android_version = require_text("androidVersion", 40)
+          one_ui_version = require_text("oneUiVersion", 40)
+          security_patch = require_text("securityPatch", 40)
+          app_version = require_text("appVersion", 40)
+
+          sdk_int = data.get("sdkInt")
+          if not isinstance(sdk_int, int) or isinstance(sdk_int, bool) or not 1 <= sdk_int <= 100:
+              raise SystemExit("sdkInt is invalid")
+
+          setup_permission = data.get("setupPermissionGranted")
+          camera_mute = data.get("cameraMuteApplied")
+          if not isinstance(setup_permission, bool) or not isinstance(camera_mute, bool):
+              raise SystemExit("Compatibility state fields must be booleans")
+
+          if security_patch != "알 수 없음" and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", security_patch):
+              raise SystemExit("securityPatch format is invalid")
+
+          def cell(value: str) -> str:
+              value = value.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+              value = html.escape(value, quote=False)
+              return value.replace("|", "\\|")
+
+          issue_number = int(issue["number"])
+          issue_url = issue["html_url"]
+          issue_cell = f"[#{issue_number}]({issue_url})"
+          setup_cell = "✅ 있음" if setup_permission else "— 없음"
+          mute_cell = "✅ 적용" if camera_mute else "— 미적용"
+          row = (
+              f"| {issue_cell} | {cell(manufacturer)} | {cell(model)} | "
+              f"{cell(android_version)} (SDK {sdk_int}) | {cell(one_ui_version)} | "
+              f"{cell(security_patch)} | {cell(app_version)} | {setup_cell} | {mute_cell} | 사용자 제출 |"
+          )
+
+          document = DOC_PATH.read_text(encoding="utf-8")
+          if START not in document:
+              raise SystemExit("Compatibility submission marker not found in document")
+          if f"[#{issue_number}]({issue_url})" in document:
+              raise SystemExit(0)
+
+          document = document.replace(START, START + "\n" + row, 1)
+          DOC_PATH.write_text(document, encoding="utf-8")
+          PY
+
+      - name: Commit compatibility report
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/COMPATIBILITY.md
+
+          if git diff --cached --quiet; then
+            echo 'No document change required.'
+            exit 0
+          fi
+
+          git commit -m "docs: register compatibility report #${{ github.event.issue.number }}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Close processed report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh issue close '${{ github.event.issue.number }}' \
+            --repo '${{ github.repository }}' \
+            --comment '호환성 데이터가 docs/COMPATIBILITY.md의 사용자 제출 데이터에 자동 등록되었습니다. 제보해 주셔서 감사합니다.'
