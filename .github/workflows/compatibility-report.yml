@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   issues: write
+  pull-requests: write
 
 concurrency:
   group: compatibility-report-document
@@ -47,7 +48,8 @@ jobs:
           if MARKER not in body:
               raise SystemExit("Compatibility marker not found")
 
-          match = re.search(r"```json\s*(\{.*?\})\s*```", body, flags=re.DOTALL)
+          report_body = body.split(MARKER, 1)[1]
+          match = re.search(r"```json\s*(\{.*?\})\s*```", report_body, flags=re.DOTALL)
           if not match:
               raise SystemExit("Compatibility JSON block not found")
 
@@ -129,27 +131,47 @@ jobs:
           DOC_PATH.write_text(document, encoding="utf-8")
           PY
 
-      - name: Commit compatibility report
+      - name: Commit report branch
+        id: commit
         shell: bash
         run: |
+          BRANCH="compatibility-report/issue-${{ github.event.issue.number }}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$BRANCH"
           git add docs/COMPATIBILITY.md
 
           if git diff --cached --quiet; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
             echo 'No document change required.'
             exit 0
           fi
 
           git commit -m "docs: register compatibility report #${{ github.event.issue.number }}"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git push origin "$BRANCH"
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
 
-      - name: Close processed report
+      - name: Open protected-main pull request
+        if: steps.commit.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          REPORT_BRANCH: ${{ steps.commit.outputs.branch }}
         shell: bash
         run: |
-          gh issue close '${{ github.event.issue.number }}' \
+          if PR_URL="$(gh pr create \
             --repo '${{ github.repository }}' \
-            --comment '호환성 데이터가 docs/COMPATIBILITY.md의 사용자 제출 데이터에 자동 등록되었습니다. 제보해 주셔서 감사합니다.'
+            --base main \
+            --head "$REPORT_BRANCH" \
+            --title 'docs: 호환성 제보 #${{ github.event.issue.number }} 등록' \
+            --body '앱에서 제출된 호환성 데이터 #${{ github.event.issue.number }}를 문서에 반영합니다.\n\nCloses #${{ github.event.issue.number }}')"; then
+            gh issue comment '${{ github.event.issue.number }}' \
+              --repo '${{ github.repository }}' \
+              --body "호환성 문서 반영용 PR을 생성했습니다: $PR_URL\n\n저장소의 필수 검증을 통과해 병합되면 docs/COMPATIBILITY.md에 등록되고 이 제보는 자동으로 닫힙니다."
+          else
+            gh issue comment '${{ github.event.issue.number }}' \
+              --repo '${{ github.repository }}' \
+              --body "호환성 데이터 검증과 문서 변경 브랜치 생성은 완료했지만, GitHub Actions의 PR 생성 권한이 비활성화되어 자동 PR을 만들지 못했습니다. 브랜치: $REPORT_BRANCH"
+            exit 1
+          fi
