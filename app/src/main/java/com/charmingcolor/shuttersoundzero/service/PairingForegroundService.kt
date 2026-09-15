@@ -22,13 +22,16 @@ import com.charmingcolor.shuttersoundzero.data.SetupIssue
 import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticLogger
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationHelper
 import com.charmingcolor.shuttersoundzero.ui.notification.PairingNotificationState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -128,6 +131,11 @@ class PairingForegroundService : Service() {
     }
 
     private fun startPairing(isDevOptionsOff: Boolean) {
+        // 새 1회 설정 시작은 이전 코드 제출 작업의 완료보다 우선한다.
+        pairingGeneration.invalidate()
+        pairingJob?.cancel()
+        pairingJob = null
+
         prefs.lastSetupIssue = null
         DiagnosticLogger.record(
             this,
@@ -235,175 +243,203 @@ class PairingForegroundService : Service() {
                     }
 
                     if (port == null) {
-                        prefs.lastSetupIssue = SetupIssue.PAIRING_DISCOVERY
-                        DiagnosticLogger.record(
-                            this@PairingForegroundService,
-                            DiagnosticLogger.Stage.PAIRING_DISCOVERY,
-                            DiagnosticLogger.Outcome.TIMEOUT
-                        )
-                        PairingNotificationHelper.showPairingNotification(
-                            this@PairingForegroundService,
-                            state = PairingNotificationState.DISCOVERY_WAITING
-                        )
+                        currentCoroutineContext().ensureActive()
+                        commitPairingSideEffect(generation) {
+                            prefs.lastSetupIssue = SetupIssue.PAIRING_DISCOVERY
+                            DiagnosticLogger.record(
+                                this@PairingForegroundService,
+                                DiagnosticLogger.Stage.PAIRING_DISCOVERY,
+                                DiagnosticLogger.Outcome.TIMEOUT
+                            )
+                            PairingNotificationHelper.showPairingNotification(
+                                this@PairingForegroundService,
+                                state = PairingNotificationState.DISCOVERY_WAITING
+                            )
+                        }
                         return@withTimeoutOrNull true
                     }
 
-                    adbManager.stopPairingDiscovery()
-                    Log.i(TAG, "Attempting pairing using app-discovered endpoint")
-                    DiagnosticLogger.record(
-                        this@PairingForegroundService,
-                        DiagnosticLogger.Stage.PAIRING,
-                        DiagnosticLogger.Outcome.STARTED
-                    )
-                    val pairResult = adbManager.pairLocal(port, code)
-
-                    if (pairResult.isSuccess) {
+                    currentCoroutineContext().ensureActive()
+                    commitPairingSideEffect(generation) {
+                        adbManager.stopPairingDiscovery()
+                        Log.i(TAG, "Attempting pairing using app-discovered endpoint")
                         DiagnosticLogger.record(
                             this@PairingForegroundService,
                             DiagnosticLogger.Stage.PAIRING,
-                            DiagnosticLogger.Outcome.SUCCESS
-                        )
-                        Log.i(TAG, "Pairing successful; applying camera mute and permissions")
-                        delay(300)
-
-                        DiagnosticLogger.record(
-                            this@PairingForegroundService,
-                            DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
                             DiagnosticLogger.Outcome.STARTED
                         )
-                        val muteResult = adbManager.applyCameraMuteViaAdb()
-                        if (muteResult.isSuccess) {
-                            prefs.lastSetupIssue = null
+                    }
+
+                    val pairResult = adbManager.pairLocal(port, code)
+                    currentCoroutineContext().ensureActive()
+
+                    if (pairResult.isSuccess) {
+                        commitPairingSideEffect(generation) {
+                            DiagnosticLogger.record(
+                                this@PairingForegroundService,
+                                DiagnosticLogger.Stage.PAIRING,
+                                DiagnosticLogger.Outcome.SUCCESS
+                            )
+                            Log.i(TAG, "Pairing successful; applying camera mute and permissions")
+                        }
+
+                        delay(300)
+                        currentCoroutineContext().ensureActive()
+                        commitPairingSideEffect(generation) {
                             DiagnosticLogger.record(
                                 this@PairingForegroundService,
                                 DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
-                                DiagnosticLogger.Outcome.SUCCESS
-                            )
-                            val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(
-                                this@PairingForegroundService
-                            )
-                            val wirelessDebuggingDisabled = wirelessCleanup.isSuccess
-                            DiagnosticLogger.record(
-                                this@PairingForegroundService,
-                                DiagnosticLogger.Stage.WIRELESS_DEBUGGING_CLEANUP,
-                                if (wirelessDebuggingDisabled) {
-                                    DiagnosticLogger.Outcome.SUCCESS
-                                } else {
-                                    DiagnosticLogger.Outcome.FAILURE
-                                },
-                                wirelessCleanup.exceptionOrNull()
-                            )
-                            if (wirelessDebuggingDisabled) {
-                                Log.i(TAG, "Wireless debugging disabled after successful setup")
-                            } else {
-                                wirelessCleanup.exceptionOrNull()?.let {
-                                    logFailure("Unable to disable wireless debugging after setup", it)
-                                }
-                            }
-
-                            DiagnosticLogger.record(
-                                this@PairingForegroundService,
-                                DiagnosticLogger.Stage.PAIRING_WORKFLOW,
-                                DiagnosticLogger.Outcome.SUCCESS
-                            )
-                            Log.i(TAG, "Pairing workflow completed successfully")
-                            complete(
-                                this@PairingForegroundService,
-                                wirelessDebuggingDisabled = wirelessDebuggingDisabled
-                            )
-
-                            Handler(Looper.getMainLooper()).post {
-                                Toast.makeText(
-                                    this@PairingForegroundService,
-                                    if (wirelessDebuggingDisabled) {
-                                        "✨ 설정 완료! 카메라 무음 설정을 적용하고 무선 디버깅도 껐습니다."
-                                    } else {
-                                        "✨ 카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요."
-                                    },
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-
-                            try {
-                                val launchIntent = Intent(
-                                    this@PairingForegroundService,
-                                    MainActivity::class.java
-                                ).apply {
-                                    addFlags(
-                                        Intent.FLAG_ACTIVITY_NEW_TASK or
-                                            Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                                            Intent.FLAG_ACTIVITY_CLEAR_TOP
-                                    )
-                                }
-                                startActivity(launchIntent)
-                            } catch (e: Exception) {
-                                logFailure("Background activity launch restricted", e)
-                            }
-                        } else {
-                            prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
-                            DiagnosticLogger.record(
-                                this@PairingForegroundService,
-                                DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
-                                DiagnosticLogger.Outcome.FAILURE,
-                                muteResult.exceptionOrNull()
-                            )
-                            muteResult.exceptionOrNull()?.let {
-                                logFailure("Mute apply failed after pairing", it)
-                            } ?: Log.w(TAG, "Mute apply failed after pairing")
-                            PairingNotificationHelper.showPairingNotification(
-                                this@PairingForegroundService,
-                                state = PairingNotificationState.CAMERA_APPLY_FAILED
+                                DiagnosticLogger.Outcome.STARTED
                             )
                         }
+
+                        val muteResult = adbManager.applyCameraMuteViaAdb()
+                        currentCoroutineContext().ensureActive()
+
+                        if (muteResult.isSuccess) {
+                            commitPairingSideEffect(generation) {
+                                prefs.lastSetupIssue = null
+                                DiagnosticLogger.record(
+                                    this@PairingForegroundService,
+                                    DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
+                                    DiagnosticLogger.Outcome.SUCCESS
+                                )
+                                val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(
+                                    this@PairingForegroundService
+                                )
+                                val wirelessDebuggingDisabled = wirelessCleanup.isSuccess
+                                DiagnosticLogger.record(
+                                    this@PairingForegroundService,
+                                    DiagnosticLogger.Stage.WIRELESS_DEBUGGING_CLEANUP,
+                                    if (wirelessDebuggingDisabled) {
+                                        DiagnosticLogger.Outcome.SUCCESS
+                                    } else {
+                                        DiagnosticLogger.Outcome.FAILURE
+                                    },
+                                    wirelessCleanup.exceptionOrNull()
+                                )
+                                if (wirelessDebuggingDisabled) {
+                                    Log.i(TAG, "Wireless debugging disabled after successful setup")
+                                } else {
+                                    wirelessCleanup.exceptionOrNull()?.let {
+                                        logFailure("Unable to disable wireless debugging after setup", it)
+                                    }
+                                }
+
+                                DiagnosticLogger.record(
+                                    this@PairingForegroundService,
+                                    DiagnosticLogger.Stage.PAIRING_WORKFLOW,
+                                    DiagnosticLogger.Outcome.SUCCESS
+                                )
+                                Log.i(TAG, "Pairing workflow completed successfully")
+
+                                Handler(Looper.getMainLooper()).post {
+                                    Toast.makeText(
+                                        this@PairingForegroundService,
+                                        if (wirelessDebuggingDisabled) {
+                                            "✨ 설정 완료! 카메라 무음 설정을 적용하고 무선 디버깅도 껐습니다."
+                                        } else {
+                                            "✨ 카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요."
+                                        },
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+
+                                try {
+                                    val launchIntent = Intent(
+                                        this@PairingForegroundService,
+                                        MainActivity::class.java
+                                    ).apply {
+                                        addFlags(
+                                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                                                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                                Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                        )
+                                    }
+                                    startActivity(launchIntent)
+                                } catch (e: Exception) {
+                                    logFailure("Background activity launch restricted", e)
+                                }
+
+                                complete(
+                                    this@PairingForegroundService,
+                                    wirelessDebuggingDisabled = wirelessDebuggingDisabled
+                                )
+                            }
+                        } else {
+                            commitPairingSideEffect(generation) {
+                                prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
+                                DiagnosticLogger.record(
+                                    this@PairingForegroundService,
+                                    DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
+                                    DiagnosticLogger.Outcome.FAILURE,
+                                    muteResult.exceptionOrNull()
+                                )
+                                muteResult.exceptionOrNull()?.let {
+                                    logFailure("Mute apply failed after pairing", it)
+                                } ?: Log.w(TAG, "Mute apply failed after pairing")
+                                PairingNotificationHelper.showPairingNotification(
+                                    this@PairingForegroundService,
+                                    state = PairingNotificationState.CAMERA_APPLY_FAILED
+                                )
+                            }
+                        }
                     } else {
-                        prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
-                        DiagnosticLogger.record(
-                            this@PairingForegroundService,
-                            DiagnosticLogger.Stage.PAIRING,
-                            DiagnosticLogger.Outcome.FAILURE,
-                            pairResult.exceptionOrNull()
-                        )
-                        pairResult.exceptionOrNull()?.let {
-                            logFailure("Pairing failed", it)
-                        } ?: Log.w(TAG, "Pairing failed")
-                        PairingNotificationHelper.showPairingNotification(
-                            this@PairingForegroundService,
-                            pairingPort = port,
-                            state = PairingNotificationState.PAIRING_FAILED
-                        )
+                        commitPairingSideEffect(generation) {
+                            prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
+                            DiagnosticLogger.record(
+                                this@PairingForegroundService,
+                                DiagnosticLogger.Stage.PAIRING,
+                                DiagnosticLogger.Outcome.FAILURE,
+                                pairResult.exceptionOrNull()
+                            )
+                            pairResult.exceptionOrNull()?.let {
+                                logFailure("Pairing failed", it)
+                            } ?: Log.w(TAG, "Pairing failed")
+                            PairingNotificationHelper.showPairingNotification(
+                                this@PairingForegroundService,
+                                pairingPort = port,
+                                state = PairingNotificationState.PAIRING_FAILED
+                            )
+                        }
                     }
                     true
                 }
 
+                currentCoroutineContext().ensureActive()
                 if (timedResult == null) {
+                    commitPairingSideEffect(generation) {
+                        prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
+                        DiagnosticLogger.record(
+                            this@PairingForegroundService,
+                            DiagnosticLogger.Stage.PAIRING_WORKFLOW,
+                            DiagnosticLogger.Outcome.TIMEOUT
+                        )
+                        Log.w(TAG, "Pairing timed out after 25 seconds")
+                        PairingNotificationHelper.showPairingNotification(
+                            this@PairingForegroundService,
+                            state = PairingNotificationState.PAIRING_TIMEOUT
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                Log.i(TAG, "Pairing workflow cancelled during service shutdown")
+                throw e
+            } catch (e: Exception) {
+                commitPairingSideEffect(generation) {
                     prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
                     DiagnosticLogger.record(
                         this@PairingForegroundService,
                         DiagnosticLogger.Stage.PAIRING_WORKFLOW,
-                        DiagnosticLogger.Outcome.TIMEOUT
+                        DiagnosticLogger.Outcome.FAILURE,
+                        e
                     )
-                    Log.w(TAG, "Pairing timed out after 25 seconds")
+                    logFailure("Pairing error", e)
                     PairingNotificationHelper.showPairingNotification(
                         this@PairingForegroundService,
-                        state = PairingNotificationState.PAIRING_TIMEOUT
+                        state = PairingNotificationState.PAIRING_ERROR
                     )
                 }
-            } catch (e: java.util.concurrent.CancellationException) {
-                Log.i(TAG, "Pairing workflow cancelled during service shutdown")
-                throw e
-            } catch (e: Exception) {
-                prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
-                DiagnosticLogger.record(
-                    this@PairingForegroundService,
-                    DiagnosticLogger.Stage.PAIRING_WORKFLOW,
-                    DiagnosticLogger.Outcome.FAILURE,
-                    e
-                )
-                logFailure("Pairing error", e)
-                PairingNotificationHelper.showPairingNotification(
-                    this@PairingForegroundService,
-                    state = PairingNotificationState.PAIRING_ERROR
-                )
             } finally {
                 // 이전 세대의 늦은 finally가 새 pairingJob 참조를 지우지 못하게 한다.
                 if (pairingGeneration.isCurrent(generation) && pairingJob === coroutineContext[Job]) {
@@ -413,6 +449,12 @@ class PairingForegroundService : Service() {
         }
         pairingJob = job
         job.start()
+    }
+
+    private fun commitPairingSideEffect(generation: Long, block: () -> Unit) {
+        if (!pairingGeneration.runIfCurrent(generation, block)) {
+            throw CancellationException("Stale pairing workflow")
+        }
     }
 
     private fun logFailure(summary: String, error: Throwable) {

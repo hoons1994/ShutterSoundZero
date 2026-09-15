@@ -40,16 +40,10 @@ object DeveloperOptionsManager {
      * WRITE_SECURE_SETTINGS 권한과 적용된 CSC 값도 유지된다.
      *
      * 다른 카메라 설정 변경이 실행 중이거나 ADB mutex를 기다리는 동안에는
-     * 해당 작업의 연결을 끊지 않도록 정리를 건너뛴다. 마지막 작업의 후처리가
-     * 다시 호출되므로 현재 사용자 요청을 방해하는 것보다 안전하다.
+     * 해당 작업의 연결을 끊지 않도록 정리를 건너뛴다. idle 확인부터 실제 설정
+     * 변경까지 같은 작업 게이트에서 수행해 새 ADB 작업과의 TOCTOU 경쟁을 막는다.
      */
     fun disableWirelessDebugging(context: Context): Result<Unit> {
-        if (CameraMuteOperationGate.hasPendingOperations()) {
-            return Result.failure(
-                IllegalStateException("카메라 설정 변경 작업이 진행 중입니다.")
-            )
-        }
-
         if (!canDisableDirectly(context)) {
             return Result.failure(
                 SecurityException("WRITE_SECURE_SETTINGS 권한이 필요합니다.")
@@ -57,15 +51,18 @@ object DeveloperOptionsManager {
         }
 
         return runCatching {
-            val changed = Settings.Global.putInt(
-                context.contentResolver,
-                ADB_WIFI_ENABLED,
-                0
-            )
-            check(changed) { "무선 디버깅 설정을 변경하지 못했습니다." }
-            check(!isWirelessDebuggingEnabled(context)) {
-                "무선 디버깅이 아직 활성화되어 있습니다."
+            val cleaned = CameraMuteOperationGate.runCleanupIfIdle {
+                val changed = Settings.Global.putInt(
+                    context.contentResolver,
+                    ADB_WIFI_ENABLED,
+                    0
+                )
+                check(changed) { "무선 디버깅 설정을 변경하지 못했습니다." }
+                check(!isWirelessDebuggingEnabled(context)) {
+                    "무선 디버깅이 아직 활성화되어 있습니다."
+                }
             }
+            check(cleaned) { "카메라 설정 변경 작업이 진행 중입니다." }
         }
     }
 
@@ -81,28 +78,31 @@ object DeveloperOptionsManager {
         }
 
         return runCatching {
-            val resolver = context.contentResolver
+            val cleaned = CameraMuteOperationGate.runCleanupIfIdle {
+                val resolver = context.contentResolver
 
-            // ADB 연결을 먼저 종료한 뒤 개발자 옵션 마스터 상태를 내린다.
-            val wirelessAdbDisabled = Settings.Global.putInt(
-                resolver,
-                ADB_WIFI_ENABLED,
-                0
-            )
-            val usbAdbDisabled = Settings.Global.putInt(
-                resolver,
-                Settings.Global.ADB_ENABLED,
-                0
-            )
-            val developerOptionsDisabled = Settings.Global.putInt(
-                resolver,
-                Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
-                0
-            )
+                // ADB 연결을 먼저 종료한 뒤 개발자 옵션 마스터 상태를 내린다.
+                val wirelessAdbDisabled = Settings.Global.putInt(
+                    resolver,
+                    ADB_WIFI_ENABLED,
+                    0
+                )
+                val usbAdbDisabled = Settings.Global.putInt(
+                    resolver,
+                    Settings.Global.ADB_ENABLED,
+                    0
+                )
+                val developerOptionsDisabled = Settings.Global.putInt(
+                    resolver,
+                    Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
+                    0
+                )
 
-            check(wirelessAdbDisabled && usbAdbDisabled && developerOptionsDisabled) {
-                "개발자 옵션 설정을 모두 변경하지 못했습니다."
+                check(wirelessAdbDisabled && usbAdbDisabled && developerOptionsDisabled) {
+                    "개발자 옵션 설정을 모두 변경하지 못했습니다."
+                }
             }
+            check(cleaned) { "카메라 설정 변경 작업이 진행 중입니다." }
         }
     }
 

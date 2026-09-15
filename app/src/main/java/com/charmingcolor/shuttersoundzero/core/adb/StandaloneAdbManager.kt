@@ -11,6 +11,7 @@ import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
 import io.github.muntashirakon.adb.android.AdbMdns
 import io.github.muntashirakon.adb.android.AndroidUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -101,6 +102,13 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
     var lastDiscoveredConnectPort: Int? = null
 
     private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+    private val multicastLeaseManager by lazy {
+        MulticastLockLeaseManager(
+            acquireResource = ::acquireMulticastLockResource,
+            releaseResource = ::releaseMulticastLockResource
+        )
+    }
+    private var pairingMulticastLease: MulticastLockLeaseManager.Lease? = null
     private var pairingMdns: AdbMdns? = null
     private var pairingConnectMdns: AdbMdns? = null
 
@@ -116,6 +124,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         LocalNetworkAccess.requireGranted(context)
         stopPairingDiscovery()
         isPairingDiscoveryActive = true
+        pairingMulticastLease = multicastLeaseManager.acquire()
 
         try {
             pairingMdns = startMdnsDiscovery(AdbMdns.SERVICE_TYPE_TLS_PAIRING) { _, port ->
@@ -130,7 +139,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         }
     }
 
-    /** 페어링 취소·완료 시 관련 탐색과 멀티캐스트 잠금을 즉시 해제한다. */
+    /** 페어링 취소·완료 시 관련 탐색과 해당 세션의 멀티캐스트 lease를 즉시 해제한다. */
     @Synchronized
     fun stopPairingDiscovery() {
         isPairingDiscoveryActive = false
@@ -142,18 +151,19 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         }
         pairingMdns = null
         pairingConnectMdns = null
-        releaseMulticastLock()
+        pairingMulticastLease?.close()
+        pairingMulticastLease = null
     }
 
     /**
-     * mDNS를 활용하여 활성화된 무선 디버깅 포트를 탐색
+     * mDNS를 활용하여 활성화된 무선 디버깅 포트를 탐색한다.
+     * 호출자는 탐색 수명 동안 MulticastLock lease를 소유해야 한다.
      */
-    fun startMdnsDiscovery(
+    private fun startMdnsDiscovery(
         serviceType: String,
         onDiscovered: (InetAddress, Int) -> Unit
     ): AdbMdns {
         LocalNetworkAccess.requireGranted(context)
-        acquireMulticastLock()
         val mdns = AdbMdns(context, serviceType) { address, port ->
             if (address != null) {
                 if (LocalAdbEndpointPolicy.isLocalDeviceAddress(address) && port in 1..65535) {
@@ -175,7 +185,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         return mdns
     }
 
-    private fun acquireMulticastLock() {
+    private fun acquireMulticastLockResource() {
         try {
             if (multicastLock == null || !multicastLock!!.isHeld) {
                 val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
@@ -190,47 +200,56 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
         }
     }
 
-    fun releaseMulticastLock() {
+    private fun releaseMulticastLockResource() {
         try {
             multicastLock?.let {
                 if (it.isHeld) it.release()
             }
             multicastLock = null
             Log.d(TAG, "Released WifiManager MulticastLock")
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            logFailure("Failed to release MulticastLock", e)
+        }
     }
 
     /**
      * 6자리 페어링 코드로 로컬 기기와 페어링 수행
      */
     suspend fun pairLocal(port: Int, pairingCode: String): Result<Unit> = withContext(Dispatchers.IO) {
-        localNetworkPermissionFailure()?.let { return@withContext it }
-        adbOperationMutex.lock()
+        CameraMuteOperationGate.enter()
         try {
-            if (port !in 1..65535) {
-                return@withContext Result.failure(IOException("유효한 페어링 포트를 찾지 못했습니다."))
-            }
-
-            acquireMulticastLock()
+            localNetworkPermissionFailure()?.let { return@withContext it }
+            adbOperationMutex.lock()
             try {
-                val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
-                Log.i(TAG, "Attempting local ADB pairing")
-                logSensitive { "Pairing endpoint: $host:$port" }
-                val success = pair(host, port, pairingCode)
-                if (success) {
-                    Log.i(TAG, "Pairing successful")
-                    Result.success(Unit)
-                } else {
-                    Result.failure(IOException("페어링에 실패했습니다. 페어링 코드를 다시 확인해 주세요."))
+                if (port !in 1..65535) {
+                    return@withContext Result.failure(IOException("유효한 페어링 포트를 찾지 못했습니다."))
                 }
-            } catch (e: Exception) {
-                logFailure("Pairing failed", e)
-                Result.failure(IOException("페어링 중 오류가 발생했습니다. 무선 디버깅 상태와 코드를 확인해 주세요."))
+
+                val multicastLease = multicastLeaseManager.acquire()
+                try {
+                    val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
+                    Log.i(TAG, "Attempting local ADB pairing")
+                    logSensitive { "Pairing endpoint: $host:$port" }
+                    val success = pair(host, port, pairingCode)
+                    if (success) {
+                        Log.i(TAG, "Pairing successful")
+                        Result.success(Unit)
+                    } else {
+                        Result.failure(IOException("페어링에 실패했습니다. 페어링 코드를 다시 확인해 주세요."))
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logFailure("Pairing failed", e)
+                    Result.failure(IOException("페어링 중 오류가 발생했습니다. 무선 디버깅 상태와 코드를 확인해 주세요."))
+                } finally {
+                    multicastLease.close()
+                }
             } finally {
-                releaseMulticastLock()
+                adbOperationMutex.unlock()
             }
         } finally {
-            adbOperationMutex.unlock()
+            CameraMuteOperationGate.exit()
         }
     }
 
@@ -238,94 +257,108 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
      * 무선 디버깅 포트로 연결하여 권한 부여 및 셔터음 무음화 명령어 실행
      */
     suspend fun applyCameraMuteViaAdb(connectPort: Int? = null): Result<Unit> = withContext(Dispatchers.IO) {
-        localNetworkPermissionFailure()?.let { return@withContext it }
-        adbOperationMutex.lock()
+        CameraMuteOperationGate.enter()
         try {
-            acquireMulticastLock()
+            localNetworkPermissionFailure()?.let { return@withContext it }
+            adbOperationMutex.lock()
             try {
-                val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
-                val prefs = PreferencesRepository.getInstance(context)
-                Log.i(TAG, "Connecting to local ADB daemon")
-                logSensitive { "Local ADB host: $host" }
+                val multicastLease = multicastLeaseManager.acquire()
+                try {
+                    val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
+                    val prefs = PreferencesRepository.getInstance(context)
+                    Log.i(TAG, "Connecting to local ADB daemon")
+                    logSensitive { "Local ADB host: $host" }
 
-                var connected = false
+                    var connected = false
 
-                // 1. 지정된 connectPort가 있다면 직접 연결 시도
-                val requestedPort = connectPort?.takeIf { it in 1..65535 }
-                if (requestedPort != null) {
-                    try {
-                        Log.i(TAG, "Attempting direct ADB connect")
-                        logSensitive { "Direct connect port: $requestedPort" }
-                        connected = connect(host, requestedPort)
-                        if (connected) rememberConnectedPort(requestedPort)
-                    } catch (e: Exception) {
-                        logFailure("Direct ADB connect failed", e)
+                    // 1. 지정된 connectPort가 있다면 직접 연결 시도
+                    val requestedPort = connectPort?.takeIf { it in 1..65535 }
+                    if (requestedPort != null) {
+                        try {
+                            Log.i(TAG, "Attempting direct ADB connect")
+                            logSensitive { "Direct connect port: $requestedPort" }
+                            connected = connect(host, requestedPort)
+                            if (connected) rememberConnectedPort(requestedPort)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logFailure("Direct ADB connect failed", e)
+                        }
                     }
-                }
 
-                // 2. 이미 캐시된 connectPort가 있다면 시도
-                val cachedPort = (lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 })
-                    ?.takeIf { it in 1..65535 }
-                if (!connected && cachedPort != null) {
-                    try {
-                        Log.i(TAG, "Attempting cached ADB connect")
-                        logSensitive { "Cached connect port: $cachedPort" }
-                        connected = connect(host, cachedPort)
-                        if (connected) rememberConnectedPort(cachedPort)
-                    } catch (e: Exception) {
-                        logFailure("Cached ADB connect failed", e)
+                    // 2. 이미 캐시된 connectPort가 있다면 시도
+                    val cachedPort = (lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 })
+                        ?.takeIf { it in 1..65535 }
+                    if (!connected && cachedPort != null) {
+                        try {
+                            Log.i(TAG, "Attempting cached ADB connect")
+                            logSensitive { "Cached connect port: $cachedPort" }
+                            connected = connect(host, cachedPort)
+                            if (connected) rememberConnectedPort(cachedPort)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logFailure("Cached ADB connect failed", e)
+                        }
                     }
-                }
 
-                // 3. 현재 기기가 게시한 adb-tls-connect 서비스만 탐색하여 연결
-                if (!connected) {
-                    try {
-                        Log.i(TAG, "Attempting local-only TLS discovery with 7s timeout")
-                        connected = connectLocalTls(7000)
-                    } catch (e: Exception) {
-                        logFailure("Local-only TLS discovery failed", e)
+                    // 3. 현재 기기가 게시한 adb-tls-connect 서비스만 탐색하여 연결
+                    if (!connected) {
+                        try {
+                            Log.i(TAG, "Attempting local-only TLS discovery with 7s timeout")
+                            connected = connectLocalTls(7000)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logFailure("Local-only TLS discovery failed", e)
+                        }
                     }
-                }
 
-                if (!connected && !isConnected) {
-                    return@withContext Result.failure(IOException("ADB 연결 실패: 무선 디버깅이 활성화되어 있는지 확인해 주세요."))
-                }
-
-                Log.i(TAG, "ADB session established; applying permission and camera setting")
-
-                // 1) WRITE_SECURE_SETTINGS 권한 부여 (영구 권한)
-                executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
-                if (!CscMuteManager.hasWritePermission(context)) {
-                    throw IOException("WRITE_SECURE_SETTINGS 권한 부여 상태를 확인할 수 없습니다.")
-                }
-                prefs.isPermissionRevokedByUser = false
-
-                // 2) CSC 셔터음 키 무음화 설정 (0) - 권한 부여 시 켜짐 상태 적용
-                executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 0")
-                if (!CscStateVerifier.waitFor(true) {
-                        CscMuteManager.isCscShutterSoundMuted(context)
+                    if (!connected && !isConnected) {
+                        return@withContext Result.failure(IOException("ADB 연결 실패: 무선 디버깅이 활성화되어 있는지 확인해 주세요."))
                     }
-                ) {
-                    throw IOException("카메라 무음 설정 적용 상태를 확인할 수 없습니다.")
+
+                    Log.i(TAG, "ADB session established; applying permission and camera setting")
+
+                    // 1) WRITE_SECURE_SETTINGS 권한 부여 (영구 권한)
+                    executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+                    if (!CscMuteManager.hasWritePermission(context)) {
+                        throw IOException("WRITE_SECURE_SETTINGS 권한 부여 상태를 확인할 수 없습니다.")
+                    }
+                    prefs.isPermissionRevokedByUser = false
+
+                    // 2) CSC 셔터음 키 무음화 설정 (0) - 권한 부여 시 켜짐 상태 적용
+                    executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 0")
+                    if (!CscStateVerifier.waitFor(true) {
+                            CscMuteManager.isCscShutterSoundMuted(context)
+                        }
+                    ) {
+                        throw IOException("카메라 무음 설정 적용 상태를 확인할 수 없습니다.")
+                    }
+
+                    Log.i(TAG, "ADB permission and camera setting applied successfully")
+
+                    // 3) 실제 적용이 확인된 뒤 사용자 의도를 저장한다.
+                    prefs.shouldMuteOnBoot = true
+
+                    // 이후 무선 디버깅을 끄더라도 죽은 TLS 세션이 연결 상태로 남지 않게 정리한다.
+                    disconnectAfterSuccessfulCommand("initial camera mute setup")
+                    Result.success(Unit)
+                } catch (e: CancellationException) {
+                    try { disconnect() } catch (_: Exception) {}
+                    throw e
+                } catch (e: Exception) {
+                    logFailure("Failed to apply permission via ADB", e)
+                    try { disconnect() } catch (_: Exception) {}
+                    Result.failure(IOException("ADB 권한 적용 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
+                } finally {
+                    multicastLease.close()
                 }
-
-                Log.i(TAG, "ADB permission and camera setting applied successfully")
-
-                // 3) 실제 적용이 확인된 뒤 사용자 의도를 저장한다.
-                prefs.shouldMuteOnBoot = true
-
-                // 이후 무선 디버깅을 끄더라도 죽은 TLS 세션이 연결 상태로 남지 않게 정리한다.
-                disconnectAfterSuccessfulCommand("initial camera mute setup")
-                Result.success(Unit)
-            } catch (e: Exception) {
-                logFailure("Failed to apply permission via ADB", e)
-                try { disconnect() } catch (_: Exception) {}
-                Result.failure(IOException("ADB 권한 적용 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
             } finally {
-                releaseMulticastLock()
+                adbOperationMutex.unlock()
             }
         } finally {
-            adbOperationMutex.unlock()
+            CameraMuteOperationGate.exit()
         }
     }
 
@@ -333,94 +366,108 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
      * 권한 연동 해제 (WRITE_SECURE_SETTINGS 회수 및 셔터음 소리 기본값 복원)
      */
     suspend fun revokePermissionViaAdb(): Result<Unit> = withContext(Dispatchers.IO) {
-        localNetworkPermissionFailure()?.let { return@withContext it }
-        adbOperationMutex.lock()
+        CameraMuteOperationGate.enter()
         try {
-            acquireMulticastLock()
-            val prefs = PreferencesRepository.getInstance(context)
+            localNetworkPermissionFailure()?.let { return@withContext it }
+            adbOperationMutex.lock()
             try {
-                val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
-                val savedPort = (lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 })
-                    ?.takeIf { it in 1..65535 }
-
-                var connected = isConnected
-                if (!connected && savedPort != null) {
-                    try {
-                        connected = connect(host, savedPort)
-                        if (connected) rememberConnectedPort(savedPort)
-                    } catch (e: Exception) {
-                        logFailure("Saved-port reconnect for permission revoke failed", e)
-                    }
-                }
-
-                if (!connected) {
-                    try {
-                        connected = connectLocalTls(4000)
-                    } catch (e: Exception) {
-                        logFailure("Local-only TLS reconnect for permission revoke failed", e)
-                    }
-                }
-
-                if (!connected) {
-                    return@withContext Result.failure(
-                        IOException("ADB 연결 실패: 무선 디버깅을 켠 뒤 다시 시도해 주세요.")
-                    )
-                }
-
-                // 1) 셔터음 키 1로 복원 (소리 남). 실제 상태가 확인된 뒤 의도를 저장해
-                // 뒤의 권한 회수가 실패하더라도 앱 의도와 실제 CSC 상태가 엇갈리지 않게 한다.
-                executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 1")
-                if (!CscStateVerifier.waitFor(false) {
-                        CscMuteManager.isCscShutterSoundMuted(context)
-                    }
-                ) {
-                    throw IOException("카메라 셔터음 복원 상태를 확인할 수 없습니다.")
-                }
-                prefs.shouldMuteOnBoot = false
-
-                // 2) WRITE_SECURE_SETTINGS 권한 회수. 명령 응답이 끊겨도 실제 권한이 이미
-                // 회수되었을 수 있으므로 최종 상태를 Android 권한 API로 재확인한다.
-                var revokeCommandFailure: Exception? = null
+                val multicastLease = multicastLeaseManager.acquire()
+                val prefs = PreferencesRepository.getInstance(context)
                 try {
-                    executeShellCommand("pm revoke ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
-                } catch (e: Exception) {
-                    revokeCommandFailure = e
-                    logFailure("Permission revoke command did not complete cleanly", e)
-                }
+                    val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
+                    val savedPort = (lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 })
+                        ?.takeIf { it in 1..65535 }
 
-                if (CscMuteManager.hasWritePermission(context)) {
-                    prefs.isPermissionRevokedByUser = false
-                    if (revokeCommandFailure != null) throw revokeCommandFailure
-                    throw IOException("WRITE_SECURE_SETTINGS 권한 회수 상태를 확인할 수 없습니다.")
-                }
+                    var connected = isConnected
+                    if (!connected && savedPort != null) {
+                        try {
+                            connected = connect(host, savedPort)
+                            if (connected) rememberConnectedPort(savedPort)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logFailure("Saved-port reconnect for permission revoke failed", e)
+                        }
+                    }
 
-                prefs.lastConnectPort = -1
-                prefs.isPermissionRevokedByUser = true
+                    if (!connected) {
+                        try {
+                            connected = connectLocalTls(4000)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logFailure("Local-only TLS reconnect for permission revoke failed", e)
+                        }
+                    }
 
-                try {
-                    disconnect()
-                } catch (e: Exception) {
-                    logFailure("ADB disconnect after permission revoke failed", e)
-                }
+                    if (!connected) {
+                        return@withContext Result.failure(
+                            IOException("ADB 연결 실패: 무선 디버깅을 켠 뒤 다시 시도해 주세요.")
+                        )
+                    }
 
-                Result.success(Unit)
-            } catch (e: Exception) {
-                logFailure("Failed to revoke permission via ADB", e)
+                    // 1) 셔터음 키 1로 복원 (소리 남). 실제 상태가 확인된 뒤 의도를 저장해
+                    // 뒤의 권한 회수가 실패하더라도 앱 의도와 실제 CSC 상태가 엇갈리지 않게 한다.
+                    executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key 1")
+                    if (!CscStateVerifier.waitFor(false) {
+                            CscMuteManager.isCscShutterSoundMuted(context)
+                        }
+                    ) {
+                        throw IOException("카메라 셔터음 복원 상태를 확인할 수 없습니다.")
+                    }
+                    prefs.shouldMuteOnBoot = false
 
-                // 부분 성공을 실제 상태에 맞춰 정리한다. 권한이 이미 사라졌다면 사용자가
-                // 요청한 연동 해제는 완료된 것이므로 다음 앱 업데이트에서 재연동 오탐을 막는다.
-                if (!CscMuteManager.hasWritePermission(context)) {
+                    // 2) WRITE_SECURE_SETTINGS 권한 회수. 명령 응답이 끊겨도 실제 권한이 이미
+                    // 회수되었을 수 있으므로 최종 상태를 Android 권한 API로 재확인한다.
+                    var revokeCommandFailure: Exception? = null
+                    try {
+                        executeShellCommand("pm revoke ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        revokeCommandFailure = e
+                        logFailure("Permission revoke command did not complete cleanly", e)
+                    }
+
+                    if (CscMuteManager.hasWritePermission(context)) {
+                        prefs.isPermissionRevokedByUser = false
+                        if (revokeCommandFailure != null) throw revokeCommandFailure
+                        throw IOException("WRITE_SECURE_SETTINGS 권한 회수 상태를 확인할 수 없습니다.")
+                    }
+
                     prefs.lastConnectPort = -1
                     prefs.isPermissionRevokedByUser = true
-                }
 
-                try { disconnect() } catch (_: Exception) {}
-                Result.failure(IOException("권한 연동 해제 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
+                    try {
+                        disconnect()
+                    } catch (e: Exception) {
+                        logFailure("ADB disconnect after permission revoke failed", e)
+                    }
+
+                    Result.success(Unit)
+                } catch (e: CancellationException) {
+                    try { disconnect() } catch (_: Exception) {}
+                    throw e
+                } catch (e: Exception) {
+                    logFailure("Failed to revoke permission via ADB", e)
+
+                    // 부분 성공을 실제 상태에 맞춰 정리한다. 권한이 이미 사라졌다면 사용자가
+                    // 요청한 연동 해제는 완료된 것이므로 다음 앱 업데이트에서 재연동 오탐을 막는다.
+                    if (!CscMuteManager.hasWritePermission(context)) {
+                        prefs.lastConnectPort = -1
+                        prefs.isPermissionRevokedByUser = true
+                    }
+
+                    try { disconnect() } catch (_: Exception) {}
+                    Result.failure(IOException("권한 연동 해제 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
+                } finally {
+                    multicastLease.close()
+                }
             } finally {
-                releaseMulticastLock()
+                adbOperationMutex.unlock()
             }
         } finally {
-            adbOperationMutex.unlock()
+            CameraMuteOperationGate.exit()
         }
     }
 
@@ -433,7 +480,7 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
             localNetworkPermissionFailure()?.let { return@withContext it }
             adbOperationMutex.lock()
             try {
-                acquireMulticastLock()
+                val multicastLease = multicastLeaseManager.acquire()
                 try {
                     val targetVal = if (enableMute) "0" else "1"
                     val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
@@ -453,6 +500,8 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                             Log.i(TAG, "Reused active ADB session for camera setting")
                             disconnectAfterSuccessfulCommand("reused camera setting session")
                             return@withContext Result.success(Unit)
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             logFailure("Active ADB session failed; reconnecting", e)
                             try { disconnect() } catch (_: Exception) {}
@@ -470,6 +519,8 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                             logSensitive { "Saved reconnect port: $savedPort" }
                             connected = connect(host, savedPort)
                             if (connected) rememberConnectedPort(savedPort)
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             logFailure("Fast ADB reconnect failed", e)
                         }
@@ -480,6 +531,8 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                         try {
                             Log.i(TAG, "Attempting local-only TLS discovery with 4s timeout")
                             connected = connectLocalTls(4000)
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             logFailure("Local-only TLS discovery failed", e)
                         }
@@ -500,12 +553,15 @@ class StandaloneAdbManager(context: Context) : AbsAdbConnectionManager() {
                     Log.i(TAG, "Camera setting updated successfully via ADB")
                     disconnectAfterSuccessfulCommand("camera setting update")
                     Result.success(Unit)
+                } catch (e: CancellationException) {
+                    try { disconnect() } catch (_: Exception) {}
+                    throw e
                 } catch (e: Exception) {
                     logFailure("Failed to update camera setting via ADB", e)
                     try { disconnect() } catch (_: Exception) {}
                     Result.failure(IOException("셔터음 설정 변경 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."))
                 } finally {
-                    releaseMulticastLock()
+                    multicastLease.close()
                 }
             } finally {
                 adbOperationMutex.unlock()
