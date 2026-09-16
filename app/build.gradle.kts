@@ -1,4 +1,4 @@
-﻿import java.io.FileInputStream
+import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
@@ -15,31 +15,31 @@ val localProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.charmingcolor.shuttersoundzero"
+    namespace = "io.github.hoons1994.shuttersoundzero"
     compileSdk = 37
     defaultConfig {
-        applicationId = "com.charmingcolor.shuttersoundzero"
+        applicationId = "io.github.hoons1994.shuttersoundzero"
         minSdk = 30
         targetSdk = 37
-        versionCode = 154
-        versionName = "1.5.3"
+        versionCode = 200
+        versionName = "2.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
-            val storeFilePath = localProperties.getProperty("RELEASE_STORE_FILE")
-                ?: System.getenv("RELEASE_STORE_FILE")
+            val storeFilePath = System.getenv("RELEASE_STORE_FILE")
+                ?: localProperties.getProperty("RELEASE_STORE_FILE")
                 ?: "../release.jks"
             val storeFileObj = file(storeFilePath)
             if (storeFileObj.exists()) {
                 storeFile = storeFileObj
-                storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
-                    ?: System.getenv("RELEASE_STORE_PASSWORD") ?: ""
-                keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
-                    ?: System.getenv("RELEASE_KEY_ALIAS") ?: ""
-                keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
-                    ?: System.getenv("RELEASE_KEY_PASSWORD") ?: ""
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                    ?: localProperties.getProperty("RELEASE_STORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                    ?: localProperties.getProperty("RELEASE_KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+                    ?: localProperties.getProperty("RELEASE_KEY_PASSWORD") ?: ""
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true

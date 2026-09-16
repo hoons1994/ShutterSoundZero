@@ -3,55 +3,22 @@ set -euo pipefail
 
 CURRENT_APK="${1:?Current APK path is required}"
 APKSIGNER="${2:?apksigner path is required}"
-CURRENT_TAG="${3:-}"
+EXPECTED_DIGEST_FILE="${3:?Expected signer digest file is required}"
 
 if [ ! -f "$CURRENT_APK" ]; then
   echo "Current APK was not found: $CURRENT_APK"
   exit 1
 fi
 
-if [ ! -x "$APKSIGNER" ]; then
-  echo "apksigner was not found or is not executable: $APKSIGNER"
+if [ ! -f "$APKSIGNER" ]; then
+  echo "apksigner was not found: $APKSIGNER"
   exit 1
 fi
 
-if [ -z "${GITHUB_REPOSITORY:-}" ]; then
-  echo 'GITHUB_REPOSITORY is not set.'
+if [ ! -f "$EXPECTED_DIGEST_FILE" ]; then
+  echo "Expected signer digest file was not found: $EXPECTED_DIGEST_FILE"
   exit 1
 fi
-
-PREVIOUS_TAG=''
-while IFS= read -r tag; do
-  if [ -n "$tag" ] && [ "$tag" != "$CURRENT_TAG" ]; then
-    PREVIOUS_TAG="$tag"
-    break
-  fi
-done < <(
-  gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-    --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name'
-)
-
-if [ -z "$PREVIOUS_TAG" ]; then
-  echo 'No previous stable GitHub Release was found for signer continuity verification.'
-  exit 1
-fi
-
-PREVIOUS_DIR="$RUNNER_TEMP/previous-release-signer-check"
-rm -rf "$PREVIOUS_DIR"
-mkdir -p "$PREVIOUS_DIR"
-
-gh release download "$PREVIOUS_TAG" \
-  --repo "$GITHUB_REPOSITORY" \
-  --pattern '*.apk' \
-  --dir "$PREVIOUS_DIR"
-
-mapfile -t PREVIOUS_APKS < <(find "$PREVIOUS_DIR" -maxdepth 1 -type f -name '*.apk' -print | sort)
-if [ "${#PREVIOUS_APKS[@]}" -ne 1 ]; then
-  echo "Expected exactly one APK in release $PREVIOUS_TAG, found ${#PREVIOUS_APKS[@]}."
-  exit 1
-fi
-
-PREVIOUS_APK="${PREVIOUS_APKS[0]}"
 
 extract_signer_digest() {
   local apk="$1"
@@ -80,19 +47,27 @@ extract_signer_digest() {
 }
 
 CURRENT_DIGEST="$(extract_signer_digest "$CURRENT_APK")"
-PREVIOUS_DIGEST="$(extract_signer_digest "$PREVIOUS_APK")"
+EXPECTED_DIGEST="$(
+  tr '[:upper:]' '[:lower:]' < "$EXPECTED_DIGEST_FILE" \
+    | tr -d '[:space:]:'
+)"
 
-if [ -z "$CURRENT_DIGEST" ] || [ -z "$PREVIOUS_DIGEST" ]; then
-  echo 'Unable to extract APK signing certificate SHA-256 digest.'
+if [ -z "$CURRENT_DIGEST" ]; then
+  echo 'Unable to extract the APK signing certificate SHA-256 digest.'
   exit 1
 fi
 
-if [ "$CURRENT_DIGEST" != "$PREVIOUS_DIGEST" ]; then
-  echo "Release signing certificate mismatch with previous official release $PREVIOUS_TAG."
-  echo "Previous signer SHA-256: $PREVIOUS_DIGEST"
+if [[ ! "$EXPECTED_DIGEST" =~ ^[0-9a-f]{64}$ ]]; then
+  echo 'Pinned signing certificate SHA-256 digest is invalid.'
+  exit 1
+fi
+
+if [ "$CURRENT_DIGEST" != "$EXPECTED_DIGEST" ]; then
+  echo 'Release signing certificate does not match the pinned certificate.'
+  echo "Expected signer SHA-256: $EXPECTED_DIGEST"
   echo "Current signer SHA-256:  $CURRENT_DIGEST"
   exit 1
 fi
 
-echo "Release signer continuity verified against $PREVIOUS_TAG."
+echo 'Release signer matches the pinned signing certificate.'
 echo "Signer certificate SHA-256: $CURRENT_DIGEST"
