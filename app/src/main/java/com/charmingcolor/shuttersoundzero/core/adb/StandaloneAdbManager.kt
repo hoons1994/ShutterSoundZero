@@ -11,7 +11,6 @@ import com.charmingcolor.shuttersoundzero.core.CscStateVerifier
 import com.charmingcolor.shuttersoundzero.data.PreferencesRepository
 import io.github.muntashirakon.adb.CancellableAdbConnection
 import io.github.muntashirakon.adb.CancellablePairingConnection
-import io.github.muntashirakon.adb.android.AndroidUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -32,6 +31,7 @@ class StandaloneAdbManager(context: Context) {
     companion object {
         private const val TAG = "StandaloneAdbManager"
         private const val DEVICE_NAME = "ShutterSoundZero"
+        private const val LOCAL_ADB_HOST = "127.0.0.1"
         private const val SERVICE_TYPE_TLS_PAIRING = "adb-tls-pairing"
         private const val SERVICE_TYPE_TLS_CONNECT = "adb-tls-connect"
         private const val ADB_CONNECTION_TIMEOUT_MS = 8_000L
@@ -190,7 +190,7 @@ class StandaloneAdbManager(context: Context) {
     ) {
         require(port in 1..65535) { "Invalid pairing port" }
         require(pairingCode.length == 6 && pairingCode.all { it in '0'..'9' }) { "Invalid pairing code" }
-        val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
+        val host = LOCAL_ADB_HOST
         val password = pairingCode.toByteArray(Charsets.UTF_8)
         val client = try {
             CancellablePairingConnection(host, port, password, keyPairAndCert.first, keyPairAndCert.second, DEVICE_NAME)
@@ -267,7 +267,7 @@ class StandaloneAdbManager(context: Context) {
     private suspend fun ensureConnection(requestedPort: Int?, discoveryTimeout: Long) {
         if (connection?.isConnected == true) return
         val prefs = PreferencesRepository.getInstance(context)
-        val host = AndroidUtils.getHostIpAddress(context).ifBlank { "127.0.0.1" }
+        val host = LOCAL_ADB_HOST
         val cached = lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 }
         for (port in listOfNotNull(requestedPort, cached).filter { it in 1..65535 }.distinct()) {
             try {
@@ -331,9 +331,10 @@ class StandaloneAdbManager(context: Context) {
                 failure.get()?.let { throw it }
                 false
             } else {
-                val (address, port) = endpoint.get() ?: return false
-                val host = address.hostAddress ?: return false
-                val connected = connectInterruptibly(host, port)
+                val (_, port) = endpoint.get() ?: return false
+                // mDNS validates that the service belongs to this device, but only its port is
+                // consumed. Never send credentials to a Wi-Fi address that may later change owner.
+                val connected = connectInterruptibly(LOCAL_ADB_HOST, port)
                 if (connected) rememberConnectedPort(port)
                 connected
             }

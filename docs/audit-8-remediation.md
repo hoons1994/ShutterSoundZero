@@ -35,3 +35,21 @@ API 34 이상에서는 `stopServiceResolution()`으로 진행 중 주소 확인 
 이 변경의 테스트는 lease 획득 실패, 코루틴 취소/동시 요청, 늦게 종료되는 worker, TCP 연결 중 취소, 실제 loopback 읽기/TLS handshake 중단, 실패 ADB 연결의 EOF, 연속 셸 명령, OPEN 제한시간, 잘못된 패킷 크기, mDNS 직렬화·재시도·세션 중단을 포함합니다.
 
 일부 로컬 검사는 JDK 소켓/JSSE와 경량 assertion 실행기로 수행했습니다. Android SDK 빌드 및 실제 의존성 연계 검사는 GitHub Actions 결과로 구분하며, 실행하지 않은 검사에 통과를 표시하지 않습니다. 실제 Android Conscrypt + SPAKE2 페어링, 삼성 카메라의 최종 동작, 제조사별 NSD 종료 콜백은 실기기 확인 범위입니다.
+
+
+## 추가 보안 점검: CodeQL 경고는 아직 미해결
+
+첫 수정 커밋 `199bbf606fe33aac1e4fcb78861769eb3005746f`에서 Android CI 전체와 CodeQL 분석 작업 자체는 성공했지만, 별도 CodeQL 최종 보안 판정은 `java/unsafe-cert-trust` 2건(critical)으로 실패했습니다. 분석 실행 성공을 취약점 없음으로 해석하면 안 됩니다.
+
+경고 위치는 연결/페어링 TLS 스트림입니다. ADB는 웹 HTTPS와 달리 임의로 생성되는 인증서를 사용하며, 페어링에서는 TLS exporter에 묶인 공유 코드 기반 PAKE로 신뢰를 설정합니다. 서버 인증서에 `HTTPS` 호스트명 검증을 단순히 켜면 기존 ADB 인증서와 호환되지 않을 수 있습니다. 그렇다고 이를 자동으로 오탐으로 처리하거나 검사를 끄지는 않았습니다.
+
+방어를 강화하여 전송 계층에서 숫자 리터럴 `127.0.0.1` 또는 `::1`만 허용합니다. DNS 이름, 외부/사설 네트워크 주소, 임의 TLS 호스트 재지정은 연결 전에 거부합니다. 앱은 mDNS 주소의 기기 소속을 검증한 뒤 포트만 취하고, 실제 페어링/연결은 `127.0.0.1`로 수행합니다. 이 제한으로 외부 네트워크 연결 및 주소 변경에 따른 오연결을 막지만 **서버 인증서 검증 자체를 구현한 것은 아닙니다.** 같은 기기 안의 악성 프로세스를 인증서로 식별하는 보장도 추가하지 않습니다. 루프백을 제공하지 않는 제조사 구현에서는 외부 주소로 우회하지 않고 연결에 실패합니다.
+
+이 PR은 해당 경고의 프로토콜별 위협 모델 검토와 실기기 호환성 확인이 끝나기 전까지 Draft로 유지하며 자동 병합하지 않습니다. CodeQL 규칙, 워크플로, 경고 상태를 숨기거나 비활성화하지 않았습니다.
+
+보강된 집중 회귀 시나리오는 총 36개입니다. 기존 33개에 외부 주소/DNS 이름 차단, 잘못된 포트 차단, TLS 연결 대상 불일치 차단 검사를 추가했습니다.
+
+참고:
+- https://codeql.github.com/codeql-query-help/java/java-unsafe-cert-trust/
+- https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/pairing_connection/pairing_connection.cpp
+- https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/daemon/auth.cpp

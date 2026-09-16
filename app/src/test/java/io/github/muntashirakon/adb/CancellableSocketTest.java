@@ -83,6 +83,51 @@ public class CancellableSocketTest {
         }
     }
 
+    @Test public void nonLoopbackAddressesAndDnsNamesAreRejectedBeforeConnect() {
+        Socket raw = new Socket() {
+            @Override public void connect(SocketAddress endpoint, int timeout) {
+                fail("Disallowed endpoint reached Socket.connect");
+            }
+        };
+        try (CancellableSocket transport = new CancellableSocket(raw)) {
+            for (String host : new String[]{"192.0.2.1", "192.168.1.1", "example.com",
+                    "localhost", "127.0.0.1.example.com", "0.0.0.0", "::", "", null}) {
+                assertThrows(IOException.class, () -> transport.connect(host, 12345,
+                        new CancellableSocket.Deadline(1000)));
+            }
+        }
+    }
+
+    @Test public void invalidPortsAreRejectedBeforeConnect() {
+        Socket raw = new Socket() {
+            @Override public void connect(SocketAddress endpoint, int timeout) {
+                fail("Invalid port reached Socket.connect");
+            }
+        };
+        try (CancellableSocket transport = new CancellableSocket(raw)) {
+            for (int port : new int[]{-1, 0, 65536}) {
+                assertThrows(IOException.class, () -> transport.connect("127.0.0.1", port,
+                        new CancellableSocket.Deadline(1000)));
+            }
+        }
+    }
+
+    @Test public void tlsCannotRelabelTheConnectedEndpoint() throws Exception {
+        try (ServerSocket server = new ServerSocket(0); CancellableSocket transport = new CancellableSocket()) {
+            server.setSoTimeout(2000);
+            transport.connect("127.0.0.1", server.getLocalPort(), new CancellableSocket.Deadline(1000));
+            try (Socket peer = server.accept()) {
+                SSLContext context = SSLContext.getInstance("TLS");
+                context.init(null, null, null);
+                int wrongPort = server.getLocalPort() == 65535 ? 65534 : server.getLocalPort() + 1;
+                assertThrows(IOException.class, () -> transport.startTls(context, "127.0.0.1", wrongPort,
+                        new CancellableSocket.Deadline(1000)));
+                assertThrows(IOException.class, () -> transport.startTls(context, "example.com", server.getLocalPort(),
+                        new CancellableSocket.Deadline(1000)));
+            }
+        }
+    }
+
     @Test public void readDeadlineIsFinite() throws Exception {
         try (ServerSocket server = new ServerSocket(0)) {
             CancellableSocket transport = new CancellableSocket();

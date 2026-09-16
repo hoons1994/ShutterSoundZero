@@ -3,6 +3,7 @@ package io.github.muntashirakon.adb;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
@@ -11,7 +12,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 
-/** Owns the raw socket BEFORE connect/TLS; cancellation never waits for a worker-held monitor. */
+/**
+ * Owns the raw socket BEFORE connect/TLS; cancellation never waits for a worker-held monitor.
+ * This adapter is exclusively for on-device ADB, not arbitrary TLS endpoints.
+ */
 public final class CancellableSocket implements Closeable {
     private final Socket raw;
     private final AtomicBoolean cancelled = new AtomicBoolean();
@@ -23,7 +27,10 @@ public final class CancellableSocket implements Closeable {
 
     public void connect(String host, int port, Deadline deadline) throws IOException {
         checkOpen();
-        raw.connect(new InetSocketAddress(host, port), deadline.remainingMillis());
+        if (port < 1 || port > 65535) throw new IOException("Invalid local ADB port");
+        // Reject names before resolution: no DNS, rebinding or network-interface-change race.
+        InetAddress address = loopbackAddress(host);
+        raw.connect(new InetSocketAddress(address, port), deadline.remainingMillis());
         checkOpen();
         raw.setTcpNoDelay(true);
         prepareRead(deadline);
@@ -32,12 +39,32 @@ public final class CancellableSocket implements Closeable {
     public SSLSocket startTls(SSLContext context, String host, int port, Deadline deadline)
             throws IOException {
         checkOpen();
+        requireConnectedEndpoint(host, port);
+        // ADB certificates are not web PKI identities. This does NOT authenticate the server
+        // certificate; see the explicit unresolved CodeQL review in audit-8-remediation.md.
         tls = (SSLSocket) context.getSocketFactory().createSocket(raw, host, port, true);
         prepareRead(deadline);
         checkOpen();
         tls.startHandshake();
         checkOpen();
         return tls;
+    }
+
+    private static InetAddress loopbackAddress(String host) throws IOException {
+        if ("127.0.0.1".equals(host)) return InetAddress.getByAddress(new byte[]{127, 0, 0, 1});
+        if ("::1".equals(host)) {
+            byte[] address = new byte[16];
+            address[15] = 1;
+            return InetAddress.getByAddress(address);
+        }
+        throw new IOException("Only literal loopback ADB endpoints are permitted");
+    }
+
+    private void requireConnectedEndpoint(String host, int port) throws IOException {
+        InetAddress expected = loopbackAddress(host);
+        if (!raw.isConnected() || !expected.equals(raw.getInetAddress()) || raw.getPort() != port) {
+            throw new IOException("TLS endpoint does not match the connected local ADB socket");
+        }
     }
 
     public Socket activeSocket() throws IOException {
