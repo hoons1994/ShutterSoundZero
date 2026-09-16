@@ -55,6 +55,15 @@
             </intent-filter>
         </activity>
 
+        <!-- 앱 잠금 사용자의 빠른 설정 타일 동작을 1회 인증하는 내부 전용 화면 -->
+        <activity
+            android:name=".service.TileAuthenticationActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:finishOnTaskLaunch="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.ShutterSoundZero" />
+
         <!-- DUMP 권한과 실제 Binder shell/root UID를 모두 확인하는 일회성 ADB 신원 증명.
              설정 변경, 명령 실행, 앱 데이터 조회 기능은 제공하지 않습니다. -->
         <provider

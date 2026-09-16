@@ -1,16 +1,15 @@
 package io.github.hoons1994.shuttersoundzero.service
 
+import android.annotation.SuppressLint
+import android.app.PendingIntent
+import android.content.Intent
 import android.graphics.drawable.Icon
+import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import android.util.Log
-import android.widget.Toast
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
-import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
-import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
-import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +23,7 @@ import kotlinx.coroutines.launch
  */
 class CameraMuteTileService : TileService() {
     companion object {
-        private const val TAG = "CameraMuteTileService"
+        private const val AUTHENTICATION_REQUEST_CODE = 1001
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -41,97 +40,55 @@ class CameraMuteTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        val context = applicationContext
-        val prefs = PreferencesRepository.getInstance(context)
-
-        if (!CscMuteManager.isSamsungDevice()) {
-            Toast.makeText(
-                context,
-                "⚠️ 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.",
-                Toast.LENGTH_LONG
-            ).show()
-            updateTileState()
-            return
+        val prefs = PreferencesRepository.getInstance(applicationContext)
+        when (TileActionSecurityPolicy.decide(isLocked, prefs.isAppLockEnabled)) {
+            TileActionSecurityDecision.REQUEST_DEVICE_UNLOCK -> unlockAndRun {
+                handleUnlockedClick()
+            }
+            TileActionSecurityDecision.REQUEST_APP_AUTHENTICATION -> launchAuthenticationActivity()
+            TileActionSecurityDecision.EXECUTE -> executeAuthorizedAction()
         }
+    }
 
-        if (prefs.isPermissionRevokedByUser || !CscMuteManager.hasWritePermission(context)) {
-            Toast.makeText(
-                context,
-                "권한 연동이 해제되어 있습니다. 앱을 열어 다시 연동해 주세요.",
-                Toast.LENGTH_LONG
-            ).show()
-            updateTileState()
-            return
+    private fun handleUnlockedClick() {
+        val prefs = PreferencesRepository.getInstance(applicationContext)
+        when (TileActionSecurityPolicy.decide(isLocked, prefs.isAppLockEnabled)) {
+            TileActionSecurityDecision.REQUEST_DEVICE_UNLOCK -> return
+            TileActionSecurityDecision.REQUEST_APP_AUTHENTICATION -> launchAuthenticationActivity()
+            TileActionSecurityDecision.EXECUTE -> executeAuthorizedAction()
         }
+    }
 
-        if (!LocalNetworkAccess.isGranted(context)) {
-            Toast.makeText(
-                context,
-                "Android 17에서 기기 연결을 위해 로컬 네트워크 권한이 필요합니다. 앱을 열어 권한을 허용해 주세요.",
-                Toast.LENGTH_LONG
-            ).show()
-            updateTileState()
-            return
+    @SuppressLint("StartActivityAndCollapseDeprecated")
+    private fun launchAuthenticationActivity() {
+        val intent = Intent(this, TileAuthenticationActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
-
-        if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
-            Toast.makeText(
-                context,
-                "설정을 바꾸려면 무선 디버깅을 잠시 켠 뒤 타일을 다시 눌러 주세요.",
-                Toast.LENGTH_LONG
-            ).show()
-            updateTileState()
-            return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val pendingIntent = PendingIntent.getActivity(
+                this,
+                AUTHENTICATION_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            startActivityAndCollapse(pendingIntent)
+        } else {
+            startActivityAndCollapse(intent)
         }
+    }
 
-        val currentMuted = CscMuteManager.isCscShutterSoundMuted(context)
-        val targetMuted = !currentMuted
+    private fun executeAuthorizedAction() {
+        serviceScope.launch {
+            CameraMuteTileAction.execute(applicationContext, ::showOptimisticTileState)
+        }
+    }
 
-        // 빠른 체감을 위한 낙관적 타일 업데이트. 영구 상태는 실제 적용을 확인한
-        // StandaloneAdbManager만 저장한다.
+    private fun showOptimisticTileState(targetMuted: Boolean) {
         qsTile?.let { tile ->
             tile.icon = Icon.createWithResource(this, R.drawable.ic_qs_camera_mute)
             tile.state = if (targetMuted) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
             tile.subtitle = if (targetMuted) getString(R.string.tile_muted) else getString(R.string.tile_unmuted)
             tile.updateTile()
-        }
-
-        serviceScope.launch {
-            val adbManager = StandaloneAdbManager.getInstance(context)
-            val result = adbManager.setCameraMute(targetMuted)
-            val stateApplied = result.isSuccess && CscStateVerifier.waitFor(targetMuted) {
-                CscMuteManager.isCscShutterSoundMuted(context)
-            }
-
-            if (stateApplied) {
-                val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
-                val baseMessage = if (targetMuted) {
-                    "카메라 무음 설정이 적용되었습니다."
-                } else {
-                    "카메라 셔터음이 기본 상태로 복원되었습니다."
-                }
-                val msg = if (wirelessCleanup.isSuccess) {
-                    "$baseMessage 무선 디버깅도 껐습니다."
-                } else {
-                    "$baseMessage 무선 디버깅은 직접 꺼 주세요."
-                }
-                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-            } else {
-                Log.w(
-                    TAG,
-                    if (result.isSuccess) {
-                        "Tile toggle command completed but CSC state did not match request"
-                    } else {
-                        "Tile toggle failed via ADB"
-                    }
-                )
-                Toast.makeText(
-                    context,
-                    "설정 변경 실패: 실제 카메라 설정을 확인하지 못했습니다. 무선 디버깅을 켠 뒤 다시 시도해 주세요.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-            updateTileState()
         }
     }
 
