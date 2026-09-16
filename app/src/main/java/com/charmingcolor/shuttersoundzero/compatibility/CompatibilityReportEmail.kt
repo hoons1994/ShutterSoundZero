@@ -24,14 +24,10 @@ internal object CompatibilityReportEmail {
     )
 
     fun createIntent(draft: Draft): Intent {
-        val uri = Uri.parse(
-            "mailto:$RECIPIENT" +
-                "?subject=${Uri.encode(draft.subject)}" +
-                "&body=${Uri.encode(draft.body)}"
-        )
-        return Intent(Intent.ACTION_SENDTO, uri).apply {
-            // Some mail clients read extras rather than mailto query parameters.
-            // Both representations contain exactly the same approved draft.
+        // Keep report text out of the URI. Legacy MailTo parsers decode the
+        // query before splitting it, so even an encoded '&bcc=' can become a
+        // separate header. Use Android's email extras for the approved text.
+        return Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$RECIPIENT")).apply {
             putExtra(Intent.EXTRA_EMAIL, arrayOf(RECIPIENT))
             putExtra(Intent.EXTRA_SUBJECT, draft.subject)
             putExtra(Intent.EXTRA_TEXT, draft.body)

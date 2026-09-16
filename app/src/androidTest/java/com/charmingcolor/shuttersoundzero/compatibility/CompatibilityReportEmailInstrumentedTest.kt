@@ -54,11 +54,11 @@ class CompatibilityReportEmailInstrumentedTest {
         val intent = CompatibilityReportEmail.createIntent(draft)
         val mail = MailTo.parse(requireNotNull(intent.data).toString())
         assertEquals(Intent.ACTION_SENDTO, intent.action)
-        assertEquals("mailto", intent.data?.scheme)
+        assertEquals("mailto:${CompatibilityReportEmail.RECIPIENT}", intent.data.toString())
         assertEquals(CompatibilityReportEmail.RECIPIENT, mail.to)
-        assertEquals(draft.subject, mail.subject)
-        assertEquals(draft.body, mail.body)
-        assertEquals(setOf("to", "subject", "body"), mail.headers.keys)
+        assertEquals(setOf("to"), mail.headers.keys)
+        assertNull(mail.subject)
+        assertNull(mail.body)
         assertArrayEquals(arrayOf(CompatibilityReportEmail.RECIPIENT), intent.getStringArrayExtra(Intent.EXTRA_EMAIL))
         assertEquals(draft.subject, intent.getStringExtra(Intent.EXTRA_SUBJECT))
         assertEquals(draft.body, intent.getStringExtra(Intent.EXTRA_TEXT))
@@ -67,21 +67,38 @@ class CompatibilityReportEmailInstrumentedTest {
         assertNull(intent.type)
         assertNull(intent.component)
         assertNull(intent.`package`)
+        assertNull(intent.selector)
         assertFalse(intent.hasExtra(Intent.EXTRA_STREAM))
+        assertFalse(intent.hasExtra(Intent.EXTRA_CC))
+        assertFalse(intent.hasExtra(Intent.EXTRA_BCC))
     }
 
     @Test
     fun specialCharacters_cannotAddMailHeadersOrChangeRecipient() {
-        val snapshot = report().copy(model = "테스트 + &bcc=other@example.invalid?#%\r\nBcc: nobody")
-        val draft = CompatibilityReportEmail.prepare(snapshot)
-        val mail = MailTo.parse(CompatibilityReportEmail.createIntent(draft).data.toString())
-        assertEquals(CompatibilityReportEmail.RECIPIENT, mail.to)
-        assertEquals(draft.subject, mail.subject)
-        assertEquals(draft.body, mail.body)
-        assertEquals(setOf("to", "subject", "body"), mail.headers.keys)
-        assertFalse(draft.subject.contains('\r'))
-        assertFalse(draft.subject.contains('\n'))
-        assertTrue(draft.body.contains(snapshot.model))
+        val models = listOf(
+            "테스트 + &bcc=other@example.invalid?#%\r\nBcc: nobody",
+            "TEST&to=other@example.invalid&cc=other@example.invalid",
+            "TEST%26bcc%3Dother%40example.invalid",
+            "테스트 %25 + = ? # & \"quoted\""
+        )
+        models.forEach { model ->
+            val snapshot = report().copy(model = model)
+            val draft = CompatibilityReportEmail.prepare(snapshot)
+            val intent = CompatibilityReportEmail.createIntent(draft)
+            val mail = MailTo.parse(requireNotNull(intent.data).toString())
+            // The platform parser sees a constant address, never report text.
+            assertEquals("mailto:${CompatibilityReportEmail.RECIPIENT}", intent.data.toString())
+            assertEquals(CompatibilityReportEmail.RECIPIENT, mail.to)
+            assertEquals(setOf("to"), mail.headers.keys)
+            assertArrayEquals(arrayOf(CompatibilityReportEmail.RECIPIENT), intent.getStringArrayExtra(Intent.EXTRA_EMAIL))
+            assertFalse(intent.hasExtra(Intent.EXTRA_CC))
+            assertFalse(intent.hasExtra(Intent.EXTRA_BCC))
+            assertEquals(draft.subject, intent.getStringExtra(Intent.EXTRA_SUBJECT))
+            assertEquals(draft.body, intent.getStringExtra(Intent.EXTRA_TEXT))
+            assertFalse(draft.subject.contains('\r'))
+            assertFalse(draft.subject.contains('\n'))
+            assertTrue(draft.body.contains(model))
+        }
     }
 
     @Test

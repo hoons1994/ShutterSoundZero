@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.espresso.Espresso.pressBack
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -70,8 +71,9 @@ class CompatibilityReportRowTest {
             assertEquals(Intent.ACTION_SENDTO, intent.action)
             assertEquals(0, intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK)
             assertEquals("hoons1994@naver.com", email.to)
-            assertEquals(shownSubject, email.subject)
-            assertEquals(shownBody, email.body)
+            assertEquals(setOf("to"), email.headers.keys)
+            assertArrayEquals(arrayOf("hoons1994@naver.com"), intent.getStringArrayExtra(Intent.EXTRA_EMAIL))
+            assertEquals(shownSubject, intent.getStringExtra(Intent.EXTRA_SUBJECT))
             assertEquals(shownBody, intent.getStringExtra(Intent.EXTRA_TEXT))
         }
         composeTestRule.onNodeWithText("호환성 데이터를 제출하시겠습니까?").assertDoesNotExist()
@@ -101,7 +103,12 @@ class CompatibilityReportRowTest {
         composeTestRule.onNodeWithText("예").performClick()
         composeTestRule.runOnIdle {
             assertEquals(2, recordingContext.intents.size)
-            assertEquals(recordingContext.intents[0].data, recordingContext.intents[1].data)
+            val first = recordingContext.intents[0]
+            val retry = recordingContext.intents[1]
+            assertEquals(first.data, retry.data)
+            assertEquals(first.getStringExtra(Intent.EXTRA_SUBJECT), retry.getStringExtra(Intent.EXTRA_SUBJECT))
+            assertEquals(first.getStringExtra(Intent.EXTRA_TEXT), retry.getStringExtra(Intent.EXTRA_TEXT))
+            assertArrayEquals(first.getStringArrayExtra(Intent.EXTRA_EMAIL), retry.getStringArrayExtra(Intent.EXTRA_EMAIL))
         }
         composeTestRule.onNodeWithText("호환성 데이터를 제출하시겠습니까?").assertDoesNotExist()
     }
