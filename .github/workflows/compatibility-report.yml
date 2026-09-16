@@ -1,0 +1,237 @@
+name: Compatibility Report
+
+on:
+  issues:
+    types:
+      - opened
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: compatibility-report-document
+  cancel-in-progress: false
+
+jobs:
+  register:
+    if: contains(github.event.issue.body, '<!-- shuttersoundzero-compatibility-report:v1 -->')
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+
+      - name: Validate report and update compatibility document
+        shell: bash
+        run: |
+          python3 <<'PY'
+          import html
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          MARKER = "<!-- shuttersoundzero-compatibility-report:v1 -->"
+          START = "<!-- APP_SUBMISSIONS_START -->"
+          DOC_PATH = Path("docs/COMPATIBILITY.md")
+
+          with open(os.environ["GITHUB_EVENT_PATH"], "r", encoding="utf-8") as handle:
+              event = json.load(handle)
+
+          issue = event["issue"]
+          body = issue.get("body") or ""
+          if MARKER not in body:
+              raise SystemExit("Compatibility marker not found")
+
+          report_body = body.split(MARKER, 1)[1]
+          match = re.search(r"```json\s*(\{.*?\})\s*```", report_body, flags=re.DOTALL)
+          if not match:
+              raise SystemExit("Compatibility JSON block not found")
+
+          try:
+              data = json.loads(match.group(1))
+          except json.JSONDecodeError as error:
+              raise SystemExit(f"Invalid compatibility JSON: {error}") from error
+
+          expected_keys = {
+              "schemaVersion",
+              "manufacturer",
+              "model",
+              "androidVersion",
+              "sdkInt",
+              "oneUiVersion",
+              "securityPatch",
+              "appVersion",
+              "setupPermissionGranted",
+              "cameraMuteApplied",
+          }
+          if set(data) != expected_keys:
+              raise SystemExit("Unexpected compatibility report fields")
+          if data["schemaVersion"] != 1:
+              raise SystemExit("Unsupported compatibility schema version")
+
+          def require_text(key: str, max_length: int) -> str:
+              value = data.get(key)
+              if not isinstance(value, str):
+                  raise SystemExit(f"{key} must be a string")
+              value = value.strip()
+              if not value or len(value) > max_length:
+                  raise SystemExit(f"{key} length is invalid")
+              if any(ord(char) < 32 and char not in "\t" for char in value):
+                  raise SystemExit(f"{key} contains control characters")
+              return value
+
+          manufacturer = require_text("manufacturer", 40)
+          model = require_text("model", 80)
+          android_version = require_text("androidVersion", 40)
+          one_ui_version = require_text("oneUiVersion", 40)
+          security_patch = require_text("securityPatch", 40)
+          app_version = require_text("appVersion", 40)
+
+          sdk_int = data.get("sdkInt")
+          if not isinstance(sdk_int, int) or isinstance(sdk_int, bool) or not 1 <= sdk_int <= 100:
+              raise SystemExit("sdkInt is invalid")
+
+          setup_permission = data.get("setupPermissionGranted")
+          camera_mute = data.get("cameraMuteApplied")
+          if not isinstance(setup_permission, bool) or not isinstance(camera_mute, bool):
+              raise SystemExit("Compatibility state fields must be booleans")
+
+          if security_patch != "알 수 없음" and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", security_patch):
+              raise SystemExit("securityPatch format is invalid")
+
+          def cell(value: str) -> str:
+              value = value.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+              value = html.escape(value, quote=False)
+              return value.replace("|", "\\|")
+
+          issue_number = int(issue["number"])
+          issue_url = issue["html_url"]
+          issue_cell = f"[#{issue_number}]({issue_url})"
+          setup_cell = "✅ 있음" if setup_permission else "— 없음"
+          mute_cell = "✅ 적용" if camera_mute else "— 미적용"
+          row = (
+              f"| {issue_cell} | {cell(manufacturer)} | {cell(model)} | "
+              f"{cell(android_version)} (SDK {sdk_int}) | {cell(one_ui_version)} | "
+              f"{cell(security_patch)} | {cell(app_version)} | {setup_cell} | {mute_cell} | 사용자 제출 |"
+          )
+
+          document = DOC_PATH.read_text(encoding="utf-8")
+          if START not in document:
+              raise SystemExit("Compatibility submission marker not found in document")
+          if f"[#{issue_number}]({issue_url})" in document:
+              raise SystemExit(0)
+
+          document = document.replace(START, START + "\n" + row, 1)
+          DOC_PATH.write_text(document, encoding="utf-8")
+          PY
+
+      - name: Commit report branch
+        id: commit
+        shell: bash
+        run: |
+          BRANCH="compatibility-report/issue-${{ github.event.issue.number }}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$BRANCH"
+          git add docs/COMPATIBILITY.md
+
+          if git diff --cached --quiet; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'No document change required.'
+            exit 0
+          fi
+
+          git commit -m "docs: register compatibility report #${{ github.event.issue.number }}"
+          git push origin "$BRANCH"
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+
+      - name: Open protected-main pull request
+        id: pull_request
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          PR_TOKEN: ${{ secrets.COMPATIBILITY_PR_TOKEN || github.token }}
+          COMMENT_TOKEN: ${{ github.token }}
+          REPORT_BRANCH: ${{ steps.commit.outputs.branch }}
+        shell: bash
+        run: |
+          PR_BODY="$(cat <<EOF
+          앱에서 제출된 호환성 데이터 #${{ github.event.issue.number }}를 문서에 반영합니다.
+
+          Closes #${{ github.event.issue.number }}
+          EOF
+          )"
+
+          if PR_URL="$(GH_TOKEN="$PR_TOKEN" gh pr create \
+            --repo '${{ github.repository }}' \
+            --base main \
+            --head "$REPORT_BRANCH" \
+            --title 'docs: 호환성 제보 #${{ github.event.issue.number }} 등록' \
+            --body "$PR_BODY")"; then
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            COMMENT_BODY="$(cat <<EOF
+          호환성 문서 반영용 PR을 생성했습니다: $PR_URL
+
+          저장소의 필수 검증을 자동 실행합니다. 모두 통과하면 PR을 병합하고 이 제보를 닫습니다.
+          EOF
+          )"
+            GH_TOKEN="$COMMENT_TOKEN" gh issue comment '${{ github.event.issue.number }}' \
+              --repo '${{ github.repository }}' \
+              --body "$COMMENT_BODY"
+          else
+            GH_TOKEN="$COMMENT_TOKEN" gh issue comment '${{ github.event.issue.number }}' \
+              --repo '${{ github.repository }}' \
+              --body "호환성 데이터 검증과 문서 변경 브랜치 생성은 완료했지만, GitHub Actions의 PR 생성 권한이 비활성화되어 자동 PR을 만들지 못했습니다. 브랜치: $REPORT_BRANCH"
+            exit 1
+          fi
+
+      - name: Run required checks on report branch
+        if: steps.pull_request.outputs.pr_url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT_BRANCH: ${{ steps.commit.outputs.branch }}
+        shell: bash
+        run: |
+          gh workflow run android-ci.yml \
+            --repo '${{ github.repository }}' \
+            --ref "$REPORT_BRANCH"
+          gh workflow run codeql.yml \
+            --repo '${{ github.repository }}' \
+            --ref "$REPORT_BRANCH"
+          gh workflow run dependency-review.yml \
+            --repo '${{ github.repository }}' \
+            --ref "$REPORT_BRANCH"
+
+      - name: Wait for required checks
+        if: steps.pull_request.outputs.pr_url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ steps.pull_request.outputs.pr_url }}
+        shell: bash
+        run: |
+          sleep 20
+          gh pr checks "$PR_URL" \
+            --repo '${{ github.repository }}' \
+            --required \
+            --watch \
+            --interval 20
+
+      - name: Merge verified compatibility report
+        if: steps.pull_request.outputs.pr_url != ''
+        env:
+          GH_TOKEN: ${{ secrets.COMPATIBILITY_PR_TOKEN || github.token }}
+          PR_URL: ${{ steps.pull_request.outputs.pr_url }}
+        shell: bash
+        run: |
+          gh pr merge "$PR_URL" \
+            --repo '${{ github.repository }}' \
+            --squash \
+            --delete-branch
