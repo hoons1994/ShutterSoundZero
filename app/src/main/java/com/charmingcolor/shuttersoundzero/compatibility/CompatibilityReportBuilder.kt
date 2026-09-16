@@ -2,18 +2,11 @@ package com.charmingcolor.shuttersoundzero.compatibility
 
 import android.content.Context
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import com.charmingcolor.shuttersoundzero.core.CscMuteManager
-import org.json.JSONObject
 
 object CompatibilityReportBuilder {
-    private const val REPORT_SCHEMA_VERSION = 1
-    private const val ISSUE_BASE_URL =
-        "https://github.com/hoons1994/ShutterSoundZero/issues/new"
-
     data class Report(
-        val schemaVersion: Int,
         val manufacturer: String,
         val model: String,
         val androidVersion: String,
@@ -38,7 +31,6 @@ object CompatibilityReportBuilder {
 
     fun build(context: Context): Report {
         return Report(
-            schemaVersion = REPORT_SCHEMA_VERSION,
             manufacturer = Build.MANUFACTURER.ifBlank { "알 수 없음" },
             model = Build.MODEL.ifBlank { "알 수 없음" },
             androidVersion = Build.VERSION.RELEASE.ifBlank { "알 수 없음" },
@@ -51,48 +43,17 @@ object CompatibilityReportBuilder {
         )
     }
 
-    fun buildIssueUri(report: Report): Uri {
-        val body = buildString {
-            appendLine("<!-- shuttersoundzero-compatibility-report:v1 -->")
-            appendLine("ShutterSoundZero 설정 화면에서 사용자가 공개 제출에 동의한 호환성 정보입니다.")
-            appendLine()
-            appendLine("## 제출 정보")
-            appendLine()
-            appendLine(report.displayText())
-            appendLine()
-            appendLine("## 자동 처리 데이터")
-            appendLine()
-            appendLine("```json")
-            appendLine(report.toJson().toString())
-            appendLine("```")
-            appendLine()
-            appendLine(
-                "> 이 보고서에는 이름, 계정, 전화번호, 사진·미디어, 위치, IMEI, Android ID, " +
-                    "일련번호, Wi-Fi 정보, ADB 페어링 코드·키가 포함되지 않습니다."
-            )
-        }.trimEnd()
+    fun buildEmailSubject(report: Report): String =
+        "[ShutterSoundZero 호환성] ${report.model} / Android ${report.androidVersion}"
 
-        val title = "[호환성] ${report.model} / Android ${report.androidVersion}"
-        return Uri.parse(ISSUE_BASE_URL)
-            .buildUpon()
-            .appendQueryParameter("title", title)
-            .appendQueryParameter("body", body)
-            .build()
-    }
-
-    private fun Report.toJson(): JSONObject {
-        return JSONObject()
-            .put("schemaVersion", schemaVersion)
-            .put("manufacturer", manufacturer)
-            .put("model", model)
-            .put("androidVersion", androidVersion)
-            .put("sdkInt", sdkInt)
-            .put("oneUiVersion", oneUiVersion)
-            .put("securityPatch", securityPatch)
-            .put("appVersion", appVersion)
-            .put("setupPermissionGranted", setupPermissionGranted)
-            .put("cameraMuteApplied", cameraMuteApplied)
-    }
+    fun buildEmailBody(report: Report): String = buildString {
+        appendLine("안녕하세요. ShutterSoundZero 호환성 정보를 제보합니다.")
+        appendLine()
+        appendLine("[호환성 정보]")
+        appendLine(report.displayText())
+        appendLine()
+        appendLine("위 정보는 앱의 호환성 데이터 제출 화면에서 확인 후 전송한 내용입니다.")
+    }.trimEnd()
 
     @Suppress("DEPRECATION")
     private fun currentVersionName(context: Context): String {
