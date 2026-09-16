@@ -12,13 +12,13 @@ Shutter Sound Zero는 `vX.Y.Z` 형식의 Git 태그가 `main` 브랜치의 커�
 6. Release keystore를 GitHub Actions Secret에서 제한된 파일 권한으로 복원합니다.
 7. `assembleRelease`로 서명된 APK를 빌드한 뒤 임시 keystore 파일을 삭제합니다.
 8. `apksigner`로 APK 자체의 서명 유효성을 검증합니다.
-9. 직전 안정 GitHub Release의 APK를 내려받아 서명 인증서 SHA-256 지문이 동일한지 확인합니다.
+9. 새 APK의 서명 인증서 SHA-256 지문이 저장소에 고정된 공개 지문과 일치하는지 확인합니다.
 10. APK provenance attestation을 생성하고 다시 검증합니다.
 11. APK, SHA-256 체크섬, Sigstore attestation bundle을 GitHub Release에 업로드합니다.
 
-태그가 `main`에 포함되지 않은 커밋을 가리키거나, 태그 버전과 앱의 `versionName`이 다르거나, 새 APK의 서명 인증서가 직전 공식 안정 릴리스와 다르면 릴리즈는 중단됩니다.
+태그가 `main`에 포함되지 않은 커밋을 가리키거나, 태그 버전과 앱의 `versionName`이 다르거나, 새 APK의 서명 인증서가 `.github/release-signing-certificate.sha256`과 다르면 릴리즈는 중단됩니다.
 
-수동 Signed Release Preflight도 `main`에서만 실행되며 같은 `release-signing` Environment와 서명 인증서 연속성 검사를 사용합니다. 따라서 잘못된 keystore가 등록되었거나 서명 키가 의도치 않게 바뀐 경우 실제 GitHub Release를 만들기 전에 탐지할 수 있습니다.
+수동 Signed Release Preflight도 `main`에서만 실행되며 같은 `release-signing` Environment와 고정 인증서 지문 검사를 사용합니다. 따라서 잘못된 keystore가 등록되었거나 서명 키가 의도치 않게 바뀐 경우 실제 GitHub Release를 만들기 전에 탐지할 수 있습니다.
 
 ---
 
@@ -49,7 +49,7 @@ release-signing
 
 ## 최초 1회: GitHub Actions Secrets 등록
 
-현재 workflow는 아래 이름의 Secret 4개를 사용합니다. 기존 Repository Secret을 그대로 사용할 수 있으며, 더 강한 격리를 원하면 동일한 이름으로 `release-signing` Environment Secret에 옮길 수 있습니다.
+현재 workflow는 아래 이름의 `release-signing` Environment Secret 4개를 사용합니다. 서명 비밀의 사용 범위를 릴리스 job으로 제한하기 위해 같은 이름의 Repository Secret 복사본은 두지 않습니다.
 
 필요한 Secret은 아래 4개입니다.
 
@@ -60,15 +60,11 @@ release-signing
 | `RELEASE_KEY_ALIAS` | 서명 키 alias |
 | `RELEASE_KEY_PASSWORD` | 서명 키 비밀번호 |
 
-Repository Secret을 등록하는 기존 메뉴:
-
-`Settings` → `Secrets and variables` → `Actions` → `New repository secret`
-
-Environment Secret으로 옮기는 경우:
+Environment Secret 등록 메뉴:
 
 `Settings` → `Environments` → `release-signing` → `Environment secrets`
 
-동일한 이름의 Environment Secret이 있으면 해당 Environment를 사용하는 job에서 그 값을 사용할 수 있습니다. Environment Secret으로 정상 동작하는 것을 Signed Release Preflight에서 확인한 뒤 Repository Secret 복사본을 제거하면 서명 비밀의 사용 범위를 릴리스 job으로 더 좁힐 수 있습니다.
+Environment Secret은 `release-signing` Environment를 사용하는 job에서만 사용할 수 있습니다. Repository Secret에 같은 값을 중복 등록하지 마세요.
 
 > `release.jks` 파일이나 비밀번호를 저장소에 커밋하지 마세요. Secret 값도 Issue, PR, 문서 또는 채팅에 공유하지 않는 것을 권장합니다.
 
@@ -98,7 +94,7 @@ Preflight는 실제 GitHub Release를 만들지 않고 다음을 검증합니다
 - 서명 Secret 4개 복원
 - signed release APK 빌드
 - `apksigner` 서명 검증
-- 직전 안정 릴리스와 signer 인증서 연속성
+- 저장소에 고정된 signer 인증서 SHA-256 지문
 - provenance 생성 및 검증
 
 Preflight가 성공한 뒤에만 새 버전 태그를 생성하는 것을 권장합니다.
@@ -153,11 +149,11 @@ Release notes는 GitHub가 자동 생성합니다.
 
 ---
 
-## 서명 인증서 연속성 검사
+## 서명 인증서 고정 검사
 
-`verify-release-signer.sh`는 GitHub API에서 가장 최근의 draft/prerelease가 아닌 안정 릴리스를 찾고 해당 릴리스의 APK를 내려받습니다. 새로 빌드한 APK와 직전 공식 APK 각각에서 `apksigner --print-certs`로 첫 번째 signer의 SHA-256 인증서 지문을 추출한 뒤 두 값을 비교합니다.
+`verify-release-signer.sh`는 새로 빌드한 APK에서 `apksigner --print-certs`로 첫 번째 signer의 SHA-256 인증서 지문을 추출한 뒤 `.github/release-signing-certificate.sha256`에 고정된 공개 지문과 비교합니다.
 
-현재 릴리스 태그를 다시 실행하는 경우에는 자기 자신을 비교 대상으로 사용하지 않고 그 이전 안정 릴리스를 선택합니다. 직전 릴리스에서 APK를 찾을 수 없거나 APK가 둘 이상이어서 기준 파일이 모호하거나 인증서 지문을 추출할 수 없거나 지문이 다르면 fail-closed 방식으로 릴리스를 중단합니다.
+고정 지문 파일이 없거나 형식이 잘못되었거나 APK 인증서 지문을 추출할 수 없거나 지문이 다르면 fail-closed 방식으로 릴리스를 중단합니다. 이 지문은 새 패키지 `io.github.hoons1994.shuttersoundzero`의 공개 인증서 기준이며, 유출된 이전 키의 지문으로 되돌리면 안 됩니다.
 
 이 검사는 keystore 비밀번호나 개인키를 외부에 공개하지 않습니다. 비교되는 인증서 SHA-256 지문은 APK에 포함된 공개 인증서에서 계산되는 값입니다.
 
@@ -167,10 +163,9 @@ Release notes는 GitHub가 자동 생성합니다.
 
 - `release-signing` Environment가 존재하고 보호 규칙이 의도대로 설정되어 있는지
 - GitHub Actions Secret 4개가 모두 등록되어 있는지
-- `release.jks`가 기존 배포 APK와 동일한 서명 키인지
-- 직전 안정 GitHub Release에 공식 APK가 정확히 1개 존재하는지
+- `release.jks`가 `.github/release-signing-certificate.sha256`에 고정된 새 서명 키인지
 - Git 태그 `vX.Y.Z`와 `versionName`이 일치하는지
 - 태그가 `main`에 포함된 커밋을 가리키는지
 - Android SDK 또는 Gradle 빌드가 정상인지
 
-기존에 배포한 앱을 업데이트하려면 반드시 기존 APK와 동일한 signing key를 사용해야 합니다. 이 저장소의 Release workflow는 이제 그 연속성을 자동으로 검증합니다.
+버전 2부터는 유출된 이전 키와 신뢰를 분리하기 위해 새 패키지 ID와 새 signing key를 사용합니다. 기존 앱 위에 업데이트되지 않으며 사용자는 이전 앱을 삭제하고 새 앱에서 기기 연동을 다시 진행해야 합니다.

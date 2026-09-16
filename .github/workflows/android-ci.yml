@@ -271,7 +271,7 @@ jobs:
       - name: Run Android 17 fresh-install local-network E2E
         run: >-
           ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
-          -Pandroid.testInstrumentationRunnerArguments.class=com.charmingcolor.shuttersoundzero.core.adb.LocalNetworkAccessInstrumentedTest
+          -Pandroid.testInstrumentationRunnerArguments.class=io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccessInstrumentedTest
 
       - name: Upload instrumented test reports
         if: always()
