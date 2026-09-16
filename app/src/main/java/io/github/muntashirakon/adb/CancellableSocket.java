@@ -20,6 +20,7 @@ public final class CancellableSocket implements Closeable {
     private final Socket raw;
     private final AtomicBoolean cancelled = new AtomicBoolean();
     // Only the worker touches TLS state. The cancelling thread closes the raw transport only.
+    private SSLSocket handshakingTls;
     private SSLSocket tls;
 
     public CancellableSocket() { this(new Socket()); }
@@ -42,17 +43,23 @@ public final class CancellableSocket implements Closeable {
         requireConnectedEndpoint(host, port);
         // TLS is provisional until PAKE or the Binder shell-identity proof completes.
         // This policy is deliberately distinct from HTTPS endpoint identification.
-        tls = (SSLSocket) context.context().getSocketFactory().createSocket(raw, host, port, true);
-        tls.setUseClientMode(true);
-        tls.setEnabledProtocols(new String[]{"TLSv1.3"});
-        SSLParameters parameters = tls.getSSLParameters();
+        SSLSocket socket = (SSLSocket) context.context().getSocketFactory()
+                .createSocket(raw, host, port, true);
+        handshakingTls = socket;
+        socket.setUseClientMode(true);
+        socket.setEnabledProtocols(new String[]{"TLSv1.3"});
+        SSLParameters parameters = socket.getSSLParameters();
         parameters.setEndpointIdentificationAlgorithm(context.endpointAlgorithm());
-        tls.setSSLParameters(parameters);
+        socket.setSSLParameters(parameters);
         prepareRead(deadline);
         checkOpen();
-        tls.startHandshake();
+        socket.startHandshake();
         checkOpen();
-        return tls;
+        // Publish only the socket that completed the explicit endpoint-identification policy.
+        // Keeping an earlier alias in tls lets static and human review miss that invariant.
+        tls = socket;
+        handshakingTls = null;
+        return socket;
     }
 
     private static InetAddress loopbackAddress(String host) throws IOException {
@@ -81,6 +88,7 @@ public final class CancellableSocket implements Closeable {
         checkOpen();
         int remaining = deadline.remainingMillis();
         raw.setSoTimeout(remaining);
+        if (handshakingTls != null) handshakingTls.setSoTimeout(remaining);
         if (tls != null) tls.setSoTimeout(remaining);
     }
 
@@ -101,6 +109,10 @@ public final class CancellableSocket implements Closeable {
     /** Worker-only TLS cleanup, after raw close has unblocked I/O. Never destroys shared credentials. */
     public void dispose() {
         close();
+        if (handshakingTls != null) {
+            try { handshakingTls.close(); } catch (IOException ignored) { }
+            handshakingTls = null;
+        }
         if (tls != null) {
             try { tls.close(); } catch (IOException ignored) { }
             tls = null;
