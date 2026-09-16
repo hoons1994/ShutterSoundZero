@@ -135,6 +135,12 @@ fun SettingsHelpSection() {
                 )
             }
 
+            CompatibilityReportRow()
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                thickness = 0.5.dp
+            )
             SupportRow(onClick = {
                 diagnosticReport = DiagnosticReportBuilder.build(context)
             })

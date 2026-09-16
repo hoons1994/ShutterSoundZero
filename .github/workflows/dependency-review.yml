@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,8 +22,32 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - name: Review dependency changes
+        if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
         with:
           fail-on-severity: high
+
+      - name: Verify generated compatibility report scope
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          git fetch origin main
+          BASE_SHA="$(git merge-base origin/main HEAD)"
+          CHANGED_FILES="$(git diff --name-only "$BASE_SHA"..HEAD)"
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo 'No compatibility document change was found.'
+            exit 1
+          fi
+
+          echo "$CHANGED_FILES"
+          UNEXPECTED_FILES="$(printf '%s\n' "$CHANGED_FILES" | grep -Ev '^docs/COMPATIBILITY\.md$' || true)"
+          if [ -n "$UNEXPECTED_FILES" ]; then
+            echo 'Generated compatibility PR contains unexpected files:'
+            echo "$UNEXPECTED_FILES"
+            exit 1
+          fi
