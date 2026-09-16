@@ -3,6 +3,7 @@ package com.charmingcolor.shuttersoundzero.ui.settings
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.charmingcolor.shuttersoundzero.compatibility.CompatibilityReportBuilder
+import com.charmingcolor.shuttersoundzero.diagnostics.DiagnosticReportBuilder
 
 @Composable
 fun CompatibilityReportRow() {
@@ -61,7 +63,7 @@ fun CompatibilityReportRow() {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "제출될 기기·앱 정보를 먼저 확인한 뒤 GitHub 호환성 문서에 제보",
+                text = "제출될 기기·앱 정보를 확인한 뒤 이메일로 간편 제보",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 19.sp
@@ -88,7 +90,7 @@ fun CompatibilityReportRow() {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "아래 정보만 공개 GitHub 이슈로 제출됩니다. GitHub에서 최종 제출하면 문서 반영용 변경이 자동 생성되며, 저장소의 필수 검증을 통과해 병합된 뒤 호환성 문서의 사용자 제출 데이터에 등록됩니다.",
+                        text = "아래 정보만 이메일 본문에 포함됩니다. 예를 누르면 이메일 작성 화면이 열리며, 실제 전송은 이메일 앱에서 보내기를 눌러야 완료됩니다. 제보 내용은 검토 후 호환성 문서에 수동 반영될 수 있습니다.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 19.sp
@@ -111,13 +113,13 @@ fun CompatibilityReportRow() {
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "이름·계정, 전화번호, 사진·미디어, 위치, IMEI, Android ID, 일련번호, Wi-Fi 정보, ADB 페어링 코드·키",
+                        text = "전화번호, 사진·미디어, 위치, IMEI, Android ID, 일련번호, Wi-Fi 정보, ADB 페어링 코드·키",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 19.sp
                     )
                     Text(
-                        text = "GitHub 계정으로 제출하는 경우 GitHub 사용자명은 공개 이슈 작성자 정보로 표시될 수 있습니다.",
+                        text = "이메일을 보내면 사용 중인 메일 계정의 이메일 주소와 표시 이름 등 발신자 정보가 수신자에게 표시될 수 있습니다.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 19.sp
@@ -127,7 +129,7 @@ fun CompatibilityReportRow() {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (openCompatibilityIssue(context, report)) {
+                        if (openCompatibilityEmail(context, report)) {
                             pendingReport = null
                         }
                     }
@@ -146,19 +148,28 @@ fun CompatibilityReportRow() {
     }
 }
 
-private fun openCompatibilityIssue(
+private fun openCompatibilityEmail(
     context: Context,
     report: CompatibilityReportBuilder.Report
 ): Boolean {
+    val mailUri = Uri.parse(
+        "mailto:${Uri.encode(DiagnosticReportBuilder.SUPPORT_EMAIL)}" +
+            "?subject=${Uri.encode(CompatibilityReportBuilder.buildEmailSubject(report))}" +
+            "&body=${Uri.encode(CompatibilityReportBuilder.buildEmailBody(report))}"
+    )
+
     return try {
         context.startActivity(
-            Intent(Intent.ACTION_VIEW, CompatibilityReportBuilder.buildIssueUri(report))
+            Intent.createChooser(
+                Intent(Intent.ACTION_SENDTO, mailUri),
+                "호환성 정보 이메일 보내기"
+            )
         )
         true
     } catch (_: ActivityNotFoundException) {
         Toast.makeText(
             context,
-            "GitHub 제출 화면을 열 수 있는 앱을 찾지 못했습니다.",
+            "이메일을 보낼 수 있는 앱을 찾지 못했습니다.",
             Toast.LENGTH_LONG
         ).show()
         false
