@@ -30,7 +30,7 @@ ADB는 웹 HTTPS가 아닙니다. AOSP 페어링은 자체 서명 인증서 위�
 
 ## 회귀 검사
 
-기존/확장 집중 단위 시나리오 49개와 Android 통합 시나리오 7개를 둡니다. 전체 저장소 테스트 수는 아닙니다.
+기존/확장 집중 단위 시나리오 50개와 Android 통합 시나리오 7개를 둡니다. 전체 저장소 테스트 수는 아닙니다.
 
 - JVM: 자원 경계, 취소/worker 누적, mDNS, 실제 TCP/TLS 취소, TLS 1.3 성공과 잘못된 인증서 거부, 토큰 수명/권한, TLS ADB 스트림, 가짜 성공 출력 및 평문 downgrade 거부.
 - Android: 실제 shell Binder 성공, DUMP 권한을 얻은 앱 UID의 위조 거부, 재생 거부, 실제 Conscrypt + libadb SPAKE2 페어링 성공, 잘못된 코드·TLS exporter·인증된 peer type 거부.

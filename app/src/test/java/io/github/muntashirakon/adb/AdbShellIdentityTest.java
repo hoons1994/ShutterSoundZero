@@ -5,9 +5,16 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class AdbShellIdentityTest {
-    private static final String AUTHORITY = "com.example.adb_auth";
+    private static final String AUTHORITY = "com.example.adb-auth";
     private static String token(AdbShellIdentity.Challenge challenge) throws IOException {
         return challenge.command().split(" --arg ")[1];
+    }
+    @Test public void androidUidProfilesDoNotUseSerialNumbersOrHiddenApis() {
+        assertEquals(0, AdbShellIdentity.androidUserIdForUid(10123));
+        assertEquals(0, AdbShellIdentity.androidUserIdForUid(99999));
+        assertEquals(1, AdbShellIdentity.androidUserIdForUid(100000));
+        assertEquals(10, AdbShellIdentity.androidUserIdForUid(1010123));
+        assertThrows(IllegalArgumentException.class, () -> AdbShellIdentity.androidUserIdForUid(-1));
     }
     @Test public void untrustedUidCannotAttestEvenWithCorrectToken() throws Exception {
         try (AdbShellIdentity.Challenge challenge = AdbShellIdentity.begin(AUTHORITY, 0, 1000)) {

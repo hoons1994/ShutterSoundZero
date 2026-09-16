@@ -3,7 +3,6 @@ package io.github.muntashirakon.adb;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
-import android.os.UserHandle;
 import android.app.Instrumentation;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -28,7 +27,7 @@ import static org.junit.Assert.*;
 public class AdbIdentityInstrumentedTest {
     private Instrumentation getInstrumentation() { return InstrumentationRegistry.getInstrumentation(); }
     private String authority() { return getInstrumentation().getTargetContext().getPackageName() + ".adb-auth"; }
-    private int userId() { return UserHandle.getUserHandleForUid(android.os.Process.myUid()).getIdentifier(); }
+    private int userId() { return AdbShellIdentity.androidUserIdForUid(android.os.Process.myUid()); }
 
     @Test public void testRealShellBinderIdentityCompletesOneShotChallenge() throws Exception {
         try (AdbShellIdentity.Challenge challenge = AdbShellIdentity.begin(authority(), userId(), 10_000)) {

@@ -19,9 +19,20 @@ public final class AdbShellIdentity {
     private static Challenge active;
     private AdbShellIdentity() { }
 
+    /**
+     * Android's UID layout: userId * 100000 + appId (AOSP UserHandle.PER_USER_RANGE).
+     * Avoids hidden getIdentifier()/getUserId() APIs. This selects a provider profile only;
+     * it is NEVER used to infer the trusted Binder caller UID.
+     * See platform/frameworks/base, android-15.0.0_r1, core/java/android/os/UserHandle.java.
+     */
+    public static int androidUserIdForUid(int uid) {
+        if (uid < 0) throw new IllegalArgumentException("Invalid Android UID");
+        return uid / 100_000;
+    }
+
     public static synchronized Challenge begin(String authority, int userId, long timeoutMillis)
             throws IOException {
-        if (authority == null || !authority.matches("[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z0-9_]+)+")
+        if (authority == null || !authority.matches("[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)+")
                 || userId < 0 || timeoutMillis <= 0 || timeoutMillis > 15_000) {
             throw new IOException("Invalid ADB identity challenge parameters");
         }
