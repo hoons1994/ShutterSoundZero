@@ -23,6 +23,7 @@ android {
         targetSdk = 37
         versionCode = 154
         versionName = "1.5.3"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {

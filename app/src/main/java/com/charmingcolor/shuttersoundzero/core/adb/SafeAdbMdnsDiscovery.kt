@@ -15,6 +15,7 @@ import java.net.InetAddress
 internal class SafeAdbMdnsDiscovery(
     context: Context,
     private val serviceType: String,
+    private val onFailure: (Int) -> Unit = {},
     private val onDiscovered: (InetAddress, Int) -> Unit
 ) {
     companion object {
@@ -25,6 +26,8 @@ internal class SafeAdbMdnsDiscovery(
         .getSystemService(Context.NSD_SERVICE) as? NsdManager
         ?: error("NsdManager is unavailable")
     private val registration = MdnsDiscoveryRegistration()
+    private val resolver = SharedNsdResolver.get(nsdManager)
+    private val resolutionOwner = Any()
 
     private val discoveryListener = object : NsdManager.DiscoveryListener {
         override fun onDiscoveryStarted(regType: String) {
@@ -34,12 +37,17 @@ internal class SafeAdbMdnsDiscovery(
         }
 
         override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+            registration.requestStop()
             registration.onStartFailed()
+            resolver.cancel(resolutionOwner)
+            onFailure(errorCode)
             Log.w(TAG, "mDNS discovery start failed ($errorCode)")
         }
 
         override fun onDiscoveryStopped(serviceType: String) {
+            registration.requestStop()
             registration.onDiscoveryStopped()
+            resolver.cancel(resolutionOwner)
         }
 
         override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
@@ -53,7 +61,9 @@ internal class SafeAdbMdnsDiscovery(
             resolve(serviceInfo)
         }
 
-        override fun onServiceLost(serviceInfo: NsdServiceInfo) = Unit
+        override fun onServiceLost(serviceInfo: NsdServiceInfo) {
+            resolver.cancel(resolutionOwner, serviceInfo)
+        }
     }
 
     fun start() {
@@ -71,7 +81,9 @@ internal class SafeAdbMdnsDiscovery(
     }
 
     fun stop() {
-        if (registration.requestStop()) {
+        val stopDiscovery = registration.requestStop()
+        resolver.cancel(resolutionOwner)
+        if (stopDiscovery) {
             stopRegisteredDiscovery()
         }
     }
@@ -89,24 +101,23 @@ internal class SafeAdbMdnsDiscovery(
         }
     }
 
-    @Suppress("DEPRECATION")
     private fun resolve(serviceInfo: NsdServiceInfo) {
-        try {
-            nsdManager.resolveService(
-                serviceInfo,
-                object : NsdManager.ResolveListener {
-                    override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = Unit
-
-                    override fun onServiceResolved(resolved: NsdServiceInfo) {
-                        if (!registration.shouldDeliverCallbacks()) return
-                        val address = resolved.host ?: return
-                        val port = resolved.port
-                        onDiscovered(address, port)
-                    }
+        resolver.resolve(
+            resolutionOwner,
+            serviceInfo,
+            isActive = registration::shouldDeliverCallbacks,
+            onResolved = { resolved ->
+                if (registration.shouldDeliverCallbacks()) {
+                    val address = resolved.host
+                    if (address != null) onDiscovered(address, resolved.port)
                 }
-            )
-        } catch (e: RuntimeException) {
-            Log.w(TAG, "Unable to resolve mDNS service (${e.javaClass.simpleName})")
-        }
+            },
+            onFailure = { errorCode ->
+                if (registration.shouldDeliverCallbacks()) {
+                    Log.w(TAG, "mDNS resolution failed ($errorCode)")
+                    onFailure(errorCode)
+                }
+            }
+        )
     }
 }

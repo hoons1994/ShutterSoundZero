@@ -55,6 +55,15 @@
             </intent-filter>
         </activity>
 
+        <!-- DUMP 권한과 실제 Binder shell/root UID를 모두 확인하는 일회성 ADB 신원 증명.
+             설정 변경, 명령 실행, 앱 데이터 조회 기능은 제공하지 않습니다. -->
+        <provider
+            android:name=".security.AdbIdentityProvider"
+            android:authorities="${applicationId}.adb-auth"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            android:grantUriPermissions="false" />
+
         <!-- 검증된 업데이트 APK만 앱 캐시에서 패키지 설치 화면으로 공유 -->
         <provider
             android:name="androidx.core.content.FileProvider"
