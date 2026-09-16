@@ -46,6 +46,7 @@ object CompatibilityReportBuilder {
     fun buildEmailSubject(report: Report): String =
         "[ShutterSoundZero 호환성] ${report.model} / Android ${report.androidVersion}"
 
+    /** Formats only the supplied snapshot; it does not read logs or recollect device data. */
     fun buildEmailBody(report: Report): String = buildString {
         appendLine("안녕하세요. ShutterSoundZero 호환성 정보를 제보합니다.")
         appendLine()
