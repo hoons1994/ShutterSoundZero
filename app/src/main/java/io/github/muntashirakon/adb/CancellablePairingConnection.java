@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Arrays;
 import javax.net.ssl.SSLException;
@@ -53,7 +54,8 @@ public final class CancellablePairingConnection implements Closeable {
         try {
             CancellableSocket.Deadline deadline = new CancellableSocket.Deadline(timeoutMillis);
             transport.connect(host, port, deadline);
-            SSLSocket socket = transport.startTls(SslUtils.getSslContext(keys), host, port, deadline);
+            SSLSocket socket = transport.startTls(LocalAdbTls.create(keys.getPrivateKey(),
+                    (X509Certificate) keys.getCertificate(), LocalAdbTls.Identity.PAIRING), host, port, deadline);
             DataInputStream input = new DataInputStream(socket.getInputStream());
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
             exported = exportKeyingMaterial(socket);
@@ -77,9 +79,7 @@ public final class CancellablePairingConnection implements Closeable {
             if (encrypted == null) throw new IOException("Unable to encrypt pairing peer info");
             writePacket(output, 1, encrypted, deadline);
             byte[] decrypted = auth.decrypt(readPacket(input, 1, deadline));
-            if (decrypted == null || decrypted.length != PEER_INFO_SIZE) {
-                throw new IOException("Invalid pairing peer info");
-            }
+            PairingPeerInfo.requireDeviceGuid(decrypted);
             transport.checkOpen();
             deadline.remainingMillis();
         } finally {
@@ -127,7 +127,7 @@ public final class CancellablePairingConnection implements Closeable {
     @SuppressLint("PrivateApi") // Same Conscrypt exporter used by the pinned libadb pairing protocol.
     private static byte[] exportKeyingMaterial(SSLSocket socket) throws SSLException {
         try {
-            Class<?> provider = Class.forName(SslUtils.isCustomConscrypt()
+            Class<?> provider = Class.forName(org.conscrypt.Conscrypt.isConscrypt(socket)
                     ? "org.conscrypt.Conscrypt" : "com.android.org.conscrypt.Conscrypt");
             Method export = provider.getMethod("exportKeyingMaterial", SSLSocket.class,
                     String.class, byte[].class, int.class);

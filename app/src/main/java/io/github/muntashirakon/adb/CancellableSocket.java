@@ -9,8 +9,8 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLParameters;
 
 /**
  * Owns the raw socket BEFORE connect/TLS; cancellation never waits for a worker-held monitor.
@@ -36,13 +36,18 @@ public final class CancellableSocket implements Closeable {
         prepareRead(deadline);
     }
 
-    public SSLSocket startTls(SSLContext context, String host, int port, Deadline deadline)
+    public SSLSocket startTls(LocalAdbTls context, String host, int port, Deadline deadline)
             throws IOException {
         checkOpen();
         requireConnectedEndpoint(host, port);
-        // ADB certificates are not web PKI identities. This does NOT authenticate the server
-        // certificate; see the explicit unresolved CodeQL review in audit-8-remediation.md.
-        tls = (SSLSocket) context.getSocketFactory().createSocket(raw, host, port, true);
+        // TLS is provisional until PAKE or the Binder shell-identity proof completes.
+        // This policy is deliberately distinct from HTTPS endpoint identification.
+        tls = (SSLSocket) context.context().getSocketFactory().createSocket(raw, host, port, true);
+        tls.setUseClientMode(true);
+        tls.setEnabledProtocols(new String[]{"TLSv1.3"});
+        SSLParameters parameters = tls.getSSLParameters();
+        parameters.setEndpointIdentificationAlgorithm(context.endpointAlgorithm());
+        tls.setSSLParameters(parameters);
         prepareRead(deadline);
         checkOpen();
         tls.startHandshake();

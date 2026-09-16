@@ -42,25 +42,52 @@ public class CancellableAdbConnectionTest {
         }
     }
     private static CancellableAdbConnection connection(int port) throws Exception {
-        java.security.KeyPair keys = KeyPairGenerator.getInstance("RSA").generateKeyPair();
-        Certificate certificate = new Certificate("test") {
-            public byte[] getEncoded() { return new byte[0]; }
-            public void verify(PublicKey key) { }
-            public void verify(PublicKey key, String provider) { }
-            public PublicKey getPublicKey() { return keys.getPublic(); }
-            public String toString() { return "Loopback test certificate"; }
-        };
-        return new CancellableAdbConnection("127.0.0.1", port, keys.getPrivate(), certificate, "test", API);
+        return new CancellableAdbConnection("127.0.0.1", port, CLIENT.keys.getPrivate(), CLIENT.certificate,
+                API, "com.example.adb_auth", 0);
     }
+    private static final TestTlsKeys CLIENT;
+    private static final TestTlsKeys SERVER;
+    static {
+        try { CLIENT = new TestTlsKeys(); SERVER = new TestTlsKeys(); }
+        catch (Exception failure) { throw new ExceptionInInitializerError(failure); }
+    }
+
     private static AdbProtocol.Message read(Socket socket) throws IOException {
         return AdbProtocol.Message.parse(socket.getInputStream(), VERSION, MAX_DATA);
     }
     private static void send(Socket socket, byte[] packet) throws IOException {
         socket.getOutputStream().write(packet); socket.getOutputStream().flush();
     }
-    private static void handshake(Socket socket) throws IOException {
-        assertEquals(AdbProtocol.A_CNXN, read(socket).command);
+    private static Socket handshake(Socket raw) throws Exception { return handshake(raw, true); }
+    private static Socket handshake(Socket raw, boolean acknowledge) throws Exception {
+        assertEquals(AdbProtocol.A_CNXN, read(raw).command);
+        send(raw, AdbProtocol.generateStls());
+        assertEquals(AdbProtocol.A_STLS, read(raw).command);
+        javax.net.ssl.SSLSocket socket = (javax.net.ssl.SSLSocket) SERVER.serverContext(CLIENT.certificate)
+                .getSocketFactory().createSocket(raw, "127.0.0.1", raw.getPort(), true);
+        socket.setUseClientMode(false);
+        socket.setNeedClientAuth(true);
+        socket.setSoTimeout(3000);
+        javax.net.ssl.SSLParameters parameters = socket.getSSLParameters();
+        // Test-only server identity policy: TestTlsKeys pins the generated client certificate.
+        parameters.setEndpointIdentificationAlgorithm("SSZ-TEST-PINNED-CLIENT");
+        socket.setSSLParameters(parameters);
+        socket.startHandshake();
         send(socket, AdbProtocol.generateMessage(AdbProtocol.A_CNXN, VERSION, MAX_DATA, new byte[0]));
+        AdbProtocol.Message open = read(socket);
+        assertEquals(AdbProtocol.A_OPEN, open.command);
+        String command = new String(open.payload, StandardCharsets.UTF_8);
+        assertTrue(command.startsWith("shell:/system/bin/content call --user 0 --uri content://com.example.adb_auth"));
+        String token = command.split(" --arg ")[1].replace("\u0000", "");
+        // This unit test models the trusted Binder callback. Device tests check the real UID.
+        if (acknowledge) assertTrue(AdbShellIdentity.acknowledge(2000, token));
+        send(socket, AdbProtocol.generateReady(99, open.arg0));
+        send(socket, AdbProtocol.generateMessage(AdbProtocol.A_WRTE, 99, open.arg0,
+                "Result: Bundle[{}]".getBytes(StandardCharsets.UTF_8)));
+        assertEquals(AdbProtocol.A_OKAY, read(socket).command);
+        send(socket, AdbProtocol.generateClose(99, open.arg0));
+        assertEquals(AdbProtocol.A_CLSE, read(socket).command);
+        return socket;
     }
 
     @Test public void connectTimeoutClosesFailedSocketOnEveryAttempt() throws Exception {
@@ -97,7 +124,7 @@ public class CancellableAdbConnectionTest {
 
     @Test public void sequentialShellCommandsIgnoreLateCloseFromPreviousStream() throws Exception {
         try (Peer peer = new Peer(socket -> {
-            handshake(socket);
+            socket = handshake(socket);
             int previousLocal = 0;
             for (int remote = 101; remote <= 102; remote++) {
                 AdbProtocol.Message open = read(socket);
@@ -123,7 +150,7 @@ public class CancellableAdbConnectionTest {
 
     @Test public void shellOpenTimeoutClosesConnection() throws Exception {
         try (Peer peer = new Peer(socket -> {
-            handshake(socket); assertEquals(AdbProtocol.A_OPEN, read(socket).command);
+            socket = handshake(socket); assertEquals(AdbProtocol.A_OPEN, read(socket).command);
             assertEquals(-1, socket.getInputStream().read());
         }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
             client.connect(2000);
@@ -134,7 +161,7 @@ public class CancellableAdbConnectionTest {
 
     @Test public void oversizedPacketIsRejectedBeforeAllocatingItsPayload() throws Exception {
         try (Peer peer = new Peer(socket -> {
-            handshake(socket);
+            socket = handshake(socket);
             AdbProtocol.Message open = read(socket);
             byte[] header = AdbProtocol.generateMessage(AdbProtocol.A_WRTE, 1, open.arg0, null);
             java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(12, Integer.MAX_VALUE);
@@ -149,7 +176,7 @@ public class CancellableAdbConnectionTest {
 
     @Test public void payloadHandlerFailureClosesSession() throws Exception {
         try (Peer peer = new Peer(socket -> {
-            handshake(socket);
+            socket = handshake(socket);
             AdbProtocol.Message open = read(socket);
             send(socket, AdbProtocol.generateReady(9, open.arg0));
             send(socket, AdbProtocol.generateMessage(AdbProtocol.A_WRTE, 9, open.arg0, new byte[]{1}));
@@ -158,6 +185,28 @@ public class CancellableAdbConnectionTest {
             client.connect(2000);
             IOException expected = new IOException("output limit");
             assertSame(expected, assertThrows(IOException.class, () -> client.readShell("echo", 1000, data -> { throw expected; })));
+            assertFalse(client.isConnected());
+        }
+    }
+
+    @Test public void fakeSuccessfulShellOutputCannotAuthenticateEndpoint() throws Exception {
+        try (Peer peer = new Peer(socket -> {
+            Socket tls = handshake(socket, false);
+            assertEquals(-1, tls.getInputStream().read());
+        }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
+            assertThrows(IOException.class, () -> client.connect(2500));
+            assertFalse(client.isConnected());
+            assertThrows(IOException.class, () -> client.readShell("settings put system forbidden 0", 1000, data -> true));
+        }
+    }
+
+    @Test public void plaintextCnxnCannotSkipTlsAndIdentityProof() throws Exception {
+        try (Peer peer = new Peer(socket -> {
+            assertEquals(AdbProtocol.A_CNXN, read(socket).command);
+            send(socket, AdbProtocol.generateMessage(AdbProtocol.A_CNXN, VERSION, MAX_DATA, new byte[0]));
+            assertEquals(-1, socket.getInputStream().read());
+        }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
+            assertThrows(IOException.class, () -> client.connect(1000));
             assertFalse(client.isConnected());
         }
     }

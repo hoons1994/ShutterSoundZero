@@ -9,7 +9,6 @@ import java.net.SocketTimeoutException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.net.ssl.SSLContext;
 import static org.junit.Assert.*;
 
 public class CancellableSocketTest {
@@ -58,8 +57,7 @@ public class CancellableSocketTest {
                 peer.setSoTimeout(2000);
                 CountDownLatch entered = new CountDownLatch(1);
                 AtomicReference<Throwable> failure = new AtomicReference<>();
-                SSLContext context = SSLContext.getInstance("TLS");
-                context.init(null, null, null);
+                LocalAdbTls context = new TestTlsKeys().client(LocalAdbTls.Identity.COMMAND);
                 Thread worker = new Thread(() -> {
                     try {
                         entered.countDown();
@@ -117,8 +115,7 @@ public class CancellableSocketTest {
             server.setSoTimeout(2000);
             transport.connect("127.0.0.1", server.getLocalPort(), new CancellableSocket.Deadline(1000));
             try (Socket peer = server.accept()) {
-                SSLContext context = SSLContext.getInstance("TLS");
-                context.init(null, null, null);
+                LocalAdbTls context = new TestTlsKeys().client(LocalAdbTls.Identity.COMMAND);
                 int wrongPort = server.getLocalPort() == 65535 ? 65534 : server.getLocalPort() + 1;
                 assertThrows(IOException.class, () -> transport.startTls(context, "127.0.0.1", wrongPort,
                         new CancellableSocket.Deadline(1000)));

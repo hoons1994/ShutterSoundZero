@@ -3,6 +3,7 @@ package com.charmingcolor.shuttersoundzero.core.adb
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.os.UserHandle
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
@@ -283,7 +284,8 @@ class StandaloneAdbManager(context: Context) {
 
     private suspend fun connectInterruptibly(host: String, port: Int): Boolean {
         disconnect() // No failed or stale session can be overwritten by the next attempt.
-        val attempt = CancellableAdbConnection(host, port, keyPairAndCert.first, keyPairAndCert.second, DEVICE_NAME, Build.VERSION.SDK_INT)
+        val attempt = CancellableAdbConnection(host, port, keyPairAndCert.first, keyPairAndCert.second, Build.VERSION.SDK_INT,
+            "${context.packageName}.adb-auth", UserHandle.getUserHandleForUid(context.applicationInfo.uid).identifier)
         connection = attempt // Ownership is published BEFORE TCP creation/handshake starts.
         var success = false
         try {

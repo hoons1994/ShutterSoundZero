@@ -1,55 +1,56 @@
-# 8차 감사 보완: ADB 작업과 mDNS 자원 수명
+# 8차 감사 보완: 자원 수명과 로컬 ADB 상대 인증
 
-기준 커밋: `817171d8e7906c2d84ca6909285f9748cd3735d4`.
+최초 감사 기준: `817171d8e7906c2d84ca6909285f9748cd3735d4`. PR #151.
 
-## 변경 사항
+## 네 감사 항목
 
-- 네 공개 ADB 작업은 `AdbOperationRunner`를 공유합니다. 권한 확인·멀티캐스트 lease 획득부터 `Result` 경계 안에서 처리하고, 취소는 다시 전파합니다. 연결 정리·lease 해제·작업 gate 해제는 성공, 실패, 조기 종료, 취소 모두에 적용됩니다.
-- 페어링·연결·셸 작업은 네트워크 연결 이전부터 소켓을 소유합니다. 취소/전체 제한시간은 해당 raw socket을 닫고 작업 스레드를 interrupt합니다. TLS와 PAKE 상태의 최종 정리는 작업 스레드만 수행하여 부분 초기화 및 native destroy 경쟁을 피합니다.
-- 연결 8초, 페어링 12초, 셸 전체 6초의 제한시간에 TCP 생성·TLS·쓰기·읽기가 포함됩니다. 정리 대기는 추가로 최대 1초입니다. 여전히 반환하지 않는 플랫폼/native 작업은 전역 단일 실행 슬롯을 유지하므로 반복 재시도로 스레드가 누적되지 않습니다. 이 경우 다음 요청은 정리 중 오류를 반환합니다.
-- 연결 시도마다 독립 세션을 만들며, 실패한 세션을 닫은 뒤 다음 포트를 시도합니다. 각 공개 작업 종료 시 성공한 연결도 닫습니다. 권한/CSC 상태 확인과 확인 후 사용자 의도 저장은 유지합니다.
-- 같은 `NsdManager`를 쓰는 탐색은 공통 주소 확인 대기열을 사용합니다. `FAILURE_ALREADY_ACTIVE`는 최대 3회 시도하며, 중복 발견·서비스 소실·취소·지연 콜백을 세션/시도 식별자로 분리합니다. 대기열은 최대 64개입니다.
+- `AdbOperationRunner`: 권한 확인과 멀티캐스트 lease 획득부터 Result 경계에 포함합니다. 코루틴 취소를 보존하고 연결·lease·작업 gate를 성공/실패/취소에 모두 정리합니다.
+- `CancellableSocket`과 `BoundedBlockingOperation`: 연결 전에 raw socket을 소유합니다. 취소/시간 초과는 소켓을 닫으며 TLS/PAKE 최종 정리는 worker가 수행합니다. 종료되지 않은 worker는 단일 실행 슬롯을 유지하여 재시도 누적을 막습니다.
+- 연결은 시도별로 소유하며 실패한 세션을 닫은 다음 재시도합니다. 연결 8초, 페어링 12초, 셸 전체 6초와 최대 1초의 정리 대기를 사용합니다. 각 공개 작업이 끝나면 성공한 연결도 닫습니다.
+- 같은 NSD 클라이언트의 주소 확인은 공유 대기열에서 직렬화합니다. 최대 3회 충돌 재시도, 중복 제거, 취소/서비스 소실/지연 콜백 분리를 적용합니다.
 
-## 플랫폼 한계
+## CodeQL 경고의 실제 의미와 보완
 
-API 34 이상에서는 `stopServiceResolution()`으로 진행 중 주소 확인 중단을 요청합니다. API 30–33에서는 동일 API가 없으므로 결과 전달과 후속 재시도를 취소하고, 기존 플랫폼 요청의 종료 콜백까지 슬롯을 보유합니다. 플랫폼이 종료 콜백을 영구히 누락하면 새 주소 확인도 진행되지 않습니다. 5초 후 해당 요청의 실패는 전달하지만, 실제 요청이 종료되지 않았는데 종료된 것처럼 처리하지 않습니다.
+이전 커밋의 `java/unsafe-cert-trust` 2건은 `SSLSocket`에 명시적인 endpoint-identification 알고리즘이 없다는 경고입니다. CodeQL 분석 실행 성공은 최종 보안 검사 통과와 다릅니다. 경고의 critical 등급만으로 실제 악용 경로 2개가 확정됐다고 해석하지 않습니다.
 
-취소 전에 adbd가 이미 처리한 페어링 또는 셸 명령은 되돌릴 수 없습니다. 이 변경은 취소 뒤 살아남은 클라이언트가 추가 I/O를 수행하는 것을 막으며, 원격 부작용의 트랜잭션 롤백을 주장하지 않습니다.
+ADB는 웹 HTTPS가 아닙니다. AOSP 페어링은 자체 서명 인증서 위에서 **입력 코드 + TLS exporter에 묶인 SPAKE2/인증 암호문**으로 상대를 인증합니다. 또한 framework 페어링 서버의 키와 adbd의 임시 TLS 키는 별개이므로, 페어링 인증서를 그대로 일반 연결에 pinning하면 안 됩니다. 임의 `HTTPS` 플래그를 켠 뒤 trust-all을 유지하는 변경도 하지 않습니다.
 
-## libadb 결합 및 출처
+기존 `SslUtils.getSslContext()`의 전역 trust-all 컨텍스트 사용을 제거하고 `LocalAdbTls`의 두 정책을 적용합니다.
 
-암호화, ADB 패킷 코덱, TLS 컨텍스트와 RSA 인코딩은 기존 고정 의존성 `libadb-android 3.1.1`을 재사용합니다. 새로운 `io.github.muntashirakon.adb.Cancellable*` 클래스는 해당 라이브러리의 package-private API를 사용하므로 의존성을 올릴 때 함께 검증해야 합니다. 이들은 upstream 클래스의 중복 정의가 아닙니다.
+1. `SSZ-ADB-LOCAL-PAKE-v1`: TLS 1.3, literal loopback, 소켓에 맞는 정책, 단일 유효한 RSA >= 2048 자체 서명 인증서와 SHA-256 이상 서명을 확인합니다. **이 단계는 잠정 전송 승인이지 신원 인증 완료가 아닙니다.** 최종 성공은 TLS exporter에 결합된 PAKE와 인증된 type-1 device GUID 검증 후에만 반환합니다.
+2. `SSZ-ADB-LOCAL-SHELL-UID-v1`: 동일한 TLS 전처리에 더해, 현재 연결에서 생성한 256-bit 일회용 challenge를 `/system/bin/content call`로 제출하게 합니다. `AdbIdentityProvider`는 `android.permission.DUMP`로 보호되고, 실제 `Binder.getCallingUid()`가 shell(2000) 또는 root(0)인지도 별도로 검사합니다. 토큰·stdout·Bundle에 적힌 UID는 신뢰하지 않습니다. 증명이 끝나기 전 일반 셸 명령을 열 수 없으며 실패하면 연결을 닫습니다. TLS를 건너뛰는 평문 CNXN/legacy AUTH도 거부합니다.
 
-연결/페어링 흐름은 Muntashir Al-Islam의 다음 upstream 구현을 참고하여 전송 자원 수명을 변경했습니다. 이 저장소의 GPL-3.0-or-later 조건으로 배포하며, 암호 알고리즘 자체를 새로 구현하지 않았습니다.
+두 명칭은 `X509ExtendedTrustManager`와 연결 상태 기계가 실제로 구현하는 **비-HTTPS 상대 인증 정책**입니다. 비어 있지 않은 문자열만 추가해 검사를 우회하는 것이 아닙니다. 자체 서명 확인만으로 상대가 adbd임을 보장한다거나, 표준 CA/호스트명 검증·인증서 pinning·TOFU를 도입했다고 주장하지 않습니다. 상대에게 TLS 인증서만 제시하게 하고 일반 명령을 허용하는 경로는 없습니다.
 
-- https://github.com/MuntashirAkon/libadb-android/blob/3.1.1/libadb/src/main/java/io/github/muntashirakon/adb/AdbConnection.java
-- https://github.com/MuntashirAkon/libadb-android/blob/3.1.1/libadb/src/main/java/io/github/muntashirakon/adb/PairingConnectionCtx.java
-- https://developer.android.com/reference/android/net/nsd/NsdManager#stopServiceResolution(android.net.nsd.NsdManager.ResolveListener)
+### 위협 모델
 
-`CancellableAdbConnection`은 앱의 기존 직렬 작업 모델에 맞춘 단일 활성 셸 스트림 전송 계층입니다. 일반적인 다중 스트림 ADB 클라이언트가 아니며, 상시 reader thread를 만들지 않습니다. 연속 명령의 이전 스트림 종료 패킷을 분리하고, 패킷/출력 크기 제한 및 완료 marker 확인을 유지합니다.
+외부/DNS 주소는 전송 계층에서 거부합니다. 같은 기기의 일반 앱이 TLS 서버와 ADB 성공 응답을 흉내 내고 probe 토큰을 알아도 shell/root Binder 호출을 만들 수 없으므로 일반 명령 단계로 진행하지 못합니다. 만료·취소·재사용 토큰과 일반 앱 UID, DUMP 권한만 가진 UID는 거부합니다. 검증 provider는 데이터를 반환하거나 설정/권한/명령을 변경하지 않습니다.
+
+이미 shell/root 권한이 있는 공격자, 손상된 Android 커널/시스템, 앱 프로세스 자체의 코드 실행 권한을 얻은 공격자를 방어하는 모델은 아닙니다. 루프백, 자체 서명 RSA/TLS 1.3 또는 shell의 content 명령이 차단된 제조사 환경에서는 보안을 낮춰 우회하지 않고 오류로 종료합니다. 사용자별 provider를 찾도록 `--user`에 앱의 Android 사용자 ID를 지정합니다.
 
 ## 회귀 검사
 
-정식 실행 명령: `./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`.
+기존/확장 집중 단위 시나리오 49개와 Android 통합 시나리오 7개를 둡니다. 전체 저장소 테스트 수는 아닙니다.
 
-이 변경의 테스트는 lease 획득 실패, 코루틴 취소/동시 요청, 늦게 종료되는 worker, TCP 연결 중 취소, 실제 loopback 읽기/TLS handshake 중단, 실패 ADB 연결의 EOF, 연속 셸 명령, OPEN 제한시간, 잘못된 패킷 크기, mDNS 직렬화·재시도·세션 중단을 포함합니다.
+- JVM: 자원 경계, 취소/worker 누적, mDNS, 실제 TCP/TLS 취소, TLS 1.3 성공과 잘못된 인증서 거부, 토큰 수명/권한, TLS ADB 스트림, 가짜 성공 출력 및 평문 downgrade 거부.
+- Android: 실제 shell Binder 성공, DUMP 권한을 얻은 앱 UID의 위조 거부, 재생 거부, 실제 Conscrypt + libadb SPAKE2 페어링 성공, 잘못된 코드·TLS exporter·인증된 peer type 거부.
+- AndroidJUnitRunner를 명시하여 계측 테스트 실행 대상을 분명히 합니다.
 
-일부 로컬 검사는 JDK 소켓/JSSE와 경량 assertion 실행기로 수행했습니다. Android SDK 빌드 및 실제 의존성 연계 검사는 GitHub Actions 결과로 구분하며, 실행하지 않은 검사에 통과를 표시하지 않습니다. 실제 Android Conscrypt + SPAKE2 페어링, 삼성 카메라의 최종 동작, 제조사별 NSD 종료 콜백은 실기기 확인 범위입니다.
+정식 명령: `./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:connectedDebugAndroidTest`.
 
+검증 결과는 PR의 **해당 커밋 CI 기록**과 별도의 로컬 실행 로그로 확인합니다. 로컬 JDK/경량 assertion 실행을 실제 Android 실행으로 대신 표기하지 않습니다. CodeQL 규칙/워크플로/경고 상태는 숨기거나 비활성화하지 않습니다.
 
-## 추가 보안 점검: CodeQL 경고는 아직 미해결
+## 남는 플랫폼 범위
 
-첫 수정 커밋 `199bbf606fe33aac1e4fcb78861769eb3005746f`에서 Android CI 전체와 CodeQL 분석 작업 자체는 성공했지만, 별도 CodeQL 최종 보안 판정은 `java/unsafe-cert-trust` 2건(critical)으로 실패했습니다. 분석 실행 성공을 취약점 없음으로 해석하면 안 됩니다.
+API 34 이상은 `stopServiceResolution()`을 사용합니다. API 30–33에서는 플랫폼 종료 콜백까지 슬롯을 보유합니다. 플랫폼이 콜백을 영구 누락하면 새 resolve도 진행되지 않으며 이를 종료된 것처럼 처리하지 않습니다. 이미 adbd가 실행한 명령/페어링의 부작용은 취소로 되돌릴 수 없습니다.
 
-경고 위치는 연결/페어링 TLS 스트림입니다. ADB는 웹 HTTPS와 달리 임의로 생성되는 인증서를 사용하며, 페어링에서는 TLS exporter에 묶인 공유 코드 기반 PAKE로 신뢰를 설정합니다. 서버 인증서에 `HTTPS` 호스트명 검증을 단순히 켜면 기존 ADB 인증서와 호환되지 않을 수 있습니다. 그렇다고 이를 자동으로 오탐으로 처리하거나 검사를 끄지는 않았습니다.
+단위/에뮬레이터 검사는 모든 삼성/제조사 실기기와 카메라 소리의 검증을 대신하지 않습니다. libadb 3.1.1의 package-private 패킷/PAKE API를 재사용하므로 라이브러리 갱신 시 함께 검증해야 합니다. 암호 알고리즘을 새로 구현하지 않았습니다. UI, 이메일 제보 및 버전 번호는 변경하지 않습니다.
 
-방어를 강화하여 전송 계층에서 숫자 리터럴 `127.0.0.1` 또는 `::1`만 허용합니다. DNS 이름, 외부/사설 네트워크 주소, 임의 TLS 호스트 재지정은 연결 전에 거부합니다. 앱은 mDNS 주소의 기기 소속을 검증한 뒤 포트만 취하고, 실제 페어링/연결은 `127.0.0.1`로 수행합니다. 이 제한으로 외부 네트워크 연결 및 주소 변경에 따른 오연결을 막지만 **서버 인증서 검증 자체를 구현한 것은 아닙니다.** 같은 기기 안의 악성 프로세스를 인증서로 식별하는 보장도 추가하지 않습니다. 루프백을 제공하지 않는 제조사 구현에서는 외부 주소로 우회하지 않고 연결에 실패합니다.
+## 출처
 
-이 PR은 해당 경고의 프로토콜별 위협 모델 검토와 실기기 호환성 확인이 끝나기 전까지 Draft로 유지하며 자동 병합하지 않습니다. CodeQL 규칙, 워크플로, 경고 상태를 숨기거나 비활성화하지 않았습니다.
-
-보강된 집중 회귀 시나리오는 총 36개입니다. 기존 33개에 외부 주소/DNS 이름 차단, 잘못된 포트 차단, TLS 연결 대상 불일치 차단 검사를 추가했습니다.
-
-참고:
 - https://codeql.github.com/codeql-query-help/java/java-unsafe-cert-trust/
 - https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/pairing_connection/pairing_connection.cpp
+- https://android.googlesource.com/platform/frameworks/base/+/master/services/core/jni/com_android_server_adb_AdbDebuggingManager.cpp
 - https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/daemon/auth.cpp
+- https://developer.android.com/reference/android/os/Binder#getCallingUid()
+- https://github.com/MuntashirAkon/libadb-android/tree/3.1.1
