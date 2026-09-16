@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -40,6 +41,7 @@ class SettingsScreenTest {
     @Test
     fun compatibilityReport_requiresExplicitConfirmation() {
         composeTestRule.onNodeWithText("호환성 데이터 제출")
+            .performScrollTo()
             .assertHasClickAction()
             .performClick()
 
