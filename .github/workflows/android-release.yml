@@ -33,14 +33,14 @@ jobs:
         run: echo 'Android Release workflow loaded successfully.'
 
   release-security-freeze:
-    name: Block Releases During Signing Key Rotation
-    if: github.event_name != 'pull_request'
+    name: Block Release Publishing During Remediation
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     runs-on: ubuntu-latest
     steps:
       - name: Stop release processing
         shell: bash
         run: |
-          echo '::error::Release publishing is paused while the compromised signing key is being rotated.'
+          echo '::error::Release publishing remains paused during signing-key incident remediation.'
           exit 1
 
   dispatch-tag-release:
@@ -60,7 +60,6 @@ jobs:
 
   preflight:
     name: Validate Signed Release Preflight
-    needs: release-security-freeze
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag == ''
     runs-on: ubuntu-latest
     environment: release-signing
