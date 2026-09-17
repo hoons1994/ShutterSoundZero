@@ -75,6 +75,9 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4
         with:
+          # Stable CodeQL 2.27.0 rejects Kotlin 2.4.20. Support is already merged
+          # upstream and will ship in 2.27.1; keep the patched Kotlin compiler.
+          tools: nightly
           languages: java-kotlin
           build-mode: manual
           queries: security-extended

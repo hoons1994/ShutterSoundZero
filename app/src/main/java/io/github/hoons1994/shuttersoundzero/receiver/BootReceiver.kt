@@ -252,7 +252,7 @@ class BootReceiver : BroadcastReceiver() {
         try {
             createNotificationChannel(context)
 
-            val openIntent = Intent(context, MainActivity::class.java).apply {
+            val openIntent = Intent().setClass(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             }
             val pendingIntent = PendingIntent.getActivity(

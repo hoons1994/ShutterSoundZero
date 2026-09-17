@@ -51,7 +51,7 @@ object AppUpdateManager {
         val sha256Url: String
     )
 
-    data class VerifiedUpdate(
+    class VerifiedUpdate internal constructor(
         val file: File,
         val versionName: String,
         val versionCode: Long,
@@ -198,13 +198,21 @@ object AppUpdateManager {
     }
 
     fun launchInstaller(context: Context, verifiedUpdate: VerifiedUpdate): Boolean {
-        if (!verifiedUpdate.file.exists() || !canRequestPackageInstalls(context)) return false
+        val trustedUpdateDir = File(context.cacheDir, "updates").canonicalFile
+        val verifiedFile = verifiedUpdate.file.canonicalFile
+        if (
+            !verifiedFile.isFile ||
+            verifiedFile.parentFile != trustedUpdateDir ||
+            !canRequestPackageInstalls(context)
+        ) {
+            return false
+        }
 
         return try {
             val uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
-                verifiedUpdate.file
+                verifiedFile
             )
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
