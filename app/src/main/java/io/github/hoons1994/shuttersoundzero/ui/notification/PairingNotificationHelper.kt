@@ -83,9 +83,10 @@ object PairingNotificationHelper {
         // RemoteInput requires a mutable PendingIntent on modern Android. Keep the authoritative
         // ADB endpoint out of that mutable intent; the service resolves the current port only
         // from app-owned mDNS discovery state.
-        val submitIntent = Intent(context, PairingNotificationReceiver::class.java).apply {
-            action = ACTION_SUBMIT_PAIRING_CODE
-        }
+        val submitIntent = Intent(ACTION_SUBMIT_PAIRING_CODE).setClass(
+            context,
+            PairingNotificationReceiver::class.java
+        )
         val submitPendingIntent = PendingIntent.getBroadcast(
             context,
             1,
@@ -229,7 +230,7 @@ object PairingNotificationHelper {
     fun buildProgressNotification(context: Context): Notification {
         createNotificationChannel(context)
 
-        val contentIntent = Intent(context, MainActivity::class.java)
+        val contentIntent = Intent().setClass(context, MainActivity::class.java)
         val contentPendingIntent = PendingIntent.getActivity(
             context,
             0,
@@ -270,7 +271,7 @@ object PairingNotificationHelper {
     ) {
         createNotificationChannel(context)
 
-        val contentIntent = Intent(context, MainActivity::class.java)
+        val contentIntent = Intent().setClass(context, MainActivity::class.java)
         val contentPendingIntent = PendingIntent.getActivity(
             context,
             0,

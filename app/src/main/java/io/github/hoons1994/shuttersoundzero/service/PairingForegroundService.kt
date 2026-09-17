@@ -72,7 +72,8 @@ class PairingForegroundService : Service() {
         }
 
         fun stopIntent(context: Context): Intent {
-            return Intent(context, PairingForegroundService::class.java).setAction(ACTION_STOP)
+            return Intent(ACTION_STOP)
+                .setClass(context, PairingForegroundService::class.java)
         }
 
         fun complete(context: Context, wirelessDebuggingDisabled: Boolean) {

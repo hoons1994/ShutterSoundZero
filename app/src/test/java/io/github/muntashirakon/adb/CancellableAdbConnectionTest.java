@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPairGenerator;
@@ -58,6 +59,13 @@ public class CancellableAdbConnectionTest {
     private static void send(Socket socket, byte[] packet) throws IOException {
         socket.getOutputStream().write(packet); socket.getOutputStream().flush();
     }
+    private static void assertClosedByClient(Socket socket) throws IOException {
+        try {
+            assertEquals(-1, socket.getInputStream().read());
+        } catch (SocketException expectedReset) {
+            // Windows commonly reports a peer close as connection reset instead of EOF.
+        }
+    }
     private static Socket handshake(Socket raw) throws Exception { return handshake(raw, true); }
     private static Socket handshake(Socket raw, boolean acknowledge) throws Exception {
         assertEquals(AdbProtocol.A_CNXN, read(raw).command);
@@ -94,7 +102,7 @@ public class CancellableAdbConnectionTest {
         for (int i = 0; i < 3; i++) {
             try (Peer peer = new Peer(socket -> {
                 assertEquals(AdbProtocol.A_CNXN, read(socket).command);
-                assertEquals(-1, socket.getInputStream().read());
+                assertClosedByClient(socket);
             }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
                 assertThrows(SocketTimeoutException.class, () -> client.connect(150));
                 assertFalse(client.isConnected());
@@ -107,7 +115,7 @@ public class CancellableAdbConnectionTest {
         try (Peer peer = new Peer(socket -> {
             assertEquals(AdbProtocol.A_CNXN, read(socket).command);
             received.countDown();
-            assertEquals(-1, socket.getInputStream().read());
+            assertClosedByClient(socket);
         }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
             AtomicReference<Throwable> error = new AtomicReference<>();
             Thread worker = new Thread(() -> { try { client.connect(5000); } catch (Throwable e) { error.set(e); } });
@@ -151,7 +159,7 @@ public class CancellableAdbConnectionTest {
     @Test public void shellOpenTimeoutClosesConnection() throws Exception {
         try (Peer peer = new Peer(socket -> {
             socket = handshake(socket); assertEquals(AdbProtocol.A_OPEN, read(socket).command);
-            assertEquals(-1, socket.getInputStream().read());
+            assertClosedByClient(socket);
         }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
             client.connect(2000);
             assertThrows(SocketTimeoutException.class, () -> client.readShell("echo test", 100, data -> true));
@@ -166,7 +174,7 @@ public class CancellableAdbConnectionTest {
             byte[] header = AdbProtocol.generateMessage(AdbProtocol.A_WRTE, 1, open.arg0, null);
             java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(12, Integer.MAX_VALUE);
             send(socket, header);
-            assertEquals(-1, socket.getInputStream().read());
+            assertClosedByClient(socket);
         }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
             client.connect(2000);
             assertThrows(IOException.class, () -> client.readShell("echo test", 1000, data -> true));
@@ -180,7 +188,7 @@ public class CancellableAdbConnectionTest {
             AdbProtocol.Message open = read(socket);
             send(socket, AdbProtocol.generateReady(9, open.arg0));
             send(socket, AdbProtocol.generateMessage(AdbProtocol.A_WRTE, 9, open.arg0, new byte[]{1}));
-            assertEquals(-1, socket.getInputStream().read());
+            assertClosedByClient(socket);
         }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
             client.connect(2000);
             IOException expected = new IOException("output limit");
@@ -192,7 +200,7 @@ public class CancellableAdbConnectionTest {
     @Test public void fakeSuccessfulShellOutputCannotAuthenticateEndpoint() throws Exception {
         try (Peer peer = new Peer(socket -> {
             Socket tls = handshake(socket, false);
-            assertEquals(-1, tls.getInputStream().read());
+            assertClosedByClient(tls);
         }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
             assertThrows(IOException.class, () -> client.connect(2500));
             assertFalse(client.isConnected());
@@ -204,7 +212,7 @@ public class CancellableAdbConnectionTest {
         try (Peer peer = new Peer(socket -> {
             assertEquals(AdbProtocol.A_CNXN, read(socket).command);
             send(socket, AdbProtocol.generateMessage(AdbProtocol.A_CNXN, VERSION, MAX_DATA, new byte[0]));
-            assertEquals(-1, socket.getInputStream().read());
+            assertClosedByClient(socket);
         }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
             assertThrows(IOException.class, () -> client.connect(1000));
             assertFalse(client.isConnected());
