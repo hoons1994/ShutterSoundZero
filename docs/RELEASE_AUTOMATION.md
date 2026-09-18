@@ -145,7 +145,7 @@ ShutterSoundZero-v1.3.0.apk.sha256
 ShutterSoundZero-v1.3.0.apk.sigstore.json
 ```
 
-Release notes는 GitHub가 자동 생성합니다.
+Release notes는 태그와 같은 이름의 `.github/release-notes/vX.Y.Z.md` 파일을 사용합니다. 파일이 없거나 비어 있으면 릴리스는 중단됩니다.
 
 ---
 
