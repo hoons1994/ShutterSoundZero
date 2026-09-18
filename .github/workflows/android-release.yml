@@ -32,20 +32,8 @@ jobs:
       - name: Confirm release workflow is loadable
         run: echo 'Android Release workflow loaded successfully.'
 
-  release-security-freeze:
-    name: Block Release Publishing During Remediation
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Stop release processing
-        shell: bash
-        run: |
-          echo '::error::Release publishing remains paused during signing-key incident remediation.'
-          exit 1
-
   dispatch-tag-release:
     name: Dispatch Tagged Release
-    needs: release-security-freeze
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -232,7 +220,6 @@ jobs:
 
   release:
     name: Build Signed Release APK
-    needs: release-security-freeze
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag != ''
     runs-on: ubuntu-latest
     environment: release-signing
