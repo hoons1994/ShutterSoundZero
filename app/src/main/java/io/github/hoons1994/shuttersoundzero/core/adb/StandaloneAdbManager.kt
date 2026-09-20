@@ -95,6 +95,8 @@ class StandaloneAdbManager(context: Context) {
     fun startPairingDiscovery(onPairingPortDiscovered: (Int) -> Unit, onConnectPortDiscovered: (Int) -> Unit) {
         LocalNetworkAccess.requireGranted(context)
         stopPairingDiscovery()
+        lastDiscoveredPairingPort = null
+        lastDiscoveredConnectPort = null
         isPairingDiscoveryActive = true
         try {
             pairingMulticastLease = multicastLeaseManager.acquire()
@@ -210,7 +212,8 @@ class StandaloneAdbManager(context: Context) {
     ) {
         ensureConnection(connectPort, 7_000)
         val prefs = PreferencesRepository.getInstance(context)
-        executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+        val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
+        executeShellCommand(AdbShellCommands.grantWriteSecureSettings(context.packageName, userId))
         if (!CscMuteManager.hasWritePermission(context)) throw IOException("WRITE_SECURE_SETTINGS 권한 부여 상태를 확인할 수 없습니다.")
         prefs.isPermissionRevokedByUser = false
         applyAndVerifyMute(true)
@@ -227,7 +230,8 @@ class StandaloneAdbManager(context: Context) {
             prefs.shouldMuteOnBoot = false
             var commandFailure: Exception? = null
             try {
-                executeShellCommand("pm revoke ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+                val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
+                executeShellCommand(AdbShellCommands.revokeWriteSecureSettings(context.packageName, userId))
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
                 commandFailure = error
@@ -258,8 +262,8 @@ class StandaloneAdbManager(context: Context) {
     }
 
     private suspend fun applyAndVerifyMute(mute: Boolean) {
-        val value = if (mute) 0 else 1
-        executeShellCommand("settings put system csc_pref_camera_forced_shuttersound_key $value")
+        val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
+        executeShellCommand(AdbShellCommands.setCameraMute(mute, userId))
         if (!CscStateVerifier.waitFor(mute) { CscMuteManager.isCscShutterSoundMuted(context) }) {
             throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
         }
