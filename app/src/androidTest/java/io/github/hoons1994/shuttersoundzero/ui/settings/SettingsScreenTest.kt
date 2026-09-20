@@ -39,6 +39,15 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun developerOpenChat_isAvailableFromHelpSection() {
+        composeTestRule.onNodeWithText("사용 문의")
+            .performScrollTo()
+            .assertHasClickAction()
+        composeTestRule.onNodeWithText("카카오톡 오픈채팅으로 개발자에게 문의하기")
+            .fetchSemanticsNode()
+    }
+
+    @Test
     fun compatibilityReport_requiresExplicitConfirmation() {
         composeTestRule.onNodeWithText("호환성 데이터 제출")
             .performScrollTo()
