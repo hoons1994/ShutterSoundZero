@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
 import android.util.Log
+import io.github.hoons1994.shuttersoundzero.core.adb.AdbShellCommands
+import io.github.muntashirakon.adb.AdbShellIdentity
 
 /**
  * 기기 특화 CSC 설정 관리자
@@ -68,7 +70,8 @@ object CscMuteManager {
      * PC ADB를 통해 앱에 보안 설정 권한을 부여하는 명령어
      */
     fun getAdbGrantPermissionCommand(context: Context): String {
-        return "adb shell pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS"
+        val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
+        return "adb shell ${AdbShellCommands.grantWriteSecureSettings(context.packageName, userId)}"
     }
 
     /**
