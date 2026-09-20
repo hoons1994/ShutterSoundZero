@@ -25,7 +25,7 @@
 
 - 최신 APK: [GitHub Releases](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 - 지원 환경: 삼성 갤럭시 / Android 11 이상
-- v1.4.8부터 루트의 완성형 앱 아이콘을 런처 리소스로 직접 사용해 동일한 디자인이 표시되도록 정리했습니다.
+- v1.5.3 이하에서 전환: v1.5.4는 새 패키지 ID와 새 서명키를 사용하므로 기존 앱 위에 설치할 수 없습니다. 기존 앱을 삭제한 뒤 v1.5.4를 새로 설치하고 1회 설정을 다시 진행해 주세요.
 
 ## ✨ 주요 기능
 
@@ -68,7 +68,7 @@ One UI의 알림 팝업 스타일이 간략히 보기라서 코드 입력이 불
 - [1회 설정 필요]가 표시됨: 무선 디버깅을 켜고 [1회 설정 시작]으로 다시 연동합니다.
 - 원래 셔터음으로 복원: 설정 → 카메라 설정 → [카메라 셔터음 원래대로 복원]을 사용합니다.
 
-일반적인 재부팅만으로 CSC 셔터음 설정이 초기화되는 것을 전제로 하지 않습니다. One UI 또는 Android 업데이트 후 실제 CSC 값이 초기화된 경우에만 재적용이 필요합니다.
+일반적인 재부팅에서는 CSC 셔터음 설정이 유지되지만, 재부팅이나 One UI·Android 업데이트 후 실제 CSC 값이 초기화된 경우에는 재적용이 필요합니다.
 
 복원·재적용 후에는 이전 로컬 ADB 세션을 정리하고, CSC 반영이 잠시 늦는 경우를 고려해 실제 상태를 짧게 재확인합니다.
 
@@ -85,21 +85,21 @@ ShutterSoundZero는 백그라운드에서 APK를 자동 설치하지 않습니�
 5. 현재 설치 앱과 APK의 서명 인증서 일치 여부 확인
 6. 검증 성공 시 Android 설치 화면 실행
 
-동일 패키지·동일 서명의 정상적인 앱 업데이트에서는 기존 앱 데이터와 권한 연동이 유지되는 것이 일반적입니다. 다만 업데이트 후 기존 연동 흔적이 있는데 실제 `WRITE_SECURE_SETTINGS` 권한이 예외적으로 사라진 경우에는 다시 연동하도록 안내합니다.
+v1.5.4 이후 동일 패키지·동일 서명으로 배포되는 정상적인 앱 업데이트에서는 기존 앱 데이터와 권한 연동이 유지되는 것이 일반적입니다. 다만 업데이트 후 기존 연동 흔적이 있는데 실제 `WRITE_SECURE_SETTINGS` 권한이 예외적으로 사라진 경우에는 다시 연동하도록 안내합니다.
 
 ## 🧩 동작 방식
 
-실제 CSC 변경은 앱 UID가 직접 private 시스템 설정을 수정하는 방식이 아니라, 로컬 무선 ADB 연결을 통해 다음과 같은 시스템 명령을 실행하는 구조입니다.
+실제 CSC 변경은 앱 UID가 직접 private 시스템 설정을 수정하는 방식이 아니라, 현재 Android 사용자 프로필 ID를 확인한 뒤 로컬 무선 ADB 연결을 통해 다음과 같은 시스템 명령을 실행하는 구조입니다.
 
 ```text
-settings put system csc_pref_camera_forced_shuttersound_key 0
-settings put system csc_pref_camera_forced_shuttersound_key 1
+settings --user <user-id> put system csc_pref_camera_forced_shuttersound_key 0
+settings --user <user-id> put system csc_pref_camera_forced_shuttersound_key 1
 ```
 
 최초 연동 시에는 다음 권한을 로컬 ADB를 통해 부여합니다.
 
 ```text
-pm grant <package-name> android.permission.WRITE_SECURE_SETTINGS
+pm grant --user <user-id> <package-name> android.permission.WRITE_SECURE_SETTINGS
 ```
 
 앱은 변경 후 실제 CSC 값을 다시 읽어 UI 상태와 기기 상태가 일치하는지 확인합니다.
