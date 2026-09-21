@@ -147,6 +147,12 @@ fun SettingsHelpSection() {
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 thickness = 0.5.dp
             )
+            DeveloperDonationRow(onClick = { openDeveloperDonation(context) })
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                thickness = 0.5.dp
+            )
             SupportRow(onClick = {
                 diagnosticReport = DiagnosticReportBuilder.build(context)
             })
@@ -304,6 +310,52 @@ private fun openDeveloperOpenChat(context: Context) {
 }
 
 private const val DEVELOPER_OPEN_CHAT_URL = "https://open.kakao.com/o/sxO88pOi"
+
+@Composable
+private fun DeveloperDonationRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "개발자 후원",
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "앱이 도움이 되었다면 개발과 유지보수를 응원할 수 있습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = "개발자 후원 열기",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun openDeveloperDonation(context: Context) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DEVELOPER_DONATION_URL)))
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(
+            context,
+            "후원 링크를 열 수 있는 앱을 찾지 못했습니다.",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+}
+
+private const val DEVELOPER_DONATION_URL = "https://qr.kakaopay.com/Ej7i4dwyE"
 
 @Composable
 private fun SupportRow(onClick: () -> Unit) {
