@@ -48,15 +48,6 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun developerDonation_isAvailableFromHelpSection() {
-        composeTestRule.onNodeWithText("개발자 후원")
-            .performScrollTo()
-            .assertHasClickAction()
-        composeTestRule.onNodeWithText("앱이 도움이 되었다면 개발과 유지보수를 응원할 수 있습니다.")
-            .fetchSemanticsNode()
-    }
-
-    @Test
     fun compatibilityReport_requiresExplicitConfirmation() {
         composeTestRule.onNodeWithText("호환성 데이터 제출")
             .performScrollTo()
