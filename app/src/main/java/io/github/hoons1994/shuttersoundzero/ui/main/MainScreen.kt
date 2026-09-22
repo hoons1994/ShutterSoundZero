@@ -44,7 +44,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,15 +63,11 @@ import androidx.navigation3.runtime.NavKey
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.Settings
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
-import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import io.github.hoons1994.shuttersoundzero.theme.BrandBlueLight
 import io.github.hoons1994.shuttersoundzero.theme.StatusAmber
 import io.github.hoons1994.shuttersoundzero.theme.StatusGreen
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
-import io.github.hoons1994.shuttersoundzero.update.AppUpdateManager
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 
 private val CardRadius = 24.dp
 private val ScreenPadding = 20.dp
@@ -107,82 +102,8 @@ fun MainScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
-    val prefs = remember { PreferencesRepository.getInstance(context) }
-    val updateScope = rememberCoroutineScope()
 
     var showWifiRequiredDialog by remember { mutableStateOf(false) }
-    var availableAppUpdateVersion by remember { mutableStateOf<String?>(null) }
-    var isAppUpdatePreparing by remember { mutableStateOf(false) }
-    var isSilentAppUpdateChecking by remember { mutableStateOf(false) }
-    var appUpdateProgress by remember { mutableStateOf(0) }
-    var appUpdateStatusMessage by remember { mutableStateOf<String?>(null) }
-    var appUpdateErrorMessage by remember { mutableStateOf<String?>(null) }
-
-    fun refreshKnownAppUpdateVersion() {
-        val knownVersion = prefs.knownAvailableAppUpdateVersion
-        val currentVersion = AppUpdateManager.installedVersionName(context)
-        if (knownVersion != null && AppUpdateManager.isNewerVersion(knownVersion, currentVersion)) {
-            availableAppUpdateVersion = knownVersion
-        } else {
-            availableAppUpdateVersion = null
-            if (knownVersion != null) prefs.knownAvailableAppUpdateVersion = null
-        }
-    }
-
-    val startHomeAppUpdate: () -> Unit = {
-        if (!isAppUpdatePreparing) {
-            if (!AppUpdateManager.canRequestPackageInstalls(context)) {
-                Toast.makeText(
-                    context,
-                    "최초 1회 [이 출처 허용]을 켠 뒤 앱으로 돌아와 [업데이트]를 다시 눌러 주세요.",
-                    Toast.LENGTH_LONG
-                ).show()
-                try {
-                    AppUpdateManager.openInstallPermissionSettings(context)
-                } catch (error: Exception) {
-                    appUpdateErrorMessage = friendlyHomeUpdateError(error)
-                }
-            } else {
-                updateScope.launch {
-                    isAppUpdatePreparing = true
-                    appUpdateProgress = 0
-                    appUpdateErrorMessage = null
-                    try {
-                        val update = when (val result = AppUpdateManager.checkForUpdate(context)) {
-                            is AppUpdateManager.UpdateCheckResult.UpToDate -> {
-                                prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
-                                prefs.knownAvailableAppUpdateVersion = null
-                                availableAppUpdateVersion = null
-                                appUpdateStatusMessage = "이미 최신 버전을 사용하고 있습니다."
-                                return@launch
-                            }
-                            is AppUpdateManager.UpdateCheckResult.Available -> {
-                                prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
-                                prefs.knownAvailableAppUpdateVersion = result.update.versionName
-                                availableAppUpdateVersion = result.update.versionName
-                                result.update
-                            }
-                        }
-
-                        val verified = AppUpdateManager.downloadAndVerify(
-                            context = context,
-                            update = update,
-                            onProgress = { progress -> appUpdateProgress = progress }
-                        )
-                        if (!AppUpdateManager.launchInstaller(context, verified)) {
-                            error("Android 설치 화면을 열 수 없습니다. 기기의 설치 권한 설정을 확인해 주세요.")
-                        }
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Exception) {
-                        appUpdateErrorMessage = friendlyHomeUpdateError(error)
-                    } finally {
-                        isAppUpdatePreparing = false
-                    }
-                }
-            }
-        }
-    }
 
     val startPairing = {
         viewModel.startNotificationPairing(context)
@@ -253,54 +174,10 @@ fun MainScreen(
         }
     }
 
-    fun checkAppUpdateSilentlyIfDue() {
-        if (isAppUpdatePreparing || isSilentAppUpdateChecking) return
-        val now = System.currentTimeMillis()
-        if (
-            !AppUpdateManager.isAutomaticCheckDue(
-                enabled = prefs.isAppUpdateAutoCheckEnabled,
-                lastCheckAtMillis = prefs.lastAppUpdateCheckAtMillis,
-                nowMillis = now
-            )
-        ) {
-            return
-        }
-
-        prefs.lastAppUpdateCheckAtMillis = now
-        isSilentAppUpdateChecking = true
-        updateScope.launch {
-            try {
-                when (val result = AppUpdateManager.checkForUpdate(context)) {
-                    is AppUpdateManager.UpdateCheckResult.UpToDate -> {
-                        prefs.knownAvailableAppUpdateVersion = null
-                        availableAppUpdateVersion = null
-                    }
-                    is AppUpdateManager.UpdateCheckResult.Available -> {
-                        prefs.knownAvailableAppUpdateVersion = result.update.versionName
-                        availableAppUpdateVersion = result.update.versionName
-                    }
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                // 자동 확인은 조용히 실패한다. 수동 확인은 설정 화면에서 언제든 가능하다.
-            } finally {
-                isSilentAppUpdateChecking = false
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        refreshKnownAppUpdateVersion()
-        checkAppUpdateSilentlyIfDue()
-    }
-
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshState()
-                refreshKnownAppUpdateVersion()
-                checkAppUpdateSilentlyIfDue()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -351,63 +228,11 @@ fun MainScreen(
     ) { innerPadding ->
         HomeContent(
             uiState = uiState,
-            availableAppUpdateVersion = availableAppUpdateVersion,
-            isAppUpdatePreparing = isAppUpdatePreparing,
             onSettingsClick = { onItemClick(Settings) },
             onSetup = setupAction,
             onReapply = reapplyAction,
             onOpenCamera = openCamera,
-            onUpdate = startHomeAppUpdate,
             modifier = Modifier.padding(innerPadding)
-        )
-    }
-
-    if (isAppUpdatePreparing) {
-        AlertDialog(
-            onDismissRequest = {},
-            title = { Text("앱 업데이트") },
-            text = {
-                Text(
-                    if (appUpdateProgress > 0) {
-                        "업데이트 파일을 확인하고 있습니다. · $appUpdateProgress%"
-                    } else {
-                        "최신 버전을 확인하고 업데이트를 준비하고 있습니다."
-                    }
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {}, enabled = false) {
-                    Text(if (appUpdateProgress > 0) "$appUpdateProgress%" else "준비 중…")
-                }
-            },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    }
-
-    appUpdateStatusMessage?.let { message ->
-        AlertDialog(
-            onDismissRequest = { appUpdateStatusMessage = null },
-            title = { Text("앱 업데이트") },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = { appUpdateStatusMessage = null }) { Text("확인") }
-            },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    }
-
-    appUpdateErrorMessage?.let { message ->
-        AlertDialog(
-            onDismissRequest = { appUpdateErrorMessage = null },
-            title = { Text("앱 업데이트") },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = { appUpdateErrorMessage = null }) { Text("확인") }
-            },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = MaterialTheme.colorScheme.surface
         )
     }
 
@@ -491,13 +316,10 @@ fun MainScreen(
 @Composable
 internal fun HomeContent(
     uiState: MainUiState,
-    availableAppUpdateVersion: String? = null,
-    isAppUpdatePreparing: Boolean = false,
     onSettingsClick: () -> Unit = {},
     onSetup: () -> Unit = {},
     onReapply: () -> Unit = {},
     onOpenCamera: () -> Unit = {},
-    onUpdate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val homeStatus = resolveHomeStatus(uiState)
@@ -526,22 +348,8 @@ internal fun HomeContent(
             SetupProgressCard(uiState)
         }
 
-        availableAppUpdateVersion?.let { version ->
-            Spacer(modifier = Modifier.height(20.dp))
-            UpdateCard(
-                version = version,
-                isPreparing = isAppUpdatePreparing,
-                onUpdate = onUpdate
-            )
-        }
-
         Spacer(modifier = Modifier.height(28.dp))
     }
-}
-
-private fun friendlyHomeUpdateError(error: Exception): String {
-    return error.message?.trim().takeUnless { it.isNullOrBlank() }
-        ?: "업데이트를 준비하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요."
 }
 
 @Composable
@@ -579,7 +387,6 @@ private fun AppHeader(onSettingsClick: () -> Unit) {
         }
     }
 }
-
 @Composable
 private fun StatusHeroCard(
     status: HomeStatus,
@@ -894,46 +701,6 @@ private fun SetupStepRow(
                 color = detailColor,
                 lineHeight = 18.sp
             )
-        }
-    }
-}
-
-@Composable
-private fun UpdateCard(
-    version: String,
-    isPreparing: Boolean,
-    onUpdate: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = ScreenPadding),
-        shape = RoundedCornerShape(CardRadius),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "새 버전 v$version",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "변경 내용을 확인하고 안전하게 업데이트할 수 있습니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            OutlinedButton(
-                onClick = onUpdate,
-                enabled = !isPreparing,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Text(if (isPreparing) "업데이트 준비 중…" else "업데이트")
-            }
         }
     }
 }

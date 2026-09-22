@@ -4,7 +4,10 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.PackageManager
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -57,13 +60,12 @@ import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
 import io.github.hoons1994.shuttersoundzero.security.AppLockSession
-import io.github.hoons1994.shuttersoundzero.update.AppUpdateManager
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private val CardRadius = 20.dp
 private val CardPaddingH = 20.dp
 private val CardPaddingV = 16.dp
+private const val RELEASES_URL = "https://github.com/hoons1994/ShutterSoundZero/releases/latest"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,9 +80,6 @@ fun SettingsScreen(
 
     var isSoftwareUpdateCheck by remember {
         mutableStateOf(prefs.isSoftwareUpdateCheckEnabled)
-    }
-    var isAppUpdateAutoCheck by remember {
-        mutableStateOf(prefs.isAppUpdateAutoCheckEnabled)
     }
     var isAppLockEnabled by remember { mutableStateOf(prefs.isAppLockEnabled) }
     var isLockSetupInProgress by remember { mutableStateOf(false) }
@@ -98,81 +97,6 @@ fun SettingsScreen(
     var isReapplyInProgress by remember { mutableStateOf(false) }
     var isRestoreInProgress by remember { mutableStateOf(false) }
     var isCscMuted by remember { mutableStateOf(CscMuteManager.isCscShutterSoundMuted(context)) }
-
-    var isUpdateChecking by remember { mutableStateOf(false) }
-    var updateInfo by remember { mutableStateOf<AppUpdateManager.UpdateInfo?>(null) }
-    var isUpdateDownloading by remember { mutableStateOf(false) }
-    var updateDownloadProgress by remember { mutableStateOf(0) }
-    var updateStatusMessage by remember { mutableStateOf<String?>(null) }
-    var updateErrorMessage by remember { mutableStateOf<String?>(null) }
-    var installPermissionHint by remember { mutableStateOf(false) }
-
-    fun checkForAppUpdate() {
-        if (isUpdateChecking || isUpdateDownloading) return
-        coroutineScope.launch {
-            isUpdateChecking = true
-            updateErrorMessage = null
-            installPermissionHint = false
-            try {
-                when (val result = AppUpdateManager.checkForUpdate(context)) {
-                    is AppUpdateManager.UpdateCheckResult.UpToDate -> {
-                        prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
-                        prefs.knownAvailableAppUpdateVersion = null
-                        updateInfo = null
-                        updateStatusMessage = "현재 최신 버전을 사용하고 있습니다.\n\nv$versionName"
-                    }
-                    is AppUpdateManager.UpdateCheckResult.Available -> {
-                        prefs.lastAppUpdateCheckAtMillis = System.currentTimeMillis()
-                        prefs.knownAvailableAppUpdateVersion = result.update.versionName
-                        updateInfo = result.update
-                        updateDownloadProgress = 0
-                    }
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                updateErrorMessage = friendlyUpdateError(error)
-            } finally {
-                isUpdateChecking = false
-            }
-        }
-    }
-
-    fun downloadUpdate(update: AppUpdateManager.UpdateInfo) {
-        if (isUpdateDownloading) return
-        if (!AppUpdateManager.canRequestPackageInstalls(context)) {
-            installPermissionHint = true
-            try {
-                AppUpdateManager.openInstallPermissionSettings(context)
-            } catch (error: Exception) {
-                updateErrorMessage = friendlyUpdateError(error)
-            }
-            return
-        }
-        coroutineScope.launch {
-            isUpdateDownloading = true
-            updateDownloadProgress = 0
-            updateErrorMessage = null
-            installPermissionHint = false
-            try {
-                val verified = AppUpdateManager.downloadAndVerify(
-                    context = context,
-                    update = update,
-                    onProgress = { progress -> updateDownloadProgress = progress }
-                )
-                if (!AppUpdateManager.launchInstaller(context, verified)) {
-                    updateErrorMessage =
-                        "Android 설치 화면을 열 수 없습니다. 기기의 설치 권한 설정을 확인해 주세요."
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                updateErrorMessage = friendlyUpdateError(error)
-            } finally {
-                isUpdateDownloading = false
-            }
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -351,30 +275,20 @@ fun SettingsScreen(
 
             GroupLabel("업데이트")
             SettingsCard {
-                SwitchRow(
-                    title = "앱 업데이트 자동 확인",
-                    subtitle = "하루 한 번 이하로 새 정식 버전만 확인",
-                    checked = isAppUpdateAutoCheck,
-                    onCheckedChange = { enabled ->
-                        isAppUpdateAutoCheck = enabled
-                        prefs.isAppUpdateAutoCheckEnabled = enabled
-                        if (enabled) {
-                            prefs.lastAppUpdateCheckAtMillis = 0L
-                        }
-                    }
-                )
-                RowDivider()
                 ClickableRow(
-                    title = "지금 업데이트 확인",
-                    subtitle = when {
-                        isUpdateChecking -> "새 버전을 확인하고 있습니다…"
-                        updateInfo != null -> "v${updateInfo?.versionName} 사용 가능"
-                        isAppUpdateAutoCheck -> "자동 확인 켜짐"
-                        else -> "자동 확인 꺼짐"
-                    },
+                    title = "GitHub 릴리즈 열기",
+                    subtitle = "최신 버전은 GitHub에서 직접 확인하고 설치",
                     onClick = {
-                        if (updateInfo == null) {
-                            checkForAppUpdate()
+                        try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL))
+                            )
+                        } catch (_: Exception) {
+                            Toast.makeText(
+                                context,
+                                "GitHub 릴리즈 페이지를 열 수 없습니다.",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                     }
                 )
@@ -552,111 +466,6 @@ fun SettingsScreen(
             )
         }
 
-        updateStatusMessage?.let { message ->
-            AlertDialog(
-                onDismissRequest = { updateStatusMessage = null },
-                title = { Text("앱 업데이트") },
-                text = { Text(message) },
-                confirmButton = {
-                    TextButton(onClick = { updateStatusMessage = null }) {
-                        Text("확인")
-                    }
-                },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = MaterialTheme.colorScheme.surface
-            )
-        }
-
-        updateErrorMessage?.let { message ->
-            AlertDialog(
-                onDismissRequest = { updateErrorMessage = null },
-                title = { Text("업데이트 확인") },
-                text = { Text(message) },
-                confirmButton = {
-                    TextButton(onClick = { updateErrorMessage = null }) {
-                        Text("확인")
-                    }
-                },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = MaterialTheme.colorScheme.surface
-            )
-        }
-
-        updateInfo?.let { update ->
-            AlertDialog(
-                onDismissRequest = {
-                    if (!isUpdateDownloading) {
-                        updateInfo = null
-                        installPermissionHint = false
-                    }
-                },
-                title = { Text("새 버전 v${update.versionName}") },
-                text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "현재 v$versionName → v${update.versionName}",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = update.releaseNotes,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 19.sp
-                        )
-
-                        if (isUpdateDownloading) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-                            Text(
-                                text = "업데이트 파일 확인 중 · $updateDownloadProgress%",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        if (installPermissionHint) {
-                            Text(
-                                text = "Android의 [이 출처 허용]을 켠 뒤 이 화면으로 돌아와 [업데이트]를 다시 눌러 주세요.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 18.sp
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    if (isUpdateDownloading) {
-                        TextButton(onClick = {}, enabled = false) {
-                            Text("$updateDownloadProgress%")
-                        }
-                    } else {
-                        TextButton(onClick = { downloadUpdate(update) }) {
-                            Text("업데이트")
-                        }
-                    }
-                },
-                dismissButton = {
-                    if (!isUpdateDownloading) {
-                        TextButton(
-                            onClick = {
-                                updateInfo = null
-                                installPermissionHint = false
-                            }
-                        ) {
-                            Text("나중에")
-                        }
-                    }
-                },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = MaterialTheme.colorScheme.surface
-            )
-        }
-
         if (showDeveloperOptionsConfirm) {
             AlertDialog(
                 onDismissRequest = { showDeveloperOptionsConfirm = false },
@@ -805,15 +614,6 @@ private fun currentVersionName(context: Context): String {
         context.packageManager.getPackageInfo(context.packageName, 0)
     }
     return packageInfo.versionName ?: "-"
-}
-
-private fun friendlyUpdateError(error: Exception): String {
-    val message = error.message?.trim().orEmpty()
-    return if (message.isBlank()) {
-        "업데이트를 확인하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요."
-    } else {
-        message
-    }
 }
 
 private fun Context.findActivity(): Activity? {
