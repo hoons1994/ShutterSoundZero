@@ -39,11 +39,11 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun developerOpenChat_isAvailableFromHelpSection() {
-        composeTestRule.onNodeWithText("사용 문의")
+    fun developerDonation_isAvailableFromHelpSection() {
+        composeTestRule.onNodeWithText("개발자 후원")
             .performScrollTo()
             .assertHasClickAction()
-        composeTestRule.onNodeWithText("카카오톡 오픈채팅으로 개발자에게 문의하기")
+        composeTestRule.onNodeWithText("앱이 도움이 되었다면 개발과 유지보수를 응원할 수 있습니다.")
             .fetchSemanticsNode()
     }
 
