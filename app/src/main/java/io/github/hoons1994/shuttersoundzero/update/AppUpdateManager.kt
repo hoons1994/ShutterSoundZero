@@ -15,8 +15,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -38,9 +36,7 @@ object AppUpdateManager {
     private const val MAX_RELEASE_METADATA_BYTES = 512 * 1024
     private const val MAX_SHA256_FILE_BYTES = 16 * 1024
     private const val MAX_APK_BYTES = 200L * 1024L * 1024L
-    internal const val STALE_UPDATE_FILE_MILLIS = 24L * 60L * 60L * 1000L
     internal const val AUTOMATIC_CHECK_INTERVAL_MILLIS = 24L * 60L * 60L * 1000L
-    private val downloadMutex = Mutex()
 
     sealed interface UpdateCheckResult {
         data class UpToDate(val latestVersion: String) : UpdateCheckResult
@@ -119,30 +115,12 @@ object AppUpdateManager {
         update: UpdateInfo,
         onProgress: suspend (Int) -> Unit = {}
     ): VerifiedUpdate = withContext(Dispatchers.IO) {
-        downloadMutex.withLock {
-            downloadAndVerifyLocked(context, update, onProgress)
-        }
-    }
+        val updateDir = File(context.cacheDir, "updates").apply { mkdirs() }
+        updateDir.listFiles()?.forEach { it.delete() }
 
-    private suspend fun downloadAndVerifyLocked(
-        context: Context,
-        update: UpdateInfo,
-        onProgress: suspend (Int) -> Unit
-    ): VerifiedUpdate {
-        val updateDir = File(context.cacheDir, "updates")
-        check(updateDir.isDirectory || updateDir.mkdirs()) {
-            "업데이트 임시 저장소를 준비할 수 없습니다."
-        }
-        cleanupStaleUpdateFiles(updateDir, System.currentTimeMillis())
-
-        // Keep the temporary name APK-shaped because PackageManager rejects some non-APK suffixes.
-        val partialFile = File.createTempFile("ShutterSoundZero-update-", ".part.apk", updateDir)
-        val apkFile = File(
-            partialFile.parentFile,
-            partialFile.name.removeSuffix(".part.apk") + ".apk"
-        )
-        return try {
-            downloadFile(update.apkUrl, partialFile) { progress ->
+        val apkFile = File(updateDir, "ShutterSoundZero-v${update.versionName}.apk")
+        try {
+            downloadFile(update.apkUrl, apkFile) { progress ->
                 withContext(Dispatchers.Main.immediate) {
                     onProgress(progress)
                 }
@@ -158,13 +136,13 @@ object AppUpdateManager {
             ) ?: error("SHA-256 검증값을 읽을 수 없습니다.")
             currentCoroutineContext().ensureActive()
 
-            val actualSha = sha256(partialFile)
+            val actualSha = sha256(apkFile)
             if (!actualSha.equals(expectedSha, ignoreCase = true)) {
                 error("다운로드한 APK의 SHA-256 값이 릴리즈 정보와 일치하지 않습니다.")
             }
 
             currentCoroutineContext().ensureActive()
-            val archiveInfo = packageArchiveInfo(context, partialFile)
+            val archiveInfo = packageArchiveInfo(context, apkFile)
                 ?: error("다운로드한 APK 정보를 읽을 수 없습니다.")
             if (archiveInfo.packageName != context.packageName) {
                 error("다운로드한 APK의 패키지 이름이 현재 앱과 일치하지 않습니다.")
@@ -187,9 +165,6 @@ object AppUpdateManager {
             }
 
             currentCoroutineContext().ensureActive()
-            check(partialFile.renameTo(apkFile)) {
-                "검증된 업데이트 파일을 준비할 수 없습니다."
-            }
             withContext(Dispatchers.Main.immediate) {
                 onProgress(100)
             }
@@ -200,18 +175,8 @@ object AppUpdateManager {
                 sha256 = actualSha
             )
         } catch (error: Throwable) {
-            partialFile.delete()
             apkFile.delete()
             throw error
-        }
-    }
-
-    internal fun cleanupStaleUpdateFiles(updateDir: File, nowMillis: Long) {
-        updateDir.listFiles()?.forEach { candidate ->
-            val ageMillis = nowMillis - candidate.lastModified()
-            if (candidate.isFile && ageMillis >= STALE_UPDATE_FILE_MILLIS) {
-                candidate.delete()
-            }
         }
     }
 

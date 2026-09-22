@@ -13,31 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  changes:
-    name: Detect code changes
-    runs-on: ubuntu-latest
-    outputs:
-      code_changed: ${{ steps.classify.outputs.code_changed }}
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
-
-      - name: Classify changed files
-        id: classify
-        shell: bash
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_SHA: ${{ github.sha }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PRIOR_SHA: ${{ github.event.before }}
-        run: bash .github/scripts/detect-code-changes.sh
-
   dependency-review:
     name: Dependency Review
-    needs: changes
-    if: always() && (needs.changes.result == 'failure' || needs.changes.outputs.code_changed == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
