@@ -67,7 +67,7 @@ class PairingNotificationReceiverInstrumentedTest {
     }
 
     @Test
-    fun serviceCompanion_buildsStartTransition() {
+    fun serviceCompanion_buildsStartAndCompleteTransitions() {
         val context = RecordingContext(baseContext)
 
         PairingForegroundService.start(context, isDevOptionsOff = true)
@@ -78,6 +78,16 @@ class PairingNotificationReceiverInstrumentedTest {
             startIntent.action
         )
         assertTrue(startIntent.getBooleanExtra("dev_options_off", false))
+
+        context.reset()
+        PairingForegroundService.complete(context, wirelessDebuggingDisabled = true)
+        val completeIntent = context.lastStartedServiceIntent
+        requireNotNull(completeIntent)
+        assertEquals(
+            "io.github.hoons1994.shuttersoundzero.action.COMPLETE_PAIRING",
+            completeIntent.action
+        )
+        assertTrue(completeIntent.getBooleanExtra("wireless_debugging_disabled", false))
     }
 
     @Test
