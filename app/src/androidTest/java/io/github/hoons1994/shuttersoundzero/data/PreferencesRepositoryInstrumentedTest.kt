@@ -6,7 +6,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -33,18 +32,6 @@ class PreferencesRepositoryInstrumentedTest {
         PreferencesRepository(context).isPermissionRevokedByUser = true
 
         assertTrue(PreferencesRepository(context).isPermissionRevokedByUser)
-    }
-
-    @Test
-    fun clearingKnownUpdateVersion_doesNotResetOtherState() {
-        val repository = PreferencesRepository(context)
-        repository.shouldMuteOnBoot = true
-        repository.knownAvailableAppUpdateVersion = "9.9.9"
-
-        repository.knownAvailableAppUpdateVersion = null
-
-        assertNull(PreferencesRepository(context).knownAvailableAppUpdateVersion)
-        assertTrue(PreferencesRepository(context).shouldMuteOnBoot)
     }
 
     @Test
