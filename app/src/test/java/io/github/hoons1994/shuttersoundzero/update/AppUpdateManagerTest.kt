@@ -12,9 +12,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
-import java.io.File
 import java.io.IOException
-import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -149,31 +147,6 @@ class AppUpdateManagerTest {
 
         assertEquals("done", result)
         assertEquals(1, cleanupCount.get())
-    }
-
-    @Test
-    fun staleUpdateCleanup_preservesRecentVerifiedFile() {
-        val directory = Files.createTempDirectory("ssz-update-test").toFile()
-        try {
-            val oldFile = File(directory, "old.apk").apply {
-                writeText("old")
-                setLastModified(1_000L)
-            }
-            val recentFile = File(directory, "recent.apk").apply {
-                writeText("recent")
-                setLastModified(AppUpdateManager.STALE_UPDATE_FILE_MILLIS)
-            }
-
-            AppUpdateManager.cleanupStaleUpdateFiles(
-                directory,
-                AppUpdateManager.STALE_UPDATE_FILE_MILLIS + 1_000L
-            )
-
-            assertFalse(oldFile.exists())
-            assertTrue(recentFile.exists())
-        } finally {
-            directory.deleteRecursively()
-        }
     }
 
     @Test

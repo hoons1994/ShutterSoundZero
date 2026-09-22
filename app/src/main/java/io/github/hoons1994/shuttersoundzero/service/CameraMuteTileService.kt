@@ -45,7 +45,7 @@ class CameraMuteTileService : TileService() {
             TileActionSecurityDecision.REQUEST_DEVICE_UNLOCK -> unlockAndRun {
                 handleUnlockedClick()
             }
-            TileActionSecurityDecision.REQUEST_APP_AUTHENTICATION -> launchAuthenticationActivity(targetMuted())
+            TileActionSecurityDecision.REQUEST_APP_AUTHENTICATION -> launchAuthenticationActivity()
             TileActionSecurityDecision.EXECUTE -> executeAuthorizedAction()
         }
     }
@@ -54,16 +54,15 @@ class CameraMuteTileService : TileService() {
         val prefs = PreferencesRepository.getInstance(applicationContext)
         when (TileActionSecurityPolicy.decide(isLocked, prefs.isAppLockEnabled)) {
             TileActionSecurityDecision.REQUEST_DEVICE_UNLOCK -> return
-            TileActionSecurityDecision.REQUEST_APP_AUTHENTICATION -> launchAuthenticationActivity(targetMuted())
+            TileActionSecurityDecision.REQUEST_APP_AUTHENTICATION -> launchAuthenticationActivity()
             TileActionSecurityDecision.EXECUTE -> executeAuthorizedAction()
         }
     }
 
     @SuppressLint("StartActivityAndCollapseDeprecated")
-    private fun launchAuthenticationActivity(targetMuted: Boolean) {
+    private fun launchAuthenticationActivity() {
         val intent = Intent(this, TileAuthenticationActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra(TileAuthenticationActivity.EXTRA_TARGET_MUTED, targetMuted)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val pendingIntent = PendingIntent.getActivity(
@@ -83,9 +82,6 @@ class CameraMuteTileService : TileService() {
             CameraMuteTileAction.execute(applicationContext, ::showOptimisticTileState)
         }
     }
-
-    private fun targetMuted(): Boolean =
-        !CscMuteManager.isCscShutterSoundMuted(applicationContext)
 
     private fun showOptimisticTileState(targetMuted: Boolean) {
         qsTile?.let { tile ->

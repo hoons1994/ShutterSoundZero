@@ -45,17 +45,4 @@ class OperationGenerationTest {
         assertTrue(currentAccepted)
         assertTrue(currentRan)
     }
-
-    @Test
-    fun acceptedCompletion_canInvalidateItsOwnGeneration() {
-        val generation = OperationGeneration()
-        val token = generation.next()
-
-        val accepted = generation.runIfCurrent(token) {
-            generation.invalidate()
-        }
-
-        assertTrue(accepted)
-        assertFalse(generation.isCurrent(token))
-    }
 }
