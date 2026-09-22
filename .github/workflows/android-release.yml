@@ -204,6 +204,18 @@ jobs:
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/android-release.yml" \
             --source-digest "$GITHUB_SHA"
 
+      - name: Upload signed preflight assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ShutterSoundZero-preflight-${{ github.sha }}
+          path: |
+            ${{ env.PREFLIGHT_APK }}
+            ${{ env.PREFLIGHT_APK }}.sha256
+            ${{ env.PREFLIGHT_APK }}.sigstore.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
       - name: Record preflight result
         shell: bash
         run: |
@@ -215,7 +227,7 @@ jobs:
             echo '- Signing certificate: verified against the pinned SHA-256 fingerprint'
             echo '- Provenance: generated and verified'
             echo '- GitHub Release: not created'
-            echo '- Signed APK: not uploaded as a workflow artifact'
+            echo '- Signed APK: uploaded as a private workflow artifact for 7 days'
           } >> "$GITHUB_STEP_SUMMARY"
 
   release:
