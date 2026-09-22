@@ -40,9 +40,11 @@ class PairingForegroundService : Service() {
         private const val TAG = "PairingForegroundService"
         private const val ACTION_START = "io.github.hoons1994.shuttersoundzero.action.START_PAIRING"
         private const val ACTION_STOP = "io.github.hoons1994.shuttersoundzero.action.STOP_PAIRING"
+        private const val ACTION_COMPLETE = "io.github.hoons1994.shuttersoundzero.action.COMPLETE_PAIRING"
         private const val ACTION_SUBMIT_CODE = "io.github.hoons1994.shuttersoundzero.action.SUBMIT_PAIRING_CODE"
         private const val EXTRA_DEV_OPTIONS_OFF = "dev_options_off"
         private const val EXTRA_PAIRING_CODE = "pairing_code"
+        private const val EXTRA_WIRELESS_DEBUGGING_DISABLED = "wireless_debugging_disabled"
 
         fun start(context: Context, isDevOptionsOff: Boolean) {
             val intent = Intent(context, PairingForegroundService::class.java).apply {
@@ -74,12 +76,27 @@ class PairingForegroundService : Service() {
                 .setClass(context, PairingForegroundService::class.java)
         }
 
+        fun complete(context: Context, wirelessDebuggingDisabled: Boolean) {
+            try {
+                context.startService(
+                    Intent(context, PairingForegroundService::class.java).apply {
+                        action = ACTION_COMPLETE
+                        putExtra(EXTRA_WIRELESS_DEBUGGING_DISABLED, wirelessDebuggingDisabled)
+                    }
+                )
+            } catch (_: Exception) {
+                PairingNotificationHelper.cancelNotification(context)
+                PairingNotificationHelper.showSuccessNotification(
+                    context,
+                    wirelessDebuggingDisabled = wirelessDebuggingDisabled
+                )
+            }
+        }
     }
 
     private val adbManager by lazy { StandaloneAdbManager.getInstance(this) }
     private val prefs by lazy { PreferencesRepository.getInstance(this) }
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val mainHandler = Handler(Looper.getMainLooper())
     private val pairingGeneration = OperationGeneration()
     private var pairingJob: Job? = null
     private var isDeveloperOptionsObserverRegistered = false
@@ -102,6 +119,13 @@ class PairingForegroundService : Service() {
             ACTION_START -> startPairing(intent.getBooleanExtra(EXTRA_DEV_OPTIONS_OFF, false))
             ACTION_SUBMIT_CODE -> submitPairingCode(intent.getStringExtra(EXTRA_PAIRING_CODE).orEmpty().trim())
             ACTION_STOP -> stopPairing(showSuccess = false, wirelessDebuggingDisabled = false)
+            ACTION_COMPLETE -> stopPairing(
+                showSuccess = true,
+                wirelessDebuggingDisabled = intent.getBooleanExtra(
+                    EXTRA_WIRELESS_DEBUGGING_DISABLED,
+                    false
+                )
+            )
             else -> stopSelf(startId)
         }
         return START_NOT_STICKY
@@ -133,11 +157,7 @@ class PairingForegroundService : Service() {
         if (isDevOptionsOff) registerDeveloperOptionsObserver()
         else unregisterDeveloperOptionsObserver()
 
-        startPairingDiscovery()
-    }
-
-    private fun startPairingDiscovery(): Boolean {
-        return try {
+        try {
             adbManager.startPairingDiscovery(
                 onPairingPortDiscovered = { port ->
                     DiagnosticLogger.record(
@@ -155,7 +175,6 @@ class PairingForegroundService : Service() {
                     )
                 }
             )
-            true
         } catch (e: Exception) {
             prefs.lastSetupIssue = SetupIssue.PAIRING_DISCOVERY
             DiagnosticLogger.record(
@@ -169,7 +188,6 @@ class PairingForegroundService : Service() {
                 this,
                 state = PairingNotificationState.DISCOVERY_START_FAILED
             )
-            false
         }
     }
 
@@ -316,7 +334,38 @@ class PairingForegroundService : Service() {
                                 )
                                 Log.i(TAG, "Pairing workflow completed successfully")
 
-                                postSuccessfulCompletion(generation, wirelessDebuggingDisabled)
+                                Handler(Looper.getMainLooper()).post {
+                                    Toast.makeText(
+                                        this@PairingForegroundService,
+                                        if (wirelessDebuggingDisabled) {
+                                            "✨ 설정 완료! 카메라 무음 설정을 적용하고 무선 디버깅도 껐습니다."
+                                        } else {
+                                            "✨ 카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요."
+                                        },
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+
+                                try {
+                                    val launchIntent = Intent(
+                                        this@PairingForegroundService,
+                                        MainActivity::class.java
+                                    ).apply {
+                                        addFlags(
+                                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                                                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                                Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                        )
+                                    }
+                                    startActivity(launchIntent)
+                                } catch (e: Exception) {
+                                    logFailure("Background activity launch restricted", e)
+                                }
+
+                                complete(
+                                    this@PairingForegroundService,
+                                    wirelessDebuggingDisabled = wirelessDebuggingDisabled
+                                )
                             }
                         } else {
                             commitPairingSideEffect(generation) {
@@ -334,7 +383,6 @@ class PairingForegroundService : Service() {
                                     this@PairingForegroundService,
                                     state = PairingNotificationState.CAMERA_APPLY_FAILED
                                 )
-                                restartPairingDiscovery()
                             }
                         }
                     } else {
@@ -354,7 +402,6 @@ class PairingForegroundService : Service() {
                                 pairingPort = port,
                                 state = PairingNotificationState.PAIRING_FAILED
                             )
-                            restartPairingDiscovery()
                         }
                     }
                     true
@@ -374,7 +421,6 @@ class PairingForegroundService : Service() {
                             this@PairingForegroundService,
                             state = PairingNotificationState.PAIRING_TIMEOUT
                         )
-                        restartPairingDiscovery()
                     }
                 }
             } catch (e: CancellationException) {
@@ -394,7 +440,6 @@ class PairingForegroundService : Service() {
                         this@PairingForegroundService,
                         state = PairingNotificationState.PAIRING_ERROR
                     )
-                    restartPairingDiscovery()
                 }
             } finally {
                 // 이전 세대의 늦은 finally가 새 pairingJob 참조를 지우지 못하게 한다.
@@ -419,49 +464,6 @@ class PairingForegroundService : Service() {
             Log.w(TAG, "$summary: ${error.message}", error)
         } else {
             Log.w(TAG, "$summary (${error.javaClass.simpleName})")
-        }
-    }
-
-    private fun restartPairingDiscovery() {
-        if (startPairingDiscovery()) {
-            Log.i(TAG, "Restarted pairing discovery after unsuccessful attempt")
-        }
-    }
-
-    private fun postSuccessfulCompletion(generation: Long, wirelessDebuggingDisabled: Boolean) {
-        mainHandler.post {
-            val accepted = pairingGeneration.runIfCurrent(generation) {
-                Toast.makeText(
-                    this,
-                    if (wirelessDebuggingDisabled) {
-                        "✨ 설정 완료! 카메라 무음 설정을 적용하고 무선 디버깅도 껐습니다."
-                    } else {
-                        "✨ 카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요."
-                    },
-                    Toast.LENGTH_LONG
-                ).show()
-
-                try {
-                    val launchIntent = Intent(this, MainActivity::class.java).apply {
-                        addFlags(
-                            Intent.FLAG_ACTIVITY_NEW_TASK or
-                                Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                                Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        )
-                    }
-                    startActivity(launchIntent)
-                } catch (e: Exception) {
-                    logFailure("Background activity launch restricted", e)
-                }
-
-                stopPairing(
-                    showSuccess = true,
-                    wirelessDebuggingDisabled = wirelessDebuggingDisabled
-                )
-            }
-            if (!accepted) {
-                Log.i(TAG, "Ignored stale pairing completion")
-            }
         }
     }
 

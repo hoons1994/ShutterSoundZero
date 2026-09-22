@@ -20,16 +20,6 @@ internal object CameraMuteTileAction {
         onTargetState: (Boolean) -> Unit = {}
     ) {
         val appContext = context.applicationContext
-        val targetMuted = !CscMuteManager.isCscShutterSoundMuted(appContext)
-        executeTarget(appContext, targetMuted, onTargetState)
-    }
-
-    suspend fun executeTarget(
-        context: Context,
-        targetMuted: Boolean,
-        onTargetState: (Boolean) -> Unit = {}
-    ) {
-        val appContext = context.applicationContext
         val prefs = PreferencesRepository.getInstance(appContext)
 
         if (!CscMuteManager.isSamsungDevice()) {
@@ -62,6 +52,7 @@ internal object CameraMuteTileAction {
             return
         }
 
+        val targetMuted = !CscMuteManager.isCscShutterSoundMuted(appContext)
         onTargetState(targetMuted)
 
         try {
