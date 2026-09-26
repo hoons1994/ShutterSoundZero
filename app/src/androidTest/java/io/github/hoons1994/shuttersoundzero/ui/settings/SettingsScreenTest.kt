@@ -53,27 +53,24 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun compatibilityReport_requiresExplicitConfirmation() {
+    fun deviceReportEntry_isNotAvailable() {
         composeTestRule.onNodeWithText("호환성 데이터 제출")
+            .assertDoesNotExist()
+        composeTestRule.onNodeWithText("호환성 데이터를 제출하시겠습니까?")
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun errorReporting_isStillAvailable() {
+        composeTestRule.onNodeWithText("문제가 해결되지 않나요?")
             .performScrollTo()
             .assertHasClickAction()
             .performClick()
 
-        composeTestRule.onNodeWithText("호환성 데이터를 제출하시겠습니까?")
-            .fetchSemanticsNode()
-        composeTestRule.onNodeWithText("제출될 정보")
-            .fetchSemanticsNode()
-        composeTestRule.onNodeWithText("앱이 메일에 넣지 않는 정보")
-            .fetchSemanticsNode()
-        composeTestRule.onNodeWithText("받는 사람: hoons1994@naver.com")
-            .fetchSemanticsNode()
-        composeTestRule.onNodeWithText("이메일 작성 화면이 열리며", substring = true)
-            .fetchSemanticsNode()
-        composeTestRule.onNodeWithText("이메일 주소는 수신자에게 전달되며", substring = true)
-            .fetchSemanticsNode()
-        composeTestRule.onNodeWithText("예")
-            .assertHasClickAction()
-        composeTestRule.onNodeWithText("아니오")
-            .assertHasClickAction()
+        composeTestRule.onNodeWithText("오류 신고").assertExists()
+        composeTestRule.onNodeWithText("전송될 진단 정보").assertExists()
+        composeTestRule.onNodeWithText("이메일로 보내기").assertHasClickAction()
+        composeTestRule.onNodeWithText("닫기").performClick()
+        composeTestRule.onNodeWithText("오류 신고").assertDoesNotExist()
     }
 }
