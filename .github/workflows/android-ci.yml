@@ -38,16 +38,32 @@ jobs:
           PRIOR_SHA: ${{ github.event.before }}
         run: bash .github/scripts/detect-code-changes.sh
 
-  verify:
-    name: Build, Test & Lint
+  build:
+    name: JVM, Lint & APK Build
     needs: changes
     if: always() && (needs.changes.result == 'failure' || needs.changes.outputs.code_changed == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Validate GitHub Actions workflows
+        shell: bash
+        run: |
+          ACTIONLINT_VERSION='1.7.12'
+          ACTIONLINT_SHA256='8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
+          ARCHIVE="$RUNNER_TEMP/actionlint.tar.gz"
+
+          curl --fail --silent --show-error --location             "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"             --output "$ARCHIVE"
+          echo "${ACTIONLINT_SHA256}  ${ARCHIVE}" | sha256sum --check -
+          tar -xzf "$ARCHIVE" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" .github/workflows/*.yml
+
+      - name: Validate repository shell scripts
+        shell: bash
+        run: shellcheck .github/scripts/*.sh
 
       - name: Set up JDK 17
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
@@ -65,11 +81,11 @@ jobs:
         run: |
           sdkmanager --list --channel=3 > sdk-packages.txt
 
-          if grep -q 'platforms;android-CinnamonBun' sdk-packages.txt; then
+          if grep -Fq 'platforms;android-CinnamonBun' sdk-packages.txt; then
             PLATFORM_PACKAGE='platforms;android-CinnamonBun'
-          elif grep -q 'platforms;android-37.0' sdk-packages.txt; then
+          elif grep -Fq 'platforms;android-37.0' sdk-packages.txt; then
             PLATFORM_PACKAGE='platforms;android-37.0'
-          elif grep -q 'platforms;android-37 ' sdk-packages.txt; then
+          elif grep -Eq 'platforms;android-37([[:space:]]|$)' sdk-packages.txt; then
             PLATFORM_PACKAGE='platforms;android-37'
           else
             echo 'Android 17 SDK platform package was not found.'
@@ -77,7 +93,6 @@ jobs:
             exit 1
           fi
 
-          echo "Installing $PLATFORM_PACKAGE"
           sdkmanager --channel=3 "$PLATFORM_PACKAGE" 'build-tools;37.0.0' platform-tools
 
       - name: Set up Gradle
@@ -94,19 +109,144 @@ jobs:
         shell: bash
         run: bash .github/scripts/verify-launcher-icon.sh
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
-
-      - name: Run Android Lint
-        run: ./gradlew lintDebug --no-daemon --stacktrace
-
-      - name: Install Android 15 emulator image
+      - name: Create temporary CI release keystore
         shell: bash
         run: |
-          sdkmanager --channel=0 emulator 'system-images;android-35;default;x86_64'
+          keytool -genkeypair -noprompt             -keystore "$RUNNER_TEMP/ci-release.jks"             -storepass android             -keypass android             -alias ci-release             -keyalg RSA             -keysize 2048             -validity 3650             -dname 'CN=ShutterSoundZero CI,O=ShutterSoundZero,C=KR'
+
+      - name: Build debug and release APKs, run unit tests and lint
+        env:
+          RELEASE_STORE_FILE: ${{ runner.temp }}/ci-release.jks
+          RELEASE_STORE_PASSWORD: android
+          RELEASE_KEY_ALIAS: ci-release
+          RELEASE_KEY_PASSWORD: android
+        run: >-
+          ./gradlew
+          assembleDebug
+          assembleRelease
+          testDebugUnitTest
+          lintDebug
+          --no-daemon
+          --stacktrace
+
+      - name: Remove temporary CI release keystore
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/ci-release.jks"
+
+      - name: Verify release APK was produced
+        shell: bash
+        run: test -n "$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ShutterSoundZero-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  instrumented:
+    name: Android ${{ matrix.android }} (API ${{ matrix.api }}) Instrumented Tests
+    needs: changes
+    if: always() && (needs.changes.result == 'failure' || needs.changes.outputs.code_changed == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - android: '11'
+            api: 30
+          - android: '12'
+            api: 31
+          - android: '12L'
+            api: 32
+          - android: '13'
+            api: 33
+          - android: '14'
+            api: 34
+          - android: '15'
+            api: 35
+          - android: '16'
+            api: 36
+          - android: '17'
+            api: 37
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: ''
+
+      - name: Resolve and install SDK and emulator image
+        shell: bash
+        env:
+          TEST_API: ${{ matrix.api }}
+        run: |
+          sdkmanager --list --channel=3 > sdk-packages.txt
+
+          if grep -Fq 'platforms;android-CinnamonBun' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-CinnamonBun'
+          elif grep -Fq 'platforms;android-37.0' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-37.0'
+          elif grep -Eq 'platforms;android-37([[:space:]]|$)' sdk-packages.txt; then
+            PLATFORM_PACKAGE='platforms;android-37'
+          else
+            echo 'Android 17 compile SDK platform package was not found.'
+            grep -E 'platforms;android-(CinnamonBun|37)' sdk-packages.txt || true
+            exit 1
+          fi
+
+          if [ "$TEST_API" -eq 37 ]; then
+            candidates=(
+              'system-images;android-37.0;google_apis;x86_64'
+              'system-images;android-CinnamonBun;google_apis;x86_64'
+              'system-images;android-37;google_apis;x86_64'
+              'system-images;android-37.0;google_apis_playstore;x86_64'
+            )
+          else
+            candidates=(
+              "system-images;android-${TEST_API};google_apis;x86_64"
+              "system-images;android-${TEST_API};default;x86_64"
+            )
+          fi
+
+          IMAGE_PACKAGE=''
+          for candidate in "${candidates[@]}"; do
+            if grep -Fq "$candidate" sdk-packages.txt; then
+              IMAGE_PACKAGE="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$IMAGE_PACKAGE" ]; then
+            echo "Android API ${TEST_API} x86_64 system image was not found."
+            grep -E "system-images;android-(${TEST_API}|CinnamonBun|37)" sdk-packages.txt || true
+            exit 1
+          fi
+
+          echo "Installing compile SDK $PLATFORM_PACKAGE and emulator $IMAGE_PACKAGE"
+          sdkmanager --channel=3             "$PLATFORM_PACKAGE"             'build-tools;37.0.0'             platform-tools             emulator             "$IMAGE_PACKAGE"
+
+          echo "ANDROID_TEST_IMAGE_PACKAGE=$IMAGE_PACKAGE" >> "$GITHUB_ENV"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x gradlew
 
       - name: Enable KVM access
         shell: bash
@@ -121,148 +261,38 @@ jobs:
           echo "ANDROID_AVD_HOME=$RUNNER_TEMP/android-avd" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/android-avd"
 
-      - name: Create Android 15 emulator
+      - name: Create emulator
         shell: bash
+        env:
+          TEST_API: ${{ matrix.api }}
         run: |
-          echo no | avdmanager create avd \
-            --force \
-            --name shuttersoundzero-ci \
-            --package 'system-images;android-35;default;x86_64' \
-            --device pixel
+          echo no | avdmanager create avd             --force             --name "shuttersoundzero-api${TEST_API}"             --package "$ANDROID_TEST_IMAGE_PACKAGE"             --device pixel
 
-          EMULATOR="$ANDROID_SDK_ROOT/emulator/emulator"
-          echo 'Available AVDs:'
-          "$EMULATOR" -list-avds
-          "$EMULATOR" -list-avds | grep -Fxq 'shuttersoundzero-ci'
-
-      - name: Start Android 15 emulator
+      - name: Start emulator
         shell: bash
+        env:
+          TEST_API: ${{ matrix.api }}
         run: |
           EMULATOR="$ANDROID_SDK_ROOT/emulator/emulator"
           if [[ ! -x "$EMULATOR" ]]; then
             echo "Android emulator executable was not found at $EMULATOR"
-            ls -la "$ANDROID_SDK_ROOT/emulator" || true
             exit 1
           fi
 
-          nohup "$EMULATOR" -avd shuttersoundzero-ci \
-            -no-window \
-            -no-audio \
-            -no-boot-anim \
-            -no-snapshot \
-            -gpu swiftshader_indirect \
-            > "$RUNNER_TEMP/emulator-api35.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/emulator-api35.pid"
+          nohup "$EMULATOR" -avd "shuttersoundzero-api${TEST_API}"             -no-window             -no-audio             -no-boot-anim             -no-snapshot             -gpu swiftshader_indirect             > "$RUNNER_TEMP/emulator-api${TEST_API}.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/emulator.pid"
 
-      - name: Wait for Android 15 emulator boot
+      - name: Wait for emulator boot
         shell: bash
+        env:
+          TEST_API: ${{ matrix.api }}
         run: |
-          EMULATOR_PID="$(cat "$RUNNER_TEMP/emulator-api35.pid")"
-
-          for _ in $(seq 1 120); do
-            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
-              echo 'Android 15 emulator process exited before boot completed.'
-              cat "$RUNNER_TEMP/emulator-api35.log" || true
-              exit 1
-            fi
-
-            SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
-            if [ -n "$SERIAL" ]; then
-              BOOT_COMPLETED="$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
-              if [[ "$BOOT_COMPLETED" == "1" ]]; then
-                adb -s "$SERIAL" shell input keyevent 82 || true
-                adb -s "$SERIAL" shell settings put global window_animation_scale 0
-                adb -s "$SERIAL" shell settings put global transition_animation_scale 0
-                adb -s "$SERIAL" shell settings put global animator_duration_scale 0
-                exit 0
-              fi
-            fi
-
-            sleep 2
-          done
-
-          echo 'Android 15 emulator did not finish booting within 4 minutes.'
-          adb devices -l || true
-          cat "$RUNNER_TEMP/emulator-api35.log" || true
-          exit 1
-
-      - name: Run Android 15 instrumented tests
-        run: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
-
-      - name: Stop Android 15 emulator
-        if: always()
-        shell: bash
-        run: |
-          SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
-          if [ -n "$SERIAL" ]; then
-            adb -s "$SERIAL" emu kill || true
-          fi
-          if [ -f "$RUNNER_TEMP/emulator-api35.pid" ]; then
-            kill "$(cat "$RUNNER_TEMP/emulator-api35.pid")" 2>/dev/null || true
-          fi
-          for _ in $(seq 1 30); do
-            if ! adb devices | grep -qE '^emulator-[0-9]+[[:space:]]+(device|offline)$'; then
-              exit 0
-            fi
-            sleep 1
-          done
-          adb devices -l || true
-
-      - name: Resolve and install Android 17 emulator image
-        shell: bash
-        run: |
-          for candidate in \
-            'system-images;android-37.0;google_apis;x86_64' \
-            'system-images;android-CinnamonBun;google_apis;x86_64' \
-            'system-images;android-37;google_apis;x86_64' \
-            'system-images;android-37.0;google_apis_playstore;x86_64'; do
-            if grep -Fq "$candidate" sdk-packages.txt; then
-              IMAGE_PACKAGE="$candidate"
-              break
-            fi
-          done
-
-          if [ -z "${IMAGE_PACKAGE:-}" ]; then
-            echo 'Android 17 x86_64 system image was not found.'
-            grep -E 'system-images;android-(CinnamonBun|37)' sdk-packages.txt || true
-            exit 1
-          fi
-
-          echo "Installing $IMAGE_PACKAGE"
-          sdkmanager --channel=3 emulator "$IMAGE_PACKAGE"
-          echo "ANDROID17_IMAGE_PACKAGE=$IMAGE_PACKAGE" >> "$GITHUB_ENV"
-
-      - name: Create Android 17 emulator
-        shell: bash
-        run: |
-          echo no | avdmanager create avd \
-            --force \
-            --name shuttersoundzero-api37 \
-            --package "$ANDROID17_IMAGE_PACKAGE" \
-            --device pixel
-
-      - name: Start Android 17 emulator
-        shell: bash
-        run: |
-          EMULATOR="$ANDROID_SDK_ROOT/emulator/emulator"
-          nohup "$EMULATOR" -avd shuttersoundzero-api37 \
-            -no-window \
-            -no-audio \
-            -no-boot-anim \
-            -no-snapshot \
-            -gpu swiftshader_indirect \
-            > "$RUNNER_TEMP/emulator-api37.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/emulator-api37.pid"
-
-      - name: Wait for Android 17 emulator boot
-        shell: bash
-        run: |
-          EMULATOR_PID="$(cat "$RUNNER_TEMP/emulator-api37.pid")"
+          EMULATOR_PID="$(cat "$RUNNER_TEMP/emulator.pid")"
 
           for _ in $(seq 1 150); do
             if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
-              echo 'Android 17 emulator process exited before boot completed.'
-              cat "$RUNNER_TEMP/emulator-api37.log" || true
+              echo "Android API ${TEST_API} emulator exited before boot completed."
+              cat "$RUNNER_TEMP/emulator-api${TEST_API}.log" || true
               exit 1
             fi
 
@@ -270,9 +300,9 @@ jobs:
             if [ -n "$SERIAL" ]; then
               BOOT_COMPLETED="$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
               if [[ "$BOOT_COMPLETED" == "1" ]]; then
-                SDK_LEVEL="$(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')"
-                if [ "$SDK_LEVEL" -lt 37 ]; then
-                  echo "Expected API 37+, got API $SDK_LEVEL."
+                ACTUAL_API="$(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')"
+                if [ "$ACTUAL_API" -ne "$TEST_API" ]; then
+                  echo "Expected API ${TEST_API}, got API ${ACTUAL_API}."
                   exit 1
                 fi
                 adb -s "$SERIAL" shell input keyevent 82 || true
@@ -286,35 +316,68 @@ jobs:
             sleep 2
           done
 
-          echo 'Android 17 emulator did not finish booting within 5 minutes.'
+          echo "Android API ${TEST_API} emulator did not finish booting within 5 minutes."
           adb devices -l || true
-          cat "$RUNNER_TEMP/emulator-api37.log" || true
+          cat "$RUNNER_TEMP/emulator-api${TEST_API}.log" || true
           exit 1
 
-      - name: Run Android 17 fresh-install local-network E2E
-        run: >-
-          ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
-          -Pandroid.testInstrumentationRunnerArguments.class=io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccessInstrumentedTest
+      - name: Run instrumented tests
+        run: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+
+      - name: Stop emulator
+        if: always()
+        shell: bash
+        run: |
+          SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+          if [ -n "$SERIAL" ]; then
+            adb -s "$SERIAL" emu kill || true
+          fi
+          if [ -f "$RUNNER_TEMP/emulator.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/emulator.pid")" 2>/dev/null || true
+          fi
 
       - name: Upload instrumented test reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: ShutterSoundZero-androidTest-${{ github.sha }}
+          name: ShutterSoundZero-androidTest-api${{ matrix.api }}-${{ github.sha }}
           path: |
             app/build/reports/androidTests/connected/**
             app/build/outputs/androidTest-results/connected/**
-            ${{ runner.temp }}/emulator-api35.log
-            ${{ runner.temp }}/emulator-api37.log
+            ${{ runner.temp }}/emulator-api${{ matrix.api }}.log
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload debug APK
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: ShutterSoundZero-debug-${{ github.sha }}
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
+  verify:
+    name: Build, Test & Lint
+    needs:
+      - changes
+      - build
+      - instrumented
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate required Android CI checks
+        shell: bash
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          CODE_CHANGED: ${{ needs.changes.outputs.code_changed }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          INSTRUMENTED_RESULT: ${{ needs.instrumented.result }}
+        run: |
+          if [ "$CHANGES_RESULT" = 'success' ] && [ "$CODE_CHANGED" != 'true' ]; then
+            echo 'No application, build, dependency, or CI changes require Android validation.'
+            exit 0
+          fi
+
+          if [ "$BUILD_RESULT" != 'success' ]; then
+            echo "::error::JVM, lint, APK build, or CI configuration validation failed: $BUILD_RESULT"
+            exit 1
+          fi
+
+          if [ "$INSTRUMENTED_RESULT" != 'success' ]; then
+            echo "::error::Android API 30-37 compatibility matrix failed: $INSTRUMENTED_RESULT"
+            exit 1
+          fi
+
+          echo 'Android build, unit tests, lint, release variant, CI validation, and API 30-37 instrumented tests passed.'
