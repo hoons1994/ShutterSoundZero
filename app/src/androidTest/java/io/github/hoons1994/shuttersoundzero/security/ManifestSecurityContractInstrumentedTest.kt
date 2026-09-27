@@ -83,7 +83,7 @@ class ManifestSecurityContractInstrumentedTest {
         )
         assertFalse(
             "Application cleartext traffic must remain disabled",
-            applicationInfo.usesCleartextTraffic,
+            (applicationInfo.flags and ApplicationInfo.FLAG_USES_CLEARTEXT_TRAFFIC) != 0,
         )
     }
 
