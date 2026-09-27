@@ -2,7 +2,7 @@ name: PR 제목 규칙 검사
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened, ready_for_review]
+    types: [opened, edited, reopened, ready_for_review]
 
 permissions:
   contents: read

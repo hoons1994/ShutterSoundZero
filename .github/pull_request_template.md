@@ -18,10 +18,14 @@
 
 ## 검증
 
-- [ ] `assembleDebug` 성공
-- [ ] 단위 테스트 성공
+- [ ] Build, Test & Lint 성공
+- [ ] Debug/Release build 성공
+- [ ] Unit Test 성공
 - [ ] Android Lint 성공
-- [ ] 필요한 경우 실제 Galaxy 기기에서 확인
+- [ ] Android 11~17 / API 30~37 instrumented test 성공
+- [ ] CodeQL 성공
+- [ ] Dependency Review 성공
+- [ ] 필요한 경우 실제 Galaxy 기기 확인
 
 ## 커밋 / PR 제목 규칙
 
