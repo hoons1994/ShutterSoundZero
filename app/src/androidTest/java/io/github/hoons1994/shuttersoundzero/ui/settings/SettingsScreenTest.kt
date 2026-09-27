@@ -26,14 +26,16 @@ class SettingsScreenTest {
     @Test
     fun settings_areGroupedByUserGoal() {
         composeTestRule.onNodeWithText("카메라 설정").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("앱 동작").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("업데이트").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("도움말 및 지원").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("정보").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("보안").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("상태 확인 및 업데이트").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("기기 설정").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("자주 묻는 질문").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("문의 및 지원").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("앱 정보").fetchSemanticsNode()
     }
 
     @Test
-    fun detailedPopupSetting_isAvailableFromHelpSection() {
+    fun detailedPopupSetting_isAvailableFromDeviceSettings() {
         composeTestRule.onNodeWithText("알림 팝업 자세히 보기")
             .assertHasClickAction()
     }

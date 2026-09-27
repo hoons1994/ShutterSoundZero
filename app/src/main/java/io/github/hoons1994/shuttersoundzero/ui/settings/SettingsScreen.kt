@@ -65,6 +65,7 @@ import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
 import io.github.hoons1994.shuttersoundzero.security.AppLockSession
+import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
 import kotlinx.coroutines.launch
 
 private val CardRadius = 20.dp
@@ -250,7 +251,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("앱 동작")
+            GroupLabel("보안")
             SettingsCard {
                 SwitchRow(
                     title = "앱 잠금",
@@ -297,7 +298,12 @@ fun SettingsScreen(
                         )
                     }
                 )
-                RowDivider()
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            GroupLabel("상태 확인 및 업데이트")
+            SettingsCard {
                 SwitchRow(
                     title = "소프트웨어 업데이트 후 상태 확인",
                     subtitle = "다시 설정이 필요한 경우에만 알림",
@@ -311,23 +317,6 @@ fun SettingsScreen(
                     }
                 )
                 RowDivider()
-                ClickableRow(
-                    title = "개발자 옵션 전체 끄기",
-                    subtitle = "선택 사항 · 개발자 옵션 자체를 더 이상 사용하지 않을 때",
-                    onClick = {
-                        if (DeveloperOptionsManager.canDisableDirectly(context)) {
-                            showDeveloperOptionsConfirm = true
-                        } else {
-                            showDeveloperOptionsFallback = true
-                        }
-                    }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            GroupLabel("업데이트")
-            SettingsCard {
                 ClickableRow(
                     title = "GitHub 릴리즈 열기",
                     subtitle = "최신 버전은 GitHub에서 직접 확인하고 설치",
@@ -349,11 +338,32 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            GroupLabel("기기 설정")
+            SettingsCard {
+                NotificationPopupSettingsRow(
+                    onClick = { PairingNotificationHelper.openNotificationSettings(context) }
+                )
+                RowDivider()
+                ClickableRow(
+                    title = "개발자 옵션 전체 끄기",
+                    subtitle = "선택 사항 · 개발자 옵션 자체를 더 이상 사용하지 않을 때",
+                    onClick = {
+                        if (DeveloperOptionsManager.canDisableDirectly(context)) {
+                            showDeveloperOptionsConfirm = true
+                        } else {
+                            showDeveloperOptionsFallback = true
+                        }
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             SettingsHelpSection()
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("정보")
+            GroupLabel("앱 정보")
             SettingsCard {
                 InfoRow(
                     title = "버전",

@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticLogger
 import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticReportBuilder
-import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
 
 private data class HelpQuestion(val id: String, val question: String, val answer: String)
 
@@ -100,7 +99,7 @@ fun SettingsHelpSection() {
     var diagnosticReport by remember { mutableStateOf<DiagnosticReportBuilder.Report?>(null) }
     var userDescription by rememberSaveable { mutableStateOf("") }
 
-    SectionLabel("도움말 및 지원")
+    SectionLabel("자주 묻는 질문")
 
     Card(
         modifier = Modifier
@@ -111,16 +110,7 @@ fun SettingsHelpSection() {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
-            NotificationPopupSettingsRow(
-                onClick = { PairingNotificationHelper.openNotificationSettings(context) }
-            )
-            HorizontalDivider(
-                modifier = Modifier.padding(start = 20.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                thickness = 0.5.dp
-            )
-
-            helpQuestions.forEach { item ->
+            helpQuestions.forEachIndexed { index, item ->
                 HelpAccordionItem(
                     item = item,
                     expanded = expandedQuestionId == item.id,
@@ -128,20 +118,30 @@ fun SettingsHelpSection() {
                         expandedQuestionId = if (expandedQuestionId == item.id) null else item.id
                     }
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 20.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    thickness = 0.5.dp
-                )
+                if (index < helpQuestions.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 20.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        thickness = 0.5.dp
+                    )
+                }
             }
+        }
+    }
 
+    Spacer(modifier = Modifier.height(24.dp))
+
+    SectionLabel("문의 및 지원")
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column {
             OpenChatSupportRow(onClick = { openDeveloperOpenChat(context) })
-            HorizontalDivider(
-                modifier = Modifier.padding(start = 20.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                thickness = 0.5.dp
-            )
-            DeveloperDonationRow(onClick = { openDeveloperDonation(context) })
             HorizontalDivider(
                 modifier = Modifier.padding(start = 20.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -150,6 +150,12 @@ fun SettingsHelpSection() {
             SupportRow(onClick = {
                 diagnosticReport = DiagnosticReportBuilder.build(context)
             })
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                thickness = 0.5.dp
+            )
+            DeveloperDonationRow(onClick = { openDeveloperDonation(context) })
         }
     }
 
@@ -227,7 +233,7 @@ fun SettingsHelpSection() {
 }
 
 @Composable
-private fun NotificationPopupSettingsRow(onClick: () -> Unit) {
+internal fun NotificationPopupSettingsRow(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
