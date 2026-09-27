@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.os.Build
 import android.net.nsd.NsdServiceInfo
 import android.os.Handler
 import android.os.IBinder
@@ -13,20 +12,20 @@ import android.os.Message
 import android.os.Messenger
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.SdkSuppress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
+@SdkSuppress(minSdkVersion = 30, maxSdkVersion = 33)
 class LegacyNsdResolveServiceInstrumentedTest {
     @Test
     fun workerDeathDisconnectsClientAndNextBindingStarts() {
-        assumeTrue("Legacy NSD only", Build.VERSION.SDK_INT in 30..33)
         val context = ApplicationProvider.getApplicationContext<Context>()
         val connected = CountDownLatch(1)
         val disconnected = CountDownLatch(1)
