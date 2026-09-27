@@ -8,6 +8,7 @@ package io.github.hoons1994.shuttersoundzero.ui.notification
  */
 enum class PairingNotificationState {
     DEVELOPER_OPTIONS_READY,
+    LOCAL_NETWORK_PERMISSION_REQUIRED,
     DISCOVERY_START_FAILED,
     INVALID_PAIRING_CODE,
     DISCOVERY_WAITING,

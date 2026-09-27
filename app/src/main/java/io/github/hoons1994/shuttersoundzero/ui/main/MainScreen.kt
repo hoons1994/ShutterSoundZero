@@ -120,6 +120,7 @@ fun MainScreen(
         if (isGranted) {
             startPairing()
         } else {
+            viewModel.reportLocalNetworkPermissionDenied()
             Toast.makeText(
                 context,
                 "기기 연결을 위해 로컬 네트워크 권한이 필요합니다. [앱 설정]에서 허용해 주세요.",
@@ -238,6 +239,14 @@ fun MainScreen(
             onReapply = reapplyAction,
             onOpenCamera = openCamera,
             onOpenSoftwareInfo = { CscMuteManager.openSoftwareInfoSettings(context) },
+            onOpenAppSettings = {
+                context.startActivity(
+                    Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", context.packageName, null)
+                    )
+                )
+            },
             onSystemVolumeChange = viewModel::setSystemVolume,
             modifier = Modifier.padding(innerPadding)
         )
@@ -328,6 +337,7 @@ internal fun HomeContent(
     onReapply: () -> Unit = {},
     onOpenCamera: () -> Unit = {},
     onOpenSoftwareInfo: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
     onSystemVolumeChange: (Int) -> Int? = { null },
     modifier: Modifier = Modifier
 ) {
@@ -354,7 +364,7 @@ internal fun HomeContent(
 
         if (homeStatus == HomeStatus.SETUP_REQUIRED) {
             Spacer(modifier = Modifier.height(20.dp))
-            SetupProgressCard(uiState, onOpenSoftwareInfo)
+            SetupProgressCard(uiState, onOpenSoftwareInfo, onOpenAppSettings)
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -584,12 +594,14 @@ private fun StatusHeroCard(
 @Composable
 private fun SetupProgressCard(
     uiState: MainUiState,
-    onOpenSoftwareInfo: () -> Unit
+    onOpenSoftwareInfo: () -> Unit,
+    onOpenAppSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val issue = uiState.setupIssue
     val developerOptionsComplete = uiState.isDeveloperOptionsEnabled
-    val wirelessComplete = developerOptionsComplete && (uiState.isWirelessDebuggingEnabled || issue != null)
+    val wirelessComplete = developerOptionsComplete &&
+        (uiState.isWirelessDebuggingEnabled || (issue != null && issue != SetupIssue.LOCAL_NETWORK_PERMISSION))
     val pairingComplete = uiState.hasCscPermission || issue == SetupIssue.CAMERA_APPLY
     val applyComplete = uiState.isCscMuted
 
@@ -601,7 +613,7 @@ private fun SetupProgressCard(
     }
     val step3State = when {
         !developerOptionsComplete -> StepVisualState.PENDING
-        issue == SetupIssue.PAIRING_DISCOVERY || issue == SetupIssue.PAIRING_CODE -> StepVisualState.ERROR
+        issue != null && issue != SetupIssue.CAMERA_APPLY && issue != SetupIssue.LOCAL_NETWORK_PERMISSION -> StepVisualState.ERROR
         pairingComplete -> StepVisualState.COMPLETE
         wirelessComplete -> StepVisualState.CURRENT
         else -> StepVisualState.PENDING
@@ -616,9 +628,13 @@ private fun SetupProgressCard(
 
     val pairingErrorText = when (issue) {
         SetupIssue.PAIRING_DISCOVERY ->
-            "기기를 찾지 못했습니다. 무선 디버깅 화면을 다시 연 뒤 새 6자리 코드를 입력해 주세요."
+            "페어링 연결 화면을 찾지 못했습니다. Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 다시 열어 둔 채 시도해 주세요."
         SetupIssue.PAIRING_CODE ->
-            "코드가 만료되었거나 일치하지 않았습니다. 새 6자리 코드를 확인해 다시 입력해 주세요."
+            "숫자 6자리를 정확히 입력해 주세요. 연결 화면의 코드가 바뀌었다면 새 코드를 사용해 주세요."
+        SetupIssue.PAIRING_CONNECTION ->
+            "기기에 연결하지 못했습니다. 페어링 창이 닫혔거나 연결 정보가 바뀌었을 수 있습니다. 창을 다시 열고 새 6자리 코드로 시도해 주세요."
+        SetupIssue.PAIRING_TIMEOUT ->
+            "기기 응답 시간이 초과되었습니다. Wi-Fi와 무선 디버깅을 확인한 뒤 페어링 창을 다시 열고 새 코드로 시도해 주세요."
         else -> null
     }
 
@@ -650,6 +666,19 @@ private fun SetupProgressCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
+            if (issue == SetupIssue.LOCAL_NETWORK_PERMISSION) {
+                Text(
+                    text = "Android 17에서 기기를 찾으려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용한 뒤 1회 설정을 다시 시작해 주세요.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    lineHeight = 18.sp
+                )
+                OutlinedButton(onClick = onOpenAppSettings, shape = RoundedCornerShape(12.dp)) {
+                    Text("앱 권한 설정 열기")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             SetupStepRow(
                 number = 1,
                 title = "개발자 옵션 켜기",
@@ -671,7 +700,7 @@ private fun SetupProgressCard(
                 state = step3State,
                 errorText = pairingErrorText
             )
-            if (wirelessComplete && !pairingComplete) {
+            if (wirelessComplete && !pairingComplete && issue != SetupIssue.LOCAL_NETWORK_PERMISSION) {
                 NotificationPopupStyleHint(
                     onOpenSettings = {
                         PairingNotificationHelper.openNotificationSettings(context)

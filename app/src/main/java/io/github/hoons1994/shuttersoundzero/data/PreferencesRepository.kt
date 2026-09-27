@@ -103,7 +103,7 @@ class PreferencesRepository(context: Context) {
         }
 
     /**
-     * 마지막 1회 설정 실패 위치. 성공하거나 사용자가 다시 시작하면 비운다.
+     * 마지막 1회 설정 실패 안내 상태. 성공하거나 사용자가 다시 시작하면 비운다.
      */
     var lastSetupIssue: SetupIssue?
         get() = prefs.getString(KEY_LAST_SETUP_ISSUE, null)?.let { stored ->

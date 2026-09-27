@@ -140,6 +140,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         startPairingNow(context)
     }
 
+    fun reportLocalNetworkPermissionDenied() {
+        prefs.lastSetupIssue = SetupIssue.LOCAL_NETWORK_PERMISSION
+        _uiState.update { it.copy(setupIssue = SetupIssue.LOCAL_NETWORK_PERMISSION) }
+    }
+
     private fun startPairingNow(context: Context) {
         val devOptionsOff = !CscMuteManager.isDeveloperOptionsEnabled(context)
         PairingForegroundService.start(context, devOptionsOff)

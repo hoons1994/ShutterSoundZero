@@ -117,21 +117,37 @@ class PairingNotificationReceiverInstrumentedTest {
     }
 
     @Test
-    fun pairingFailureState_keepsCodeEntryActionWithoutInternalJargon() {
+    fun pairingFailureState_asksForFreshPairingWindow() {
         val notification = PairingNotificationHelper.buildPairingNotification(
             baseContext,
-            pairingPort = 37123,
             state = PairingNotificationState.PAIRING_FAILED
         )
 
         val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
         val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
 
-        assertEquals("오류: 기기 연결에 실패했습니다. 6자리 코드를 확인해 다시 입력해 주세요.", title)
-        assertEquals("화면에 표시된 6자리 코드를 [코드 입력]에 입력해 주세요.", text)
+        assertEquals("기기에 연결하지 못했습니다", title)
+        assertEquals("페어링 창이 닫혔거나 연결 정보가 바뀌었을 수 있습니다. 창을 다시 열고 새 6자리 코드로 시도해 주세요.", text)
         assertFalse(title.contains("포트"))
         assertFalse(text.contains("포트"))
-        assertTrue(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
+        assertFalse(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
+    }
+
+    @Test
+    fun localNetworkPermissionFailure_guidesAppSettings() {
+        val notification = PairingNotificationHelper.buildPairingNotification(
+            baseContext,
+            state = PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED
+        )
+
+        assertEquals(
+            "로컬 네트워크 권한이 필요합니다",
+            notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
+        )
+        assertEquals(
+            "앱 설정에서 로컬 네트워크 권한을 허용한 뒤 1회 설정을 다시 시작해 주세요.",
+            notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+        )
     }
 
     @Test

@@ -181,6 +181,7 @@ object PairingNotificationHelper {
 
         val stateTitle = when (state) {
             PairingNotificationState.DEVELOPER_OPTIONS_READY -> context.getString(R.string.pairing_state_developer_options_ready)
+            PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED -> context.getString(R.string.pairing_state_local_network_permission_required)
             PairingNotificationState.DISCOVERY_START_FAILED -> context.getString(R.string.pairing_state_discovery_start_failed)
             PairingNotificationState.INVALID_PAIRING_CODE -> context.getString(R.string.pairing_state_invalid_code)
             PairingNotificationState.DISCOVERY_WAITING -> context.getString(R.string.pairing_state_discovery_waiting)
@@ -195,12 +196,19 @@ object PairingNotificationHelper {
             return PairingNotificationCopy(stateTitle, nextStep, nextStep)
         }
 
-        val bigText = if (pairingPort != null) {
-            context.getString(R.string.pairing_code_entry_detail)
-        } else {
-            context.getString(R.string.pairing_continue_setup_detail)
+        val guidance = when (state) {
+            PairingNotificationState.DEVELOPER_OPTIONS_READY -> R.string.pairing_state_next_step
+            PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED -> R.string.pairing_help_local_network
+            PairingNotificationState.DISCOVERY_START_FAILED,
+            PairingNotificationState.DISCOVERY_WAITING -> R.string.pairing_help_discovery
+            PairingNotificationState.INVALID_PAIRING_CODE -> R.string.pairing_help_invalid_code
+            PairingNotificationState.CAMERA_APPLY_FAILED -> R.string.pairing_help_camera_apply
+            PairingNotificationState.PAIRING_FAILED,
+            PairingNotificationState.PAIRING_ERROR -> R.string.pairing_help_connection
+            PairingNotificationState.PAIRING_TIMEOUT -> R.string.pairing_help_timeout
         }
-        return PairingNotificationCopy(stateTitle, defaultSummary, bigText)
+        val detail = context.getString(guidance)
+        return PairingNotificationCopy(stateTitle, detail, detail)
     }
 
     fun showPairingNotification(
