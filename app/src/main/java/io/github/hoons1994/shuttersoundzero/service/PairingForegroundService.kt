@@ -15,7 +15,6 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import io.github.hoons1994.shuttersoundzero.MainActivity
 import io.github.hoons1994.shuttersoundzero.R
-import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkPermissionRequiredException
 import io.github.hoons1994.shuttersoundzero.core.adb.PairingCode
@@ -89,7 +88,7 @@ class PairingForegroundService : Service() {
 
     private val developerOptionsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
-            if (!CscMuteManager.isDeveloperOptionsEnabled(this@PairingForegroundService)) return
+            if (!DeveloperOptionsManager.isDeveloperOptionsEnabled(this@PairingForegroundService)) return
 
             PairingNotificationHelper.showPairingNotification(
                 this@PairingForegroundService,

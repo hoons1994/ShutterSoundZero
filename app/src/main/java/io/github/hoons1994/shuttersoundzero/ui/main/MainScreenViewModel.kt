@@ -9,6 +9,7 @@ import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
+import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
@@ -64,7 +65,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         return MainUiState(
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
-            isDeveloperOptionsEnabled = CscMuteManager.isDeveloperOptionsEnabled(app),
+            isDeveloperOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(app),
             isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
             setupIssue = prefs.lastSetupIssue,
             adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
@@ -87,7 +88,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             current.copy(
                 isCscMuted = isMuted,
                 hasCscPermission = perm,
-                isDeveloperOptionsEnabled = CscMuteManager.isDeveloperOptionsEnabled(app),
+                isDeveloperOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(app),
                 isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
                 setupIssue = prefs.lastSetupIssue,
                 adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
@@ -146,9 +147,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun startPairingNow(context: Context) {
-        val devOptionsOff = !CscMuteManager.isDeveloperOptionsEnabled(context)
+        val devOptionsOff = !DeveloperOptionsManager.isDeveloperOptionsEnabled(context)
         PairingForegroundService.start(context, devOptionsOff)
-        CscMuteManager.openPairingSetupScreen(context)
+        SetupSettingsNavigator.openPairingSetupScreen(context)
         _uiState.update {
             it.copy(
                 infoMessage = context.getString(R.string.main_pairing_code_entry_guidance)

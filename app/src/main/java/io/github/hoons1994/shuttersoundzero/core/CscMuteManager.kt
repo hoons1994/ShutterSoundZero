@@ -1,8 +1,6 @@
 package io.github.hoons1994.shuttersoundzero.core
 
 import android.content.Context
-import android.content.ContextWrapper
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
 import android.util.Log
@@ -20,10 +18,6 @@ import io.github.muntashirakon.adb.AdbShellIdentity
  */
 object CscMuteManager {
     private const val TAG = "CscMuteManager"
-    private const val SETTINGS_PACKAGE = "com.android.settings"
-    private const val SETTINGS_FRAGMENT_ARG_KEY = ":settings:fragment_args_key"
-    private const val SOFTWARE_INFO_PREFERENCE_KEY = "software_info"
-    private const val WIRELESS_DEBUGGING_PREFERENCE_KEY = "toggle_adb_wireless"
     const val CSC_KEY = "csc_pref_camera_forced_shuttersound_key"
 
     /**
@@ -87,142 +81,6 @@ object CscMuteManager {
      */
     fun getAdbCheckCommand(): String {
         return "adb shell settings get system $CSC_KEY"
-    }
-
-    /**
-     * 개발자 옵션 활성화 여부 확인
-     */
-    fun isDeveloperOptionsEnabled(context: Context): Boolean {
-        return try {
-            Settings.Global.getInt(
-                context.contentResolver,
-                Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
-                0
-            ) != 0
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    /** 휴대전화 정보 화면을 열고 소프트웨어 정보 항목을 강조한다. */
-    fun openSoftwareInfoSettings(context: Context) {
-        try {
-            context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).apply {
-                putExtra(SETTINGS_FRAGMENT_ARG_KEY, SOFTWARE_INFO_PREFERENCE_KEY)
-                flags = settingsTaskFlags(context)
-            })
-        } catch (_: Exception) {
-        }
-    }
-
-    private fun settingsTaskFlags(context: Context): Int {
-        var flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        if (!context.hasActivity()) flags = flags or Intent.FLAG_ACTIVITY_NEW_TASK
-        return flags
-    }
-
-    private fun Context.hasActivity(): Boolean {
-        var current: Context? = this
-        while (current is ContextWrapper) {
-            if (current is android.app.Activity) return true
-            val base = current.baseContext
-            if (base === current) break
-            current = base
-        }
-        return current is android.app.Activity
-    }
-
-    /** 개발자 옵션을 열고 무선 디버깅 항목으로 이동해 강조한다. */
-    fun openWirelessDebuggingOrDevOptions(context: Context) {
-        val developerOptionsIntent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
-            setPackage(SETTINGS_PACKAGE)
-            putExtra(SETTINGS_FRAGMENT_ARG_KEY, WIRELESS_DEBUGGING_PREFERENCE_KEY)
-            flags = settingsTaskFlags(context)
-        }
-
-        try {
-            context.startActivity(developerOptionsIntent)
-        } catch (_: Exception) {
-            try {
-                context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
-                    putExtra(SETTINGS_FRAGMENT_ARG_KEY, WIRELESS_DEBUGGING_PREFERENCE_KEY)
-                    flags = settingsTaskFlags(context)
-                })
-            } catch (_: Exception) {
-                // 설정 앱을 열 수 없는 기기에서는 아무 작업도 하지 않는다.
-            }
-        }
-    }
-
-    /**
-     * 토스트 알림의 노출 시간을 길게 연장하여 사용자가 설정 화면 이동 후에도 충분히 읽고 조작할 수 있도록 지원
-     */
-    fun showExtendedToast(context: Context, message: String, durationMultiplier: Int = 2) {
-        val handler = android.os.Handler(android.os.Looper.getMainLooper())
-        for (i in 0 until durationMultiplier) {
-            handler.postDelayed({
-                try {
-                    android.widget.Toast.makeText(
-                        context,
-                        message,
-                        android.widget.Toast.LENGTH_LONG
-                    ).show()
-                } catch (_: Exception) {}
-            }, i * 2500L)
-        }
-    }
-
-    /** 개발자 옵션 상태에 맞는 페어링 설정 화면으로 이동한다. */
-    fun openPairingSetupScreen(context: Context) {
-        if (!isDeveloperOptionsEnabled(context)) {
-            openSoftwareInfoSettings(context)
-        } else {
-            openWirelessDebuggingOrDevOptions(context)
-        }
-    }
-
-    /**
-     * 페어링 안내 알림을 표시한 뒤 개발자 옵션 상태에 맞는 설정 화면으로 이동한다.
-     */
-    fun navigateToSmartSetupScreen(context: Context) {
-        val devOptionsOff = !isDeveloperOptionsEnabled(context)
-
-        // 1. 상단바 알림창에 헤드업 팝업 및 고정 알림 띄우기 (사용자가 지울 때까지 상단바에 지속 유지)
-        io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper.showPairingNotification(
-            context,
-            isDevOptionsOff = devOptionsOff
-        )
-
-        // 2. 적절한 설정 화면으로 직행
-        openPairingSetupScreen(context)
-    }
-
-    /**
-     * Wi-Fi 네트워크 연결 여부 확인.
-     * 네트워크 상태를 읽지 못한 경우에는 무선 ADB 전제조건을 확인할 수 없으므로 안전하게 false를 반환한다.
-     */
-    fun isWifiConnected(context: Context): Boolean {
-        return try {
-            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
-            val network = cm.activeNetwork ?: return false
-            val capabilities = cm.getNetworkCapabilities(network) ?: return false
-            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
-        } catch (e: Exception) {
-            Log.w(TAG, "Unable to determine Wi-Fi connectivity (${e.javaClass.simpleName})")
-            false
-        }
-    }
-
-    /**
-     * Wi-Fi 설정 화면 열기
-     */
-    fun openWifiSettings(context: Context) {
-        try {
-            val intent = android.content.Intent(Settings.ACTION_WIFI_SETTINGS).apply {
-                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(intent)
-        } catch (_: Exception) {}
     }
 }
 

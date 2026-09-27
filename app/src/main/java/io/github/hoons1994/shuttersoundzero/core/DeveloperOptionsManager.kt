@@ -20,6 +20,19 @@ object DeveloperOptionsManager {
     // Settings.Global.ADB_WIFI_ENABLED is a hidden framework constant.
     private const val ADB_WIFI_ENABLED = "adb_wifi_enabled"
 
+    /** 개발자 옵션 활성화 여부를 읽는다. */
+    fun isDeveloperOptionsEnabled(context: Context): Boolean {
+        return try {
+            Settings.Global.getInt(
+                context.contentResolver,
+                Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
+                0
+            ) != 0
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun canDisableDirectly(context: Context): Boolean {
         return context.checkSelfPermission(WRITE_SECURE_SETTINGS_PERMISSION) ==
             PackageManager.PERMISSION_GRANTED

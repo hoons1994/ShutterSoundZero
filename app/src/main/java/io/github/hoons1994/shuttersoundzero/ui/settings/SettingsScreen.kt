@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
+import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkPermissionRequiredException
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
@@ -388,7 +389,7 @@ fun SettingsScreen(
                     TextButton(
                         onClick = {
                             showReapplyWirelessDebuggingHelp = false
-                            CscMuteManager.openWirelessDebuggingOrDevOptions(context)
+                            SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
                         }
                     ) {
                         Text("설정 열기")
@@ -418,7 +419,7 @@ fun SettingsScreen(
                     TextButton(
                         onClick = {
                             showRestoreWirelessDebuggingHelp = false
-                            CscMuteManager.openWirelessDebuggingOrDevOptions(context)
+                            SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
                         }
                     ) {
                         Text("설정 열기")

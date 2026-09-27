@@ -67,6 +67,8 @@ import androidx.navigation3.runtime.NavKey
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.Settings
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
+import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
+import io.github.hoons1994.shuttersoundzero.core.WifiConnectionStatus
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import io.github.hoons1994.shuttersoundzero.theme.BrandBlueLight
 import io.github.hoons1994.shuttersoundzero.theme.StatusAmber
@@ -158,7 +160,7 @@ fun MainScreen(
     }
 
     val requestPairingNotification: () -> Unit = {
-        if (!CscMuteManager.isWifiConnected(context)) {
+        if (!WifiConnectionStatus.isWifiConnected(context)) {
             showWifiRequiredDialog = true
         } else if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -238,7 +240,7 @@ fun MainScreen(
             onSetup = setupAction,
             onReapply = reapplyAction,
             onOpenCamera = openCamera,
-            onOpenSoftwareInfo = { CscMuteManager.openSoftwareInfoSettings(context) },
+            onOpenSoftwareInfo = { SetupSettingsNavigator.openSoftwareInfoSettings(context) },
             onOpenAppSettings = {
                 context.startActivity(
                     Intent(
@@ -260,7 +262,7 @@ fun MainScreen(
             primaryLabel = "Wi-Fi 설정 열기",
             onPrimary = {
                 showWifiRequiredDialog = false
-                CscMuteManager.openWifiSettings(context)
+                SetupSettingsNavigator.openWifiSettings(context)
             },
             secondaryLabel = "닫기",
             onSecondary = { showWifiRequiredDialog = false },
@@ -283,7 +285,7 @@ fun MainScreen(
                 Button(
                     onClick = {
                         viewModel.dismissSwitchFailureHelp()
-                        CscMuteManager.openWirelessDebuggingOrDevOptions(context)
+                        SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -313,7 +315,7 @@ fun MainScreen(
                 Button(
                     onClick = {
                         viewModel.dismissWirelessDebuggingCleanupHelp()
-                        CscMuteManager.openWirelessDebuggingOrDevOptions(context)
+                        SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) {
