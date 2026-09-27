@@ -127,7 +127,7 @@ class PairingNotificationReceiverInstrumentedTest {
         val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
         val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
 
-        assertEquals("❌ 기기 연결에 실패했습니다. 6자리 코드를 확인해 다시 입력해 주세요.", title)
+        assertEquals("오류: 기기 연결에 실패했습니다. 6자리 코드를 확인해 다시 입력해 주세요.", title)
         assertEquals("화면에 표시된 6자리 코드를 [코드 입력]에 입력해 주세요.", text)
         assertFalse(title.contains("포트"))
         assertFalse(text.contains("포트"))
@@ -140,7 +140,7 @@ class PairingNotificationReceiverInstrumentedTest {
         val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
         val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
 
-        assertEquals("카메라 무음 설정 적용 중 ⏳", title)
+        assertEquals("카메라 무음 설정 적용 중", title)
         assertFalse(text.contains("권한 연동"))
         assertTrue(text.contains("카메라 설정"))
     }

@@ -14,6 +14,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import io.github.hoons1994.shuttersoundzero.MainActivity
+import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
@@ -434,9 +435,9 @@ class PairingForegroundService : Service() {
                 Toast.makeText(
                     this,
                     if (wirelessDebuggingDisabled) {
-                        "✨ 설정 완료! 카메라 무음 설정을 적용하고 무선 디버깅도 껐습니다."
+                        getString(R.string.foreground_pairing_success_wireless_disabled)
                     } else {
-                        "✨ 카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요."
+                        getString(R.string.foreground_pairing_success_disable_wireless_manually)
                     },
                     Toast.LENGTH_LONG
                 ).show()

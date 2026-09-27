@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
             if (!isGranted) {
                 android.widget.Toast.makeText(
                     this,
-                    "Android 17에서 무선 ADB 재적용을 사용하려면 로컬 네트워크 권한이 필요합니다. [앱 설정]에서 허용해 주세요.",
+                    getString(R.string.main_local_network_reapply_prompt),
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             }
@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
         if (!CscMuteManager.isSamsungDevice()) {
             android.widget.Toast.makeText(
                 this,
-                "⚠️ 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.",
+                getString(R.string.main_non_samsung_device_warning),
                 android.widget.Toast.LENGTH_LONG
             ).show()
         }
@@ -187,15 +187,15 @@ class MainActivity : ComponentActivity() {
 
         unlockErrorMessage = null
         if (!AppLockAuthenticator.canAuthenticate(this)) {
-            unlockErrorMessage = "기기에 지문 또는 PIN·패턴·비밀번호를 설정한 뒤 다시 시도해 주세요."
+            unlockErrorMessage = getString(R.string.app_lock_unconfigured_message)
             return
         }
 
         authenticationInProgress = true
         AppLockAuthenticator.authenticate(
             activity = this,
-            title = "ShutterSoundZero 잠금 해제",
-            subtitle = "지문 또는 화면 잠금으로 확인해 주세요.",
+            title = getString(R.string.app_lock_prompt_title),
+            subtitle = getString(R.string.app_lock_prompt_subtitle),
             onSuccess = {
                 authenticationInProgress = false
                 unlockErrorMessage = null
@@ -210,7 +210,7 @@ class MainActivity : ComponentActivity() {
             },
             onError = {
                 authenticationInProgress = false
-                unlockErrorMessage = "인증을 완료할 수 없습니다. 잠금 방식을 확인한 뒤 다시 시도해 주세요."
+                unlockErrorMessage = getString(R.string.app_lock_authentication_unavailable)
             }
         )
     }
