@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 data class MainUiState(
     val isCscMuted: Boolean = false,
     val hasCscPermission: Boolean = false,
+    val isDeveloperOptionsEnabled: Boolean = false,
     val isWirelessDebuggingEnabled: Boolean = false,
     val setupIssue: SetupIssue? = null,
     val adbGrantCommand: String = "",
@@ -63,6 +64,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         return MainUiState(
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
+            isDeveloperOptionsEnabled = CscMuteManager.isDeveloperOptionsEnabled(app),
             isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
             setupIssue = prefs.lastSetupIssue,
             adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
@@ -85,6 +87,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             current.copy(
                 isCscMuted = isMuted,
                 hasCscPermission = perm,
+                isDeveloperOptionsEnabled = CscMuteManager.isDeveloperOptionsEnabled(app),
                 isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
                 setupIssue = prefs.lastSetupIssue,
                 adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),

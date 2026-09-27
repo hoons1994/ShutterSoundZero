@@ -237,6 +237,7 @@ fun MainScreen(
             onSetup = setupAction,
             onReapply = reapplyAction,
             onOpenCamera = openCamera,
+            onOpenSoftwareInfo = { CscMuteManager.openSoftwareInfoSettings(context) },
             onSystemVolumeChange = viewModel::setSystemVolume,
             modifier = Modifier.padding(innerPadding)
         )
@@ -326,6 +327,7 @@ internal fun HomeContent(
     onSetup: () -> Unit = {},
     onReapply: () -> Unit = {},
     onOpenCamera: () -> Unit = {},
+    onOpenSoftwareInfo: () -> Unit = {},
     onSystemVolumeChange: (Int) -> Int? = { null },
     modifier: Modifier = Modifier
 ) {
@@ -352,7 +354,7 @@ internal fun HomeContent(
 
         if (homeStatus == HomeStatus.SETUP_REQUIRED) {
             Spacer(modifier = Modifier.height(20.dp))
-            SetupProgressCard(uiState)
+            SetupProgressCard(uiState, onOpenSoftwareInfo)
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -497,7 +499,7 @@ private fun StatusHeroCard(
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
             "문제가 생긴 단계를 아래에 표시했습니다. 해당 단계부터 다시 진행하면 됩니다."
         } else {
-            "3단계 안내에 따라 연결하면 이후에는 앱을 계속 열어둘 필요가 없습니다."
+            "4단계 안내에 따라 연결하면 이후에는 앱을 계속 열어둘 필요가 없습니다."
         }
     }
     val badgeText = when (status) {
@@ -580,21 +582,32 @@ private fun StatusHeroCard(
 }
 
 @Composable
-private fun SetupProgressCard(uiState: MainUiState) {
+private fun SetupProgressCard(
+    uiState: MainUiState,
+    onOpenSoftwareInfo: () -> Unit
+) {
     val context = LocalContext.current
     val issue = uiState.setupIssue
-    val wirelessComplete = uiState.isWirelessDebuggingEnabled || issue != null
+    val developerOptionsComplete = uiState.isDeveloperOptionsEnabled
+    val wirelessComplete = developerOptionsComplete && (uiState.isWirelessDebuggingEnabled || issue != null)
     val pairingComplete = uiState.hasCscPermission || issue == SetupIssue.CAMERA_APPLY
     val applyComplete = uiState.isCscMuted
 
-    val step1State = if (wirelessComplete) StepVisualState.COMPLETE else StepVisualState.CURRENT
+    val step1State = if (developerOptionsComplete) StepVisualState.COMPLETE else StepVisualState.CURRENT
     val step2State = when {
+        wirelessComplete -> StepVisualState.COMPLETE
+        developerOptionsComplete -> StepVisualState.CURRENT
+        else -> StepVisualState.PENDING
+    }
+    val step3State = when {
+        !developerOptionsComplete -> StepVisualState.PENDING
         issue == SetupIssue.PAIRING_DISCOVERY || issue == SetupIssue.PAIRING_CODE -> StepVisualState.ERROR
         pairingComplete -> StepVisualState.COMPLETE
         wirelessComplete -> StepVisualState.CURRENT
         else -> StepVisualState.PENDING
     }
-    val step3State = when {
+    val step4State = when {
+        !developerOptionsComplete -> StepVisualState.PENDING
         issue == SetupIssue.CAMERA_APPLY -> StepVisualState.ERROR
         applyComplete -> StepVisualState.COMPLETE
         pairingComplete -> StepVisualState.CURRENT
@@ -639,18 +652,26 @@ private fun SetupProgressCard(uiState: MainUiState) {
 
             SetupStepRow(
                 number = 1,
-                title = "무선 디버깅 켜기",
-                subtitle = "1회 설정 시작을 누르면 필요한 설정 화면을 엽니다.",
-                state = step1State
+                title = "개발자 옵션 켜기",
+                subtitle = "휴대전화 정보 → 소프트웨어 정보 → 빌드번호를 7번 누릅니다. 화면 잠금 인증이 필요할 수 있습니다.",
+                state = step1State,
+                actionLabel = if (developerOptionsComplete) null else "휴대전화 정보 열기",
+                onAction = onOpenSoftwareInfo
             )
             SetupStepRow(
                 number = 2,
+                title = "무선 디버깅 켜기",
+                subtitle = "[1회 설정 시작]을 누르면 개발자 옵션의 무선 디버깅 화면을 엽니다.",
+                state = step2State
+            )
+            SetupStepRow(
+                number = 3,
                 title = "6자리 코드 입력",
                 subtitle = "상단 알림의 [코드 입력]에서 화면에 보이는 숫자 6자리를 입력합니다.",
-                state = step2State,
+                state = step3State,
                 errorText = pairingErrorText
             )
-            if (!pairingComplete) {
+            if (wirelessComplete && !pairingComplete) {
                 NotificationPopupStyleHint(
                     onOpenSettings = {
                         PairingNotificationHelper.openNotificationSettings(context)
@@ -658,10 +679,10 @@ private fun SetupProgressCard(uiState: MainUiState) {
                 )
             }
             SetupStepRow(
-                number = 3,
+                number = 4,
                 title = "카메라 무음 적용",
                 subtitle = "연결에 성공하면 앱이 자동으로 적용하고 마무리합니다.",
-                state = step3State,
+                state = step4State,
                 errorText = if (issue == SetupIssue.CAMERA_APPLY) {
                     "기기 연결은 됐지만 카메라 설정을 적용하지 못했습니다. 무선 디버깅을 켠 상태에서 다시 시도해 주세요."
                 } else {
@@ -718,7 +739,9 @@ private fun SetupStepRow(
     title: String,
     subtitle: String,
     state: StepVisualState,
-    errorText: String? = null
+    errorText: String? = null,
+    actionLabel: String? = null,
+    onAction: () -> Unit = {}
 ) {
     val markerColor = when (state) {
         StepVisualState.COMPLETE -> StatusGreen
@@ -788,6 +811,15 @@ private fun SetupStepRow(
                 color = detailColor,
                 lineHeight = 18.sp
             )
+            if (actionLabel != null && state == StepVisualState.CURRENT) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onAction,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(actionLabel)
+                }
+            }
         }
     }
 }

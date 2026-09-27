@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -31,11 +33,38 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("처음 한 번만 설정해 주세요").fetchSemanticsNode()
         composeTestRule.onNodeWithText("1회 설정 시작").fetchSemanticsNode()
         composeTestRule.onNodeWithText("1회 설정 진행").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("개발자 옵션 켜기").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("휴대전화 정보 열기").assertHasClickAction()
         composeTestRule.onNodeWithText("무선 디버깅 켜기").fetchSemanticsNode()
         composeTestRule.onNodeWithText("6자리 코드 입력").fetchSemanticsNode()
         composeTestRule.onNodeWithText("카메라 무음 적용").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("간략한 팝업을 사용 중인가요?").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("알림 팝업 설정 열기").assertHasClickAction()
+        assertTrue(
+            composeTestRule.onAllNodesWithText("알림 팝업 설정 열기").fetchSemanticsNodes().isEmpty()
+        )
+    }
+
+    @Test
+    fun developerOptionsStep_opensDeviceInfo() {
+        var opened = false
+        composeTestRule.setContent {
+            HomeContent(
+                uiState = MainUiState(),
+                onOpenSoftwareInfo = { opened = true }
+            )
+        }
+
+        composeTestRule.onNodeWithText("휴대전화 정보 열기").performScrollTo().performClick()
+        assertTrue(opened)
+    }
+
+    @Test
+    fun developerOptionsStep_isMarkedCompleteWhenEnabled() {
+        showHome(MainUiState(isDeveloperOptionsEnabled = true))
+
+        composeTestRule.onNodeWithText("개발자 옵션 켜기").fetchSemanticsNode()
+        assertTrue(
+            composeTestRule.onAllNodesWithText("휴대전화 정보 열기").fetchSemanticsNodes().isEmpty()
+        )
     }
 
     @Test
@@ -85,6 +114,7 @@ class MainScreenTest {
     fun pairingFailure_isShownInlineAtCodeStep() {
         showHome(
             MainUiState(
+                isDeveloperOptionsEnabled = true,
                 isWirelessDebuggingEnabled = true,
                 setupIssue = SetupIssue.PAIRING_CODE
             )
@@ -103,6 +133,7 @@ class MainScreenTest {
     fun cameraApplyFailure_isShownInlineAtApplyStep() {
         showHome(
             MainUiState(
+                isDeveloperOptionsEnabled = true,
                 setupIssue = SetupIssue.CAMERA_APPLY
             )
         )
