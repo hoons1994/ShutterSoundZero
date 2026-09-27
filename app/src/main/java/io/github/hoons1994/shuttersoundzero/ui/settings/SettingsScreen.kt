@@ -8,6 +8,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -56,6 +58,8 @@ import androidx.compose.ui.unit.sp
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
+import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
+import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkPermissionRequiredException
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
@@ -66,6 +70,10 @@ private val CardRadius = 20.dp
 private val CardPaddingH = 20.dp
 private val CardPaddingV = 16.dp
 private const val RELEASES_URL = "https://github.com/hoons1994/ShutterSoundZero/releases/latest"
+private const val LOCAL_NETWORK_PERMISSION_MESSAGE =
+    "카메라 설정을 바꾸려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용한 뒤 다시 시도해 주세요."
+
+private enum class CameraAction { REAPPLY, RESTORE }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,6 +105,64 @@ fun SettingsScreen(
     var isReapplyInProgress by remember { mutableStateOf(false) }
     var isRestoreInProgress by remember { mutableStateOf(false) }
     var isCscMuted by remember { mutableStateOf(CscMuteManager.isCscShutterSoundMuted(context)) }
+    var pendingLocalNetworkAction by remember { mutableStateOf<CameraAction?>(null) }
+
+    val runReapply: () -> Unit = {
+        if (!isReapplyInProgress) {
+            if (!LocalNetworkAccess.isGranted(context)) {
+                restoreResultMessage = LOCAL_NETWORK_PERMISSION_MESSAGE
+            } else {
+                isReapplyInProgress = true
+                coroutineScope.launch {
+                    val result = StandaloneAdbManager.getInstance(context).setCameraMute(true)
+                    val stateApplied = result.isSuccess && CscStateVerifier.waitFor(true) {
+                        CscMuteManager.isCscShutterSoundMuted(context)
+                    }
+                    if (stateApplied) {
+                        prefs.shouldMuteOnBoot = true
+                        isCscMuted = true
+                        val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
+                        restoreResultMessage = if (cleanup.isSuccess) {
+                            "카메라 무음 설정을 다시 적용했습니다."
+                        } else {
+                            "카메라 무음 설정은 적용했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
+                        }
+                    } else {
+                        restoreResultMessage = if (
+                            result.exceptionOrNull() is LocalNetworkPermissionRequiredException
+                        ) {
+                            LOCAL_NETWORK_PERMISSION_MESSAGE
+                        } else {
+                            "다시 적용하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
+                        }
+                    }
+                    isReapplyInProgress = false
+                }
+            }
+        }
+    }
+
+    val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        val action = pendingLocalNetworkAction
+        pendingLocalNetworkAction = null
+        if (action != null) {
+            if (isGranted && LocalNetworkAccess.isGranted(context)) {
+                when (action) {
+                    CameraAction.REAPPLY -> runReapply()
+                    CameraAction.RESTORE -> showRestoreConfirm = true
+                }
+            } else {
+                restoreResultMessage = LOCAL_NETWORK_PERMISSION_MESSAGE
+            }
+        }
+    }
+
+    val requestLocalNetworkPermission: (CameraAction) -> Unit = { action ->
+        pendingLocalNetworkAction = action
+        localNetworkPermissionLauncher.launch(LocalNetworkAccess.PERMISSION)
+    }
 
     Scaffold(
         topBar = {
@@ -147,6 +213,8 @@ fun SettingsScreen(
                                     "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
                             } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
                                 showRestoreWirelessDebuggingHelp = true
+                            } else if (!LocalNetworkAccess.isGranted(context)) {
+                                requestLocalNetworkPermission(CameraAction.RESTORE)
                             } else {
                                 showRestoreConfirm = true
                             }
@@ -163,26 +231,10 @@ fun SettingsScreen(
                             } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
                                 showReapplyWirelessDebuggingHelp = true
                             } else if (!isReapplyInProgress) {
-                                isReapplyInProgress = true
-                                coroutineScope.launch {
-                                    val result = StandaloneAdbManager.getInstance(context).setCameraMute(true)
-                                    val stateApplied = result.isSuccess && CscStateVerifier.waitFor(true) {
-                                        CscMuteManager.isCscShutterSoundMuted(context)
-                                    }
-                                    if (stateApplied) {
-                                        prefs.shouldMuteOnBoot = true
-                                        isCscMuted = true
-                                        val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
-                                        restoreResultMessage = if (cleanup.isSuccess) {
-                                            "카메라 무음 설정을 다시 적용했습니다."
-                                        } else {
-                                            "카메라 무음 설정은 적용했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
-                                        }
-                                    } else {
-                                        restoreResultMessage =
-                                            "다시 적용하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
-                                    }
-                                    isReapplyInProgress = false
+                                if (!LocalNetworkAccess.isGranted(context)) {
+                                    requestLocalNetworkPermission(CameraAction.REAPPLY)
+                                } else {
+                                    runReapply()
                                 }
                             }
                         }
@@ -396,6 +448,11 @@ fun SettingsScreen(
                         enabled = !isRestoreInProgress,
                         onClick = {
                             if (isRestoreInProgress) return@TextButton
+                            if (!LocalNetworkAccess.isGranted(context)) {
+                                showRestoreConfirm = false
+                                requestLocalNetworkPermission(CameraAction.RESTORE)
+                                return@TextButton
+                            }
                             isRestoreInProgress = true
                             coroutineScope.launch {
                                 val result = StandaloneAdbManager.getInstance(context).setCameraMute(false)
@@ -412,8 +469,13 @@ fun SettingsScreen(
                                         "카메라 셔터음은 복원했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
                                     }
                                 } else {
-                                    restoreResultMessage =
+                                    restoreResultMessage = if (
+                                        result.exceptionOrNull() is LocalNetworkPermissionRequiredException
+                                    ) {
+                                        LOCAL_NETWORK_PERMISSION_MESSAGE
+                                    } else {
                                         "카메라 셔터음을 복원하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
+                                    }
                                 }
                                 isRestoreInProgress = false
                                 showRestoreConfirm = false
