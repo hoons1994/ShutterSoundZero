@@ -7,7 +7,7 @@
 - `AdbOperationRunner`: 권한 확인과 멀티캐스트 lease 획득부터 Result 경계에 포함합니다. 코루틴 취소를 보존하고 연결·lease·작업 gate를 성공/실패/취소에 모두 정리합니다.
 - `CancellableSocket`과 `BoundedBlockingOperation`: 연결 전에 raw socket을 소유합니다. 취소/시간 초과는 소켓을 닫으며 TLS/PAKE 최종 정리는 worker가 수행합니다. 종료되지 않은 worker는 단일 실행 슬롯을 유지하여 재시도 누적을 막습니다.
 - 연결은 시도별로 소유하며 실패한 세션을 닫은 다음 재시도합니다. 연결 8초, 페어링 12초, 셸 전체 6초와 최대 1초의 정리 대기를 사용합니다. 각 공개 작업이 끝나면 성공한 연결도 닫습니다.
-- 같은 NSD 클라이언트의 주소 확인은 공유 대기열에서 직렬화합니다. 최대 3회 충돌 재시도, 중복 제거, 취소/서비스 소실/지연 콜백 분리를 적용합니다.
+- 같은 NSD 클라이언트의 주소 확인은 공유 대기열에서 직렬화합니다. 최대 3회 충돌 재시도, 중복 제거, 취소/서비스 소실/지연 콜백 분리를 적용합니다. API 30–33에서는 주소 확인을 별도 작업 프로세스로 격리해 플랫폼 콜백이 누락되어도 해당 프로세스만 재시작할 수 있습니다.
 
 ## CodeQL 경고의 실제 의미와 보완
 
@@ -30,7 +30,7 @@ ADB는 웹 HTTPS가 아닙니다. AOSP 페어링은 자체 서명 인증서 위�
 
 ## 회귀 검사
 
-기존/확장 집중 단위 시나리오 50개와 Android 통합 시나리오 7개를 둡니다. 전체 저장소 테스트 수는 아닙니다.
+최초 보완 당시 집중 단위 시나리오 50개와 Android 통합 시나리오 7개를 두었습니다. 전체 저장소 테스트 수는 아닙니다. 이후 API 30–33 NSD 작업 프로세스의 종료·재바인딩 계측 검사와, 콜백 없는 타임아웃 이후 큐 진행 및 재시작 예산 단위 검사를 추가했습니다.
 
 - JVM: 자원 경계, 취소/worker 누적, mDNS, 실제 TCP/TLS 취소, TLS 1.3 성공과 잘못된 인증서 거부, 토큰 수명/권한, TLS ADB 스트림, 가짜 성공 출력 및 평문 downgrade 거부.
 - Android: 실제 shell Binder 성공, DUMP 권한을 얻은 앱 UID의 위조 거부, 재생 거부, 실제 Conscrypt + libadb SPAKE2 페어링 성공, 잘못된 코드·TLS exporter·인증된 peer type 거부.
@@ -42,7 +42,7 @@ ADB는 웹 HTTPS가 아닙니다. AOSP 페어링은 자체 서명 인증서 위�
 
 ## 남는 플랫폼 범위
 
-API 34 이상은 `stopServiceResolution()`을 사용합니다. API 30–33에서는 플랫폼 종료 콜백까지 슬롯을 보유합니다. 플랫폼이 콜백을 영구 누락하면 새 resolve도 진행되지 않으며 이를 종료된 것처럼 처리하지 않습니다. 이미 adbd가 실행한 명령/페어링의 부작용은 취소로 되돌릴 수 없습니다.
+API 34 이상은 `stopServiceResolution()`을 사용합니다. API 30–33의 주소 확인은 전용 NSD 작업 프로세스에서 수행합니다. 타임아웃/취소 시 그 프로세스를 종료하고 연결 해제 콜백으로 종료를 확인한 뒤에만 다음 resolve를 시작합니다. 늦은 응답은 요청 ID와 시도별 슬롯 식별자로 무시합니다. 1분 동안 정상 종료 없이 작업 프로세스 재시작이 5회 누적되면 30초 동안 새 요청을 실패 처리해 무한 재시작을 막습니다. 작업 프로세스 자체가 종료되지 않거나 시스템 NSD 전체가 멈춘 경우에는 안전을 위해 슬롯을 유지하므로 모든 제조사 환경에서 복구를 보장하지는 않습니다. 이미 adbd가 실행한 명령/페어링의 부작용은 취소로 되돌릴 수 없습니다.
 
 단위/에뮬레이터 검사는 모든 삼성/제조사 실기기와 카메라 소리의 검증을 대신하지 않습니다. libadb 3.1.1의 package-private 패킷/PAKE API를 재사용하므로 라이브러리 갱신 시 함께 검증해야 합니다. 암호 알고리즘을 새로 구현하지 않았습니다. UI, 이메일 제보 및 버전 번호는 변경하지 않습니다.
 
@@ -54,3 +54,5 @@ API 34 이상은 `stopServiceResolution()`을 사용합니다. API 30–33에서
 - https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/daemon/auth.cpp
 - https://developer.android.com/reference/android/os/Binder#getCallingUid()
 - https://github.com/MuntashirAkon/libadb-android/tree/3.1.1
+- https://developer.android.com/reference/android/net/nsd/NsdManager
+- https://android.googlesource.com/platform/frameworks/base/+/a7ce4e3/services/core/java/com/android/server/NsdService.java

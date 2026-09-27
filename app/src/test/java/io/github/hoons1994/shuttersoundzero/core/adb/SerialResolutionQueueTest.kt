@@ -115,6 +115,25 @@ class SerialResolutionQueueTest {
         assertEquals(2, f.started.size)
     }
 
+    @Test fun workerDeathAfterTimeoutReleasesSlotWithoutAcceptingLateCallback() {
+        val f = Fixture()
+        f.add(Any(), "hung")
+        f.add(Any(), "next")
+        val timedOut = f.started[0]
+
+        f.queue.expire(timedOut)
+        assertEquals(listOf(SerialResolutionQueue.ERROR_TIMEOUT), f.failures)
+        assertEquals(1, f.started.size)
+
+        // The isolated NSD client died; no platform resolve callback was delivered.
+        f.queue.stopped(timedOut)
+        assertEquals(2, f.started.size)
+        f.queue.resolved(timedOut, "stale")
+        f.queue.resolved(f.started[1], "next")
+        assertEquals(listOf("next"), f.resolved)
+        assertEquals(listOf(SerialResolutionQueue.ERROR_TIMEOUT), f.failures)
+    }
+
     @Test fun lostServiceCancelsOnlyItsOwnRequest() {
         val f = Fixture()
         val owner = Any()

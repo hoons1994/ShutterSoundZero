@@ -3,6 +3,7 @@ package io.github.hoons1994.shuttersoundzero.core.adb
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Build
 import android.util.Log
 import java.net.InetAddress
 
@@ -26,7 +27,11 @@ internal class SafeAdbMdnsDiscovery(
         .getSystemService(Context.NSD_SERVICE) as? NsdManager
         ?: error("NsdManager is unavailable")
     private val registration = MdnsDiscoveryRegistration()
-    private val resolver = SharedNsdResolver.get(nsdManager)
+    private val resolver: AdbNsdResolver = if (Build.VERSION.SDK_INT <= 33) {
+        LegacyNsdResolver.get(context.applicationContext)
+    } else {
+        SharedNsdResolver.get(nsdManager)
+    }
     private val resolutionOwner = Any()
 
     private val discoveryListener = object : NsdManager.DiscoveryListener {
