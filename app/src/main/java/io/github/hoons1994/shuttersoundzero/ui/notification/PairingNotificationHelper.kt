@@ -32,7 +32,11 @@ object PairingNotificationHelper {
     )
 
     fun areNotificationsEnabled(context: Context): Boolean {
-        return NotificationManagerCompat.from(context).areNotificationsEnabled()
+        createNotificationChannel(context)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelEnabled = manager.getNotificationChannel(CHANNEL_ID)?.importance !=
+            NotificationManager.IMPORTANCE_NONE
+        return NotificationManagerCompat.from(context).areNotificationsEnabled() && channelEnabled
     }
 
     fun openNotificationSettings(context: Context) {

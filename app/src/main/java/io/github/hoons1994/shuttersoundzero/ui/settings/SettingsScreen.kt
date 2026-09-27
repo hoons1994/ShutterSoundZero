@@ -1,12 +1,16 @@
 package io.github.hoons1994.shuttersoundzero.ui.settings
 
 import android.app.Activity
+import android.database.ContentObserver
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,10 +47,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,18 +61,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.lifecycle.ViewModelProvider
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
-import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
-import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkPermissionRequiredException
-import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
 import io.github.hoons1994.shuttersoundzero.security.AppLockSession
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
-import kotlinx.coroutines.launch
 
 private val CardRadius = 20.dp
 private val CardPaddingH = 20.dp
@@ -86,7 +94,15 @@ fun SettingsScreen(
     val context = LocalContext.current
     val prefs = remember { PreferencesRepository.getInstance(context) }
     val versionName = remember(context) { currentVersionName(context) }
-    val coroutineScope = rememberCoroutineScope()
+    val activityViewModelStoreOwner = remember(context) {
+        context.findActivity() as? ViewModelStoreOwner
+    }
+    val viewModelStoreOwner = activityViewModelStoreOwner ?:
+        LocalViewModelStoreOwner.current ?: error("SettingsScreen requires a ViewModelStoreOwner")
+    val cameraSettingsViewModel = remember(viewModelStoreOwner) {
+        ViewModelProvider(viewModelStoreOwner).get(CameraSettingsOperationViewModel::class.java)
+    }
+    val operationState by cameraSettingsViewModel.uiState.collectAsState()
 
     var isSoftwareUpdateCheck by remember {
         mutableStateOf(prefs.isSoftwareUpdateCheckEnabled)
@@ -104,42 +120,48 @@ fun SettingsScreen(
     var showReapplyWirelessDebuggingHelp by remember { mutableStateOf(false) }
     var showRestoreWirelessDebuggingHelp by remember { mutableStateOf(false) }
     var restoreResultMessage by remember { mutableStateOf<String?>(null) }
-    var isReapplyInProgress by remember { mutableStateOf(false) }
-    var isRestoreInProgress by remember { mutableStateOf(false) }
     var isCscMuted by remember { mutableStateOf(CscMuteManager.isCscShutterSoundMuted(context)) }
     var pendingLocalNetworkAction by remember { mutableStateOf<CameraAction?>(null) }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, context) {
+        val cscObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                isCscMuted = CscMuteManager.isCscShutterSoundMuted(context)
+            }
+        }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isCscMuted = CscMuteManager.isCscShutterSoundMuted(context)
+            }
+        }
+        context.contentResolver.registerContentObserver(
+            Settings.System.getUriFor(CscMuteManager.CSC_KEY),
+            false,
+            cscObserver
+        )
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            context.contentResolver.unregisterContentObserver(cscObserver)
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(operationState.completionId) {
+        if (operationState.completionId > 0 && operationState.resultMessage != null) {
+            showRestoreConfirm = false
+            operationState.appliedMutedState?.let { isCscMuted = it }
+            restoreResultMessage = operationState.resultMessage
+            cameraSettingsViewModel.consumeCompletion()
+        }
+    }
+
     val runReapply: () -> Unit = {
-        if (!isReapplyInProgress) {
+        if (!operationState.isReapplyInProgress) {
             if (!LocalNetworkAccess.isGranted(context)) {
                 restoreResultMessage = LOCAL_NETWORK_PERMISSION_MESSAGE
             } else {
-                isReapplyInProgress = true
-                coroutineScope.launch {
-                    val result = StandaloneAdbManager.getInstance(context).setCameraMute(true)
-                    val stateApplied = result.isSuccess && CscStateVerifier.waitFor(true) {
-                        CscMuteManager.isCscShutterSoundMuted(context)
-                    }
-                    if (stateApplied) {
-                        prefs.shouldMuteOnBoot = true
-                        isCscMuted = true
-                        val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
-                        restoreResultMessage = if (cleanup.isSuccess) {
-                            "카메라 무음 설정을 다시 적용했습니다."
-                        } else {
-                            "카메라 무음 설정은 적용했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
-                        }
-                    } else {
-                        restoreResultMessage = if (
-                            result.exceptionOrNull() is LocalNetworkPermissionRequiredException
-                        ) {
-                            LOCAL_NETWORK_PERMISSION_MESSAGE
-                        } else {
-                            "다시 적용하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
-                        }
-                    }
-                    isReapplyInProgress = false
-                }
+                cameraSettingsViewModel.setCameraMute(true)
             }
         }
     }
@@ -232,7 +254,7 @@ fun SettingsScreen(
                                     "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
                             } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
                                 showReapplyWirelessDebuggingHelp = true
-                            } else if (!isReapplyInProgress) {
+                            } else if (!operationState.isReapplyInProgress) {
                                 if (!LocalNetworkAccess.isGranted(context)) {
                                     requestLocalNetworkPermission(CameraAction.REAPPLY)
                                 } else {
@@ -447,7 +469,7 @@ fun SettingsScreen(
 
         if (showRestoreConfirm) {
             AlertDialog(
-                onDismissRequest = { if (!isRestoreInProgress) showRestoreConfirm = false },
+                onDismissRequest = { if (!operationState.isRestoreInProgress) showRestoreConfirm = false },
                 title = { Text("카메라 셔터음을 원래대로 복원할까요?") },
                 text = {
                     Text(
@@ -456,49 +478,23 @@ fun SettingsScreen(
                 },
                 confirmButton = {
                     TextButton(
-                        enabled = !isRestoreInProgress,
+                        enabled = !operationState.isRestoreInProgress,
                         onClick = {
-                            if (isRestoreInProgress) return@TextButton
+                            if (operationState.isRestoreInProgress) return@TextButton
                             if (!LocalNetworkAccess.isGranted(context)) {
                                 showRestoreConfirm = false
                                 requestLocalNetworkPermission(CameraAction.RESTORE)
                                 return@TextButton
                             }
-                            isRestoreInProgress = true
-                            coroutineScope.launch {
-                                val result = StandaloneAdbManager.getInstance(context).setCameraMute(false)
-                                val stateRestored = result.isSuccess && CscStateVerifier.waitFor(false) {
-                                    CscMuteManager.isCscShutterSoundMuted(context)
-                                }
-                                if (stateRestored) {
-                                    prefs.shouldMuteOnBoot = false
-                                    isCscMuted = false
-                                    val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
-                                    restoreResultMessage = if (cleanup.isSuccess) {
-                                        "카메라 셔터음을 기본 상태로 복원했습니다."
-                                    } else {
-                                        "카메라 셔터음은 복원했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
-                                    }
-                                } else {
-                                    restoreResultMessage = if (
-                                        result.exceptionOrNull() is LocalNetworkPermissionRequiredException
-                                    ) {
-                                        LOCAL_NETWORK_PERMISSION_MESSAGE
-                                    } else {
-                                        "카메라 셔터음을 복원하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
-                                    }
-                                }
-                                isRestoreInProgress = false
-                                showRestoreConfirm = false
-                            }
+                            cameraSettingsViewModel.setCameraMute(false)
                         }
                     ) {
-                        Text(if (isRestoreInProgress) "복원 중…" else "원래대로 복원")
+                        Text(if (operationState.isRestoreInProgress) "복원 중…" else "원래대로 복원")
                     }
                 },
                 dismissButton = {
                     TextButton(
-                        enabled = !isRestoreInProgress,
+                        enabled = !operationState.isRestoreInProgress,
                         onClick = { showRestoreConfirm = false }
                     ) {
                         Text("취소")
