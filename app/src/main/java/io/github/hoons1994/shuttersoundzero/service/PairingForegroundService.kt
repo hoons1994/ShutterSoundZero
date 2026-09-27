@@ -15,8 +15,8 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import io.github.hoons1994.shuttersoundzero.MainActivity
 import io.github.hoons1994.shuttersoundzero.R
-import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
+import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkPermissionRequiredException
 import io.github.hoons1994.shuttersoundzero.core.adb.PairingCode
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
@@ -88,7 +88,7 @@ class PairingForegroundService : Service() {
 
     private val developerOptionsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
-            if (!CscMuteManager.isDeveloperOptionsEnabled(this@PairingForegroundService)) return
+            if (!DeveloperOptionsManager.isDeveloperOptionsEnabled(this@PairingForegroundService)) return
 
             PairingNotificationHelper.showPairingNotification(
                 this@PairingForegroundService,
@@ -159,7 +159,12 @@ class PairingForegroundService : Service() {
             )
             true
         } catch (e: Exception) {
-            prefs.lastSetupIssue = SetupIssue.PAIRING_DISCOVERY
+            val localNetworkPermissionMissing = e is LocalNetworkPermissionRequiredException
+            prefs.lastSetupIssue = if (localNetworkPermissionMissing) {
+                SetupIssue.LOCAL_NETWORK_PERMISSION
+            } else {
+                SetupIssue.PAIRING_DISCOVERY
+            }
             DiagnosticLogger.record(
                 this,
                 DiagnosticLogger.Stage.PAIRING_DISCOVERY,
@@ -169,7 +174,11 @@ class PairingForegroundService : Service() {
             Log.w(TAG, "Unable to start pairing discovery (${e.javaClass.simpleName})")
             PairingNotificationHelper.showPairingNotification(
                 this,
-                state = PairingNotificationState.DISCOVERY_START_FAILED
+                state = if (localNetworkPermissionMissing) {
+                    PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED
+                } else {
+                    PairingNotificationState.DISCOVERY_START_FAILED
+                }
             )
             false
         }
@@ -341,7 +350,13 @@ class PairingForegroundService : Service() {
                         }
                     } else {
                         commitPairingSideEffect(generation) {
-                            prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
+                            val localNetworkPermissionMissing =
+                                pairResult.exceptionOrNull() is LocalNetworkPermissionRequiredException
+                            prefs.lastSetupIssue = if (localNetworkPermissionMissing) {
+                                SetupIssue.LOCAL_NETWORK_PERMISSION
+                            } else {
+                                SetupIssue.PAIRING_CONNECTION
+                            }
                             DiagnosticLogger.record(
                                 this@PairingForegroundService,
                                 DiagnosticLogger.Stage.PAIRING,
@@ -353,10 +368,13 @@ class PairingForegroundService : Service() {
                             } ?: Log.w(TAG, "Pairing failed")
                             PairingNotificationHelper.showPairingNotification(
                                 this@PairingForegroundService,
-                                pairingPort = port,
-                                state = PairingNotificationState.PAIRING_FAILED
+                                state = if (localNetworkPermissionMissing) {
+                                    PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED
+                                } else {
+                                    PairingNotificationState.PAIRING_FAILED
+                                }
                             )
-                            restartPairingDiscovery()
+                            if (!localNetworkPermissionMissing) restartPairingDiscovery()
                         }
                     }
                     true
@@ -365,7 +383,7 @@ class PairingForegroundService : Service() {
                 currentCoroutineContext().ensureActive()
                 if (timedResult == null) {
                     commitPairingSideEffect(generation) {
-                        prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
+                        prefs.lastSetupIssue = SetupIssue.PAIRING_TIMEOUT
                         DiagnosticLogger.record(
                             this@PairingForegroundService,
                             DiagnosticLogger.Stage.PAIRING_WORKFLOW,
@@ -384,7 +402,12 @@ class PairingForegroundService : Service() {
                 throw e
             } catch (e: Exception) {
                 commitPairingSideEffect(generation) {
-                    prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
+                    val localNetworkPermissionMissing = e is LocalNetworkPermissionRequiredException
+                    prefs.lastSetupIssue = if (localNetworkPermissionMissing) {
+                        SetupIssue.LOCAL_NETWORK_PERMISSION
+                    } else {
+                        SetupIssue.PAIRING_CONNECTION
+                    }
                     DiagnosticLogger.record(
                         this@PairingForegroundService,
                         DiagnosticLogger.Stage.PAIRING_WORKFLOW,
@@ -394,9 +417,13 @@ class PairingForegroundService : Service() {
                     logFailure("Pairing error", e)
                     PairingNotificationHelper.showPairingNotification(
                         this@PairingForegroundService,
-                        state = PairingNotificationState.PAIRING_ERROR
+                        state = if (localNetworkPermissionMissing) {
+                            PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED
+                        } else {
+                            PairingNotificationState.PAIRING_ERROR
+                        }
                     )
-                    restartPairingDiscovery()
+                    if (!localNetworkPermissionMissing) restartPairingDiscovery()
                 }
             } finally {
                 // 이전 세대의 늦은 finally가 새 pairingJob 참조를 지우지 못하게 한다.

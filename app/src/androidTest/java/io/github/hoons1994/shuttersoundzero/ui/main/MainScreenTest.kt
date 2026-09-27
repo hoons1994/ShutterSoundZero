@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -31,11 +33,38 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("처음 한 번만 설정해 주세요").fetchSemanticsNode()
         composeTestRule.onNodeWithText("1회 설정 시작").fetchSemanticsNode()
         composeTestRule.onNodeWithText("1회 설정 진행").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("개발자 옵션 켜기").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("휴대전화 정보 열기").assertHasClickAction()
         composeTestRule.onNodeWithText("무선 디버깅 켜기").fetchSemanticsNode()
         composeTestRule.onNodeWithText("6자리 코드 입력").fetchSemanticsNode()
         composeTestRule.onNodeWithText("카메라 무음 적용").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("간략한 팝업을 사용 중인가요?").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("알림 팝업 설정 열기").assertHasClickAction()
+        assertTrue(
+            composeTestRule.onAllNodesWithText("알림 팝업 설정 열기").fetchSemanticsNodes().isEmpty()
+        )
+    }
+
+    @Test
+    fun developerOptionsStep_opensDeviceInfo() {
+        var opened = false
+        composeTestRule.setContent {
+            HomeContent(
+                uiState = MainUiState(),
+                onOpenSoftwareInfo = { opened = true }
+            )
+        }
+
+        composeTestRule.onNodeWithText("휴대전화 정보 열기").performScrollTo().performClick()
+        assertTrue(opened)
+    }
+
+    @Test
+    fun developerOptionsStep_isMarkedCompleteWhenEnabled() {
+        showHome(MainUiState(isDeveloperOptionsEnabled = true))
+
+        composeTestRule.onNodeWithText("개발자 옵션 켜기").fetchSemanticsNode()
+        assertTrue(
+            composeTestRule.onAllNodesWithText("휴대전화 정보 열기").fetchSemanticsNodes().isEmpty()
+        )
     }
 
     @Test
@@ -85,6 +114,7 @@ class MainScreenTest {
     fun pairingFailure_isShownInlineAtCodeStep() {
         showHome(
             MainUiState(
+                isDeveloperOptionsEnabled = true,
                 isWirelessDebuggingEnabled = true,
                 setupIssue = SetupIssue.PAIRING_CODE
             )
@@ -94,15 +124,57 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("1회 설정을 다시 진행해 주세요").fetchSemanticsNode()
         composeTestRule.onNodeWithText("1회 설정 다시 시작").fetchSemanticsNode()
         composeTestRule.onNodeWithText(
-            "코드가 만료되었거나 일치하지 않았습니다. 새 6자리 코드를 확인해 다시 입력해 주세요."
+            "숫자 6자리를 정확히 입력해 주세요. 연결 화면의 코드가 바뀌었다면 새 코드를 사용해 주세요."
         ).fetchSemanticsNode()
         composeTestRule.onNodeWithText("알림 팝업 설정 열기").assertHasClickAction()
+    }
+
+    @Test
+    fun discoveryFailure_showsWirelessDebuggingRecovery() {
+        showHome(MainUiState(
+            isDeveloperOptionsEnabled = true,
+            setupIssue = SetupIssue.PAIRING_DISCOVERY
+        ))
+
+        composeTestRule.onNodeWithText(
+            "페어링 연결 화면을 찾지 못했습니다. Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 다시 열어 둔 채 시도해 주세요."
+        ).fetchSemanticsNode()
+    }
+
+    @Test
+    fun connectionFailure_explainsChangedPairingPort() {
+        showHome(MainUiState(
+            isDeveloperOptionsEnabled = true,
+            setupIssue = SetupIssue.PAIRING_CONNECTION
+        ))
+
+        composeTestRule.onNodeWithText(
+            "기기에 연결하지 못했습니다. 페어링 창이 닫혔거나 연결 정보가 바뀌었을 수 있습니다. 창을 다시 열고 새 6자리 코드로 시도해 주세요."
+        ).fetchSemanticsNode()
+    }
+
+    @Test
+    fun localNetworkPermissionFailure_opensAppSettings() {
+        var opened = false
+        composeTestRule.setContent {
+            HomeContent(
+                uiState = MainUiState(setupIssue = SetupIssue.LOCAL_NETWORK_PERMISSION),
+                onOpenAppSettings = { opened = true }
+            )
+        }
+
+        composeTestRule.onNodeWithText(
+            "Android 17에서 기기를 찾으려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용한 뒤 1회 설정을 다시 시작해 주세요."
+        ).fetchSemanticsNode()
+        composeTestRule.onNodeWithText("앱 권한 설정 열기").performScrollTo().performClick()
+        assertTrue(opened)
     }
 
     @Test
     fun cameraApplyFailure_isShownInlineAtApplyStep() {
         showHome(
             MainUiState(
+                isDeveloperOptionsEnabled = true,
                 setupIssue = SetupIssue.CAMERA_APPLY
             )
         )

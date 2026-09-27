@@ -49,7 +49,7 @@ object DiagnosticReportBuilder {
             appendLine("[현재 상태]")
             appendLine("WRITE_SECURE_SETTINGS: ${yesNo(CscMuteManager.hasWritePermission(context))}")
             appendLine("CSC 카메라 무음: ${yesNo(CscMuteManager.isCscShutterSoundMuted(context))}")
-            appendLine("개발자 옵션: ${yesNo(CscMuteManager.isDeveloperOptionsEnabled(context))}")
+            appendLine("개발자 옵션: ${yesNo(DeveloperOptionsManager.isDeveloperOptionsEnabled(context))}")
             appendLine("무선 디버깅: ${yesNo(DeveloperOptionsManager.isWirelessDebuggingEnabled(context))}")
             appendLine("저장된 ADB 연결 정보: ${if (prefs.lastConnectPort in 1..65535) "있음" else "없음"}")
             appendLine()
