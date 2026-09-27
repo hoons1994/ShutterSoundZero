@@ -162,7 +162,7 @@ class BootReceiver : BroadcastReceiver() {
             Log.i(TAG, "Permission linkage was revoked by user")
             showNotification(
                 context,
-                "소프트웨어 업데이트가 감지되었습니다. 권한 연동이 해제되어 있습니다. 무선 디버깅을 켠 뒤 [1회 설정 시작]을 다시 진행해 주세요."
+                context.getString(R.string.boot_software_updated_linkage_revoked)
             )
             return
         }
@@ -177,9 +177,9 @@ class BootReceiver : BroadcastReceiver() {
         showNotification(
             context,
             if (hasPermission) {
-                "소프트웨어 업데이트 후 카메라 무음 설정이 초기화되었습니다. 무선 디버깅을 켠 뒤 설정 → 카메라 설정에서 [카메라 무음 다시 적용]을 눌러 주세요."
+                context.getString(R.string.boot_software_updated_mute_reset_permission_present)
             } else {
-                "소프트웨어 업데이트 후 카메라 무음 설정과 권한 연동이 초기화되었습니다. 무선 디버깅을 켠 뒤 [1회 설정 시작]을 다시 진행해 주세요."
+                context.getString(R.string.boot_software_updated_mute_reset_permission_missing)
             }
         )
     }
@@ -215,7 +215,7 @@ class BootReceiver : BroadcastReceiver() {
         Log.w(TAG, "App updated; expected WRITE_SECURE_SETTINGS permission is missing")
         showNotification(
             context,
-            "앱 업데이트 후 권한 연동 상태를 확인한 결과 보안 설정 변경 권한이 유지되지 않았습니다. 무선 디버깅을 켠 뒤 [1회 설정 시작]을 다시 진행해 주세요."
+            context.getString(R.string.boot_app_update_linkage_lost)
         )
     }
 
@@ -231,9 +231,9 @@ class BootReceiver : BroadcastReceiver() {
         showNotification(
             context,
             if (hasPermission) {
-                "재부팅 후 카메라 무음 설정이 초기화되었습니다. 무선 디버깅을 켠 뒤 설정 → 카메라 설정에서 [카메라 무음 다시 적용]을 눌러 주세요."
+                context.getString(R.string.boot_reboot_mute_reset_permission_present)
             } else {
-                "재부팅 후 카메라 무음 설정과 권한 상태를 확인해야 합니다. 무선 디버깅을 켠 뒤 [1회 설정 시작]을 다시 진행해 주세요."
+                context.getString(R.string.boot_reboot_mute_reset_permission_missing)
             }
         )
     }
@@ -291,10 +291,10 @@ class BootReceiver : BroadcastReceiver() {
     private fun createNotificationChannel(context: Context) {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "카메라 무음 상태 알림",
+            context.getString(R.string.boot_notification_channel_name),
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "재부팅·소프트웨어 업데이트 후 카메라 무음 상태 확인 및 재적용 안내"
+            description = context.getString(R.string.boot_notification_channel_description)
         }
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         manager?.createNotificationChannel(channel)

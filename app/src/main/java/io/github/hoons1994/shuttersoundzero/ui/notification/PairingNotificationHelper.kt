@@ -46,10 +46,10 @@ object PairingNotificationHelper {
     fun createNotificationChannel(context: Context) {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "1회 설정 안내",
+            context.getString(R.string.pairing_channel_name),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "기기 연결과 6자리 코드 입력 등 1회 설정 진행 상태를 안내합니다."
+            description = context.getString(R.string.pairing_channel_description)
             setShowBadge(true)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 200, 100, 200)
@@ -76,7 +76,7 @@ object PairingNotificationHelper {
         createNotificationChannel(context)
 
         val remoteInput = RemoteInput.Builder(KEY_PAIRING_CODE)
-            .setLabel("6자리 코드 (예: 123456)")
+            .setLabel(context.getString(R.string.pairing_code_input_hint))
             .setAllowFreeFormInput(true)
             .build()
 
@@ -97,7 +97,7 @@ object PairingNotificationHelper {
 
         val replyAction = NotificationCompat.Action.Builder(
             R.mipmap.ic_launcher,
-            "코드 입력",
+            context.getString(R.string.pairing_action_enter_code),
             submitPendingIntent
         )
             .addRemoteInput(remoteInput)
@@ -111,11 +111,12 @@ object PairingNotificationHelper {
         )
         val cancelAction = NotificationCompat.Action.Builder(
             R.mipmap.ic_launcher,
-            "취소",
+            context.getString(R.string.action_cancel),
             cancelPendingIntent
         ).build()
 
         val copy = resolvePairingNotificationCopy(
+            context = context,
             pairingPort = pairingPort,
             state = state,
             isDevOptionsOff = isDevOptionsOff
@@ -153,58 +154,51 @@ object PairingNotificationHelper {
     }
 
     private fun resolvePairingNotificationCopy(
+        context: Context,
         pairingPort: Int?,
         state: PairingNotificationState?,
         isDevOptionsOff: Boolean
     ): PairingNotificationCopy {
         val defaultSummary = when {
-            isDevOptionsOff -> "[소프트웨어 정보]에서 [빌드번호]를 7번 눌러 개발자 옵션을 켜 주세요."
-            pairingPort != null -> "화면에 표시된 6자리 코드를 [코드 입력]에 입력해 주세요."
-            else -> "무선 디버깅에서 [페어링 코드로 기기 페어링]을 열어 주세요."
+            isDevOptionsOff -> context.getString(R.string.pairing_default_dev_options_summary)
+            pairingPort != null -> context.getString(R.string.pairing_default_code_summary)
+            else -> context.getString(R.string.pairing_default_open_pairing_summary)
         }
         val defaultBigText = when {
-            isDevOptionsOff ->
-                "휴대전화 정보의 [소프트웨어 정보]에서 [빌드번호]를 7번 눌러 개발자 옵션을 켜 주세요."
-            pairingPort != null ->
-                "연결 화면을 찾았습니다. 화면에 표시된 6자리 코드를 아래 [코드 입력]에 입력해 주세요."
-            else ->
-                "[무선 디버깅] → [페어링 코드로 기기 페어링] 화면을 연 뒤 상단 알림의 [코드 입력]을 사용해 주세요."
+            isDevOptionsOff -> context.getString(R.string.pairing_default_dev_options_detail)
+            pairingPort != null -> context.getString(R.string.pairing_default_code_detail)
+            else -> context.getString(R.string.pairing_default_open_pairing_detail)
         }
 
         if (state == null) {
             val title = when {
-                isDevOptionsOff -> "1회 설정 준비"
-                pairingPort != null -> "6자리 코드 입력"
-                else -> "1회 설정 진행"
+                isDevOptionsOff -> context.getString(R.string.pairing_title_setup_ready)
+                pairingPort != null -> context.getString(R.string.pairing_title_code_entry)
+                else -> context.getString(R.string.pairing_title_setup_in_progress)
             }
             return PairingNotificationCopy(title, defaultSummary, defaultBigText)
         }
 
         val stateTitle = when (state) {
-            PairingNotificationState.DEVELOPER_OPTIONS_READY -> "개발자 옵션 준비 완료"
-            PairingNotificationState.DISCOVERY_START_FAILED -> "⚠️ 1회 설정을 시작하지 못했습니다."
-            PairingNotificationState.INVALID_PAIRING_CODE -> "⚠️ 숫자 6자리 페어링 코드를 정확히 입력해 주세요."
-            PairingNotificationState.DISCOVERY_WAITING ->
-                "⏳ 연결 화면을 찾고 있습니다. 6자리 코드를 다시 입력해 주세요."
-            PairingNotificationState.CAMERA_APPLY_FAILED ->
-                "⚠️ 기기 연결은 완료됐지만 카메라 무음 설정을 적용하지 못했습니다."
-            PairingNotificationState.PAIRING_FAILED ->
-                "❌ 기기 연결에 실패했습니다. 6자리 코드를 확인해 다시 입력해 주세요."
-            PairingNotificationState.PAIRING_TIMEOUT ->
-                "⏱️ 입력 시간이 초과되었습니다. 6자리 코드를 다시 입력해 주세요."
-            PairingNotificationState.PAIRING_ERROR ->
-                "❌ 기기 연결 중 문제가 발생했습니다. 홈 화면의 안내를 확인해 주세요."
+            PairingNotificationState.DEVELOPER_OPTIONS_READY -> context.getString(R.string.pairing_state_developer_options_ready)
+            PairingNotificationState.DISCOVERY_START_FAILED -> context.getString(R.string.pairing_state_discovery_start_failed)
+            PairingNotificationState.INVALID_PAIRING_CODE -> context.getString(R.string.pairing_state_invalid_code)
+            PairingNotificationState.DISCOVERY_WAITING -> context.getString(R.string.pairing_state_discovery_waiting)
+            PairingNotificationState.CAMERA_APPLY_FAILED -> context.getString(R.string.pairing_state_camera_apply_failed)
+            PairingNotificationState.PAIRING_FAILED -> context.getString(R.string.pairing_state_failed)
+            PairingNotificationState.PAIRING_TIMEOUT -> context.getString(R.string.pairing_state_timeout)
+            PairingNotificationState.PAIRING_ERROR -> context.getString(R.string.pairing_state_error)
         }
 
         if (state == PairingNotificationState.DEVELOPER_OPTIONS_READY) {
-            val nextStep = "무선 디버깅을 켠 뒤 [페어링 코드로 기기 페어링]을 열어 주세요."
+            val nextStep = context.getString(R.string.pairing_state_next_step)
             return PairingNotificationCopy(stateTitle, nextStep, nextStep)
         }
 
         val bigText = if (pairingPort != null) {
-            "[코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요."
+            context.getString(R.string.pairing_code_entry_detail)
         } else {
-            "홈 화면의 안내에 따라 1회 설정을 계속해 주세요."
+            context.getString(R.string.pairing_continue_setup_detail)
         }
         return PairingNotificationCopy(stateTitle, defaultSummary, bigText)
     }
@@ -240,8 +234,8 @@ object PairingNotificationHelper {
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("카메라 무음 설정 적용 중 ⏳")
-            .setContentText("기기 연결을 확인하고 카메라 설정을 적용하고 있습니다.")
+            .setContentTitle(context.getString(R.string.pairing_progress_title))
+            .setContentText(context.getString(R.string.pairing_progress_text))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -281,12 +275,17 @@ object PairingNotificationHelper {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("${context.getString(R.string.app_name)}: 설정 완료 ✨")
+            .setContentTitle(
+                context.getString(
+                    R.string.pairing_success_title,
+                    context.getString(R.string.app_name)
+                )
+            )
             .setContentText(
                 if (wirelessDebuggingDisabled) {
-                    "카메라 무음 설정이 완료되었습니다. 앱을 계속 열어둘 필요가 없습니다."
+                    context.getString(R.string.pairing_success_wireless_disabled)
                 } else {
-                    "카메라 무음 설정은 완료되었습니다. 기기 설정에서 무선 디버깅을 직접 꺼 주세요."
+                    context.getString(R.string.pairing_success_disable_wireless_manually)
                 }
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -306,8 +305,18 @@ object PairingNotificationHelper {
     private fun buildRedactedPublicVersion(context: Context, completed: Boolean): Notification {
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(if (completed) "ShutterSoundZero 알림" else "1회 설정 진행 중")
-            .setContentText(if (completed) "앱을 열어 결과를 확인하세요." else "설정을 계속하려면 기기를 잠금 해제하세요.")
+            .setContentTitle(
+                context.getString(
+                    if (completed) R.string.pairing_public_title_completed
+                    else R.string.pairing_public_title_in_progress
+                )
+            )
+            .setContentText(
+                context.getString(
+                    if (completed) R.string.pairing_public_text_completed
+                    else R.string.pairing_public_text_in_progress
+                )
+            )
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(!completed)

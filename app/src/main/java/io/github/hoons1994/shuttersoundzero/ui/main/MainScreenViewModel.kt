@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
@@ -96,7 +97,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         CscMuteManager.openPairingSetupScreen(context)
         _uiState.update {
             it.copy(
-                infoMessage = "[페어링 코드로 기기 페어링] 화면에서 알림의 [코드 입력]을 사용해 6자리 코드를 입력해 주세요."
+                infoMessage = context.getString(R.string.main_pairing_code_entry_guidance)
             )
         }
     }
@@ -110,14 +111,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
         if (!CscMuteManager.isSamsungDevice()) {
             _uiState.update {
-                it.copy(errorMessage = "이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.")
+                it.copy(errorMessage = app.getString(R.string.main_non_samsung_device_error))
             }
             return
         }
 
         if (!CscMuteManager.hasWritePermission(app)) {
             _uiState.update {
-                it.copy(errorMessage = "보안 설정 변경 권한이 필요합니다. 아래 [1회 설정 시작]을 진행해 주세요.")
+                it.copy(errorMessage = app.getString(R.string.main_write_secure_settings_required))
             }
             return
         }
@@ -127,7 +128,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 it.copy(
                     showSwitchFailureHelp = false,
                     infoMessage = null,
-                    errorMessage = "Android 17에서 무선 ADB를 사용하려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용해 주세요."
+                    errorMessage = app.getString(R.string.main_local_network_permission_required)
                 )
             }
             return
@@ -167,13 +168,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                         setupIssue = prefs.lastSetupIssue,
                         infoMessage = when {
                             enableMute && wirelessCleanup.isSuccess ->
-                                "카메라 무음 설정을 적용했고 무선 디버깅도 껐습니다."
+                                app.getString(R.string.main_mute_applied_wireless_disabled)
                             !enableMute && wirelessCleanup.isSuccess ->
-                                "카메라 셔터음을 기본 상태로 복원했고 무선 디버깅도 껐습니다."
+                                app.getString(R.string.main_restore_applied_wireless_disabled)
                             enableMute ->
-                                "카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요."
+                                app.getString(R.string.main_mute_applied_disable_wireless_manually)
                             else ->
-                                "카메라 셔터음은 기본 상태로 복원됐습니다. 무선 디버깅은 직접 꺼 주세요."
+                                app.getString(R.string.main_restore_applied_disable_wireless_manually)
                         },
                         errorMessage = null,
                         showWirelessDebuggingCleanupHelp = wirelessCleanup.isFailure
@@ -209,7 +210,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.update {
                 it.copy(
                     infoMessage = null,
-                    errorMessage = "Android 17에서 권한 연동을 해제하려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용해 주세요."
+                    errorMessage = app.getString(R.string.main_reset_local_network_permission_required)
                 )
             }
             return
@@ -225,13 +226,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 if (result.isSuccess) {
                     it.copy(
                         setupIssue = null,
-                        infoMessage = "권한 연동이 해제되었습니다. 다시 연동하려면 아래 버튼을 눌러주세요.",
+                        infoMessage = app.getString(R.string.main_permission_reset_success),
                         errorMessage = null
                     )
                 } else {
                     it.copy(
                         infoMessage = null,
-                        errorMessage = "권한 연동 해제에 실패했습니다. 무선 디버깅을 켠 뒤 다시 시도해 주세요."
+                        errorMessage = app.getString(R.string.main_permission_reset_failed)
                     )
                 }
             }
