@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.5.4-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.5.6-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터사운드 제로 안내 인포그래픽" width="720" />
@@ -19,13 +19,13 @@
 
 접근성 서비스를 이용해 화면이나 카메라 실행을 상시 감시하지 않습니다. 최초 1회 로컬 무선 ADB로 `WRITE_SECURE_SETTINGS` 권한을 연동한 뒤, 필요할 때만 무선 디버깅을 켜서 실제 CSC 값을 변경합니다.
 
-현재 최신 안정 버전은 v1.5.4입니다.
+현재 최신 안정 버전은 v1.5.6입니다.
 
 ## 📱 다운로드
 
 - 최신 APK: [GitHub Releases](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 - 지원 환경: 삼성 갤럭시 / Android 11 이상
-- v1.5.3 이하에서 전환: v1.5.4는 새 패키지 ID와 새 서명키를 사용하므로 기존 앱 위에 설치할 수 없습니다. 기존 앱을 삭제한 뒤 v1.5.4를 새로 설치하고 1회 설정을 다시 진행해 주세요.
+- v1.5.3 이하에서 전환: v1.5.6은 새 패키지 ID와 새 서명키를 사용하므로 기존 앱 위에 설치할 수 없습니다. 기존 앱을 삭제한 뒤 v1.5.6을 새로 설치하고 1회 설정을 다시 진행해 주세요.
 
 ## ✨ 주요 기능
 
@@ -41,6 +41,7 @@
 - 첫 실행 중요 안내 / 도움말 — 신규 설치에서는 핵심 안내를 먼저 보여주고, 자세한 설명은 설정의 질문형 도움말에서 확인할 수 있습니다.
 - 앱 잠금 — 생체인증 또는 기기 PIN·패턴·비밀번호로 앱 접근을 보호하며, 잠금이 켜진 동안 최근 앱 미리보기와 스크린샷 노출도 차단합니다.
 - 수동 앱 업데이트 — 설정에서 GitHub Releases 페이지를 열어 사용자가 원하는 버전을 직접 확인하고 설치합니다.
+- 개발자 문의·후원 — 설정 도움말에서 카카오톡 오픈채팅으로 문의하거나 개발자 후원 링크를 열 수 있습니다.
 - 상주 감시 서비스 없음 — 카메라 권한이나 접근성 기반 상주 서비스를 사용하지 않습니다.
 
 ## 🚀 처음 1회 설정
@@ -100,7 +101,7 @@ pm grant --user <user-id> <package-name> android.permission.WRITE_SECURE_SETTING
 - 카메라 권한을 요구하지 않습니다.
 - 화면·카메라 동작을 상시 감시하지 않습니다.
 - 무선 ADB 연결은 기기 내부 로컬 연결 용도로 사용합니다.
-- APK 업데이트 시 해시와 서명 연속성을 검증합니다.
+- 앱 내부에서는 APK를 다운로드하거나 설치하지 않으며, 업데이트는 GitHub Releases 페이지에서 사용자가 직접 진행합니다.
 
 ## ⚠️ 사용 시 유의사항
 

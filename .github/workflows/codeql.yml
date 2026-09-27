@@ -63,7 +63,7 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK tools
-        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
           packages: ''
 
@@ -96,11 +96,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
-          # Stable CodeQL 2.27.0 rejects Kotlin 2.4.20. Support is already merged
-          # upstream and will ship in 2.27.1; keep the patched Kotlin compiler.
-          tools: nightly
           languages: java-kotlin
           build-mode: manual
           queries: security-extended
@@ -109,6 +106,6 @@ jobs:
         run: ./gradlew clean assembleDebug --rerun-tasks --no-build-cache --no-configuration-cache --no-daemon --stacktrace
 
       - name: Analyze with CodeQL
-        uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           category: /language:java-kotlin

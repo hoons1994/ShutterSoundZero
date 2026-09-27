@@ -7,7 +7,6 @@ Shutter Sound Zero에 관심을 가져주셔서 감사합니다.
 ## 기여 전에 확인해 주세요
 
 - 일반 버그는 GitHub의 **Bug report** Issue Form을 사용해 주세요.
-- 새로운 Galaxy 기기나 One UI 버전의 동작 결과는 **Device compatibility report** Issue Form을 사용해 주세요.
 - 보안 취약점은 공개 Issue에 자세한 재현 정보나 민감정보를 올리지 말고 [`SECURITY.md`](SECURITY.md)의 절차를 따라 주세요.
 - IMEI, 일련번호, Wi-Fi 비밀번호, 무선 디버깅 페어링 코드, RSA 개인키, keystore, 서명 비밀번호 같은 민감정보를 Issue, PR, 로그, 스크린샷에 포함하지 마세요.
 
@@ -35,7 +34,7 @@ fix/android17-local-network
 fix/reboot-restore
 refactor/adb-manager
 chore/update-compose
-docs/update-compatibility
+docs/update-testing-guide
 ci/android-validation
 ```
 
@@ -181,8 +180,6 @@ Android 프레임워크와 분리 가능한 로직은 가능한 한 순수 Kotli
 - Android 보안 패치 수준
 - Shutter Sound Zero 버전
 - 테스트한 기능과 결과
-
-호환성 결과는 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)에 반영될 수 있습니다.
 
 ## Pull Request 절차
 
