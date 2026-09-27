@@ -9,7 +9,7 @@ import android.util.Log
 import java.util.IdentityHashMap
 
 /** Process-lifetime coordinator; it stores only an application-context NsdManager, never an Activity. */
-internal class SharedNsdResolver private constructor(private val manager: NsdManager) {
+internal class SharedNsdResolver private constructor(private val manager: NsdManager) : AdbNsdResolver {
     private val handler = Handler(Looper.getMainLooper())
     private val listeners = IdentityHashMap<SerialResolutionQueue.Attempt<NsdServiceInfo>, NsdManager.ResolveListener>()
     private val queue = SerialResolutionQueue<NsdServiceInfo>(
@@ -18,13 +18,13 @@ internal class SharedNsdResolver private constructor(private val manager: NsdMan
         schedule = { delay, action -> handler.postDelayed({ safely(action) }, delay) }
     )
 
-    fun resolve(owner: Any, info: NsdServiceInfo, isActive: () -> Boolean, onResolved: (NsdServiceInfo) -> Unit, onFailure: (Int) -> Unit) {
+    override fun resolve(owner: Any, info: NsdServiceInfo, isActive: () -> Boolean, onResolved: (NsdServiceInfo) -> Unit, onFailure: (Int) -> Unit) {
         handler.post { safely {
             if (isActive()) queue.submit(owner, key(info), info, onResolved, onFailure)
         } }
     }
 
-    fun cancel(owner: Any, info: NsdServiceInfo? = null) {
+    override fun cancel(owner: Any, info: NsdServiceInfo?) {
         handler.post { safely { queue.cancel(owner, info?.let(::key)) } }
     }
 

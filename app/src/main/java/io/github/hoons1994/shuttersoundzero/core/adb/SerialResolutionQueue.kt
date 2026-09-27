@@ -47,7 +47,7 @@ internal class SerialResolutionQueue<T>(
         active?.takeIf { matches(it.request) && !it.request.cancelled }?.let {
             it.request.cancelled = true
             it.request.detach()
-            // Keep the native slot until a terminal callback. Pre-34 Android cannot cancel resolve.
+            // Keep the slot until a terminal callback or the isolated native client has died.
             stop(it)
         }
     }

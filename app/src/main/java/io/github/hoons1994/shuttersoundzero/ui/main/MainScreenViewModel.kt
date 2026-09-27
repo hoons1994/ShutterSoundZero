@@ -85,8 +85,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun startNotificationPairing(context: Context) {
         prefs.clearTransientAdbConnectionState()
         prefs.lastSetupIssue = null
-        adbManager.lastDiscoveredPairingPort = null
-        adbManager.lastDiscoveredConnectPort = null
+        adbManager.clearDiscoveredPorts()
         _uiState.update { it.copy(setupIssue = null) }
         startPairingNow(context)
     }

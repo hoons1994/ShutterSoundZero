@@ -58,6 +58,10 @@ class ManifestSecurityContractInstrumentedTest {
             appComponent("service.PairingForegroundService"),
             0,
         )
+        val legacyNsdWorker = packageManager.getServiceInfo(
+            appComponent("core.adb.LegacyNsdResolveService"),
+            0,
+        )
         val bootReceiver = packageManager.getReceiverInfo(
             appComponent("receiver.BootReceiver"),
             0,
@@ -69,6 +73,8 @@ class ManifestSecurityContractInstrumentedTest {
 
         assertFalse(tileAuthenticationActivity.exported)
         assertFalse(pairingForegroundService.exported)
+        assertFalse(legacyNsdWorker.exported)
+        assertEquals("${targetContext.packageName}:nsd_resolver", legacyNsdWorker.processName)
         assertFalse(bootReceiver.exported)
         assertFalse(pairingNotificationReceiver.exported)
     }

@@ -17,6 +17,7 @@ import io.github.hoons1994.shuttersoundzero.MainActivity
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
+import io.github.hoons1994.shuttersoundzero.core.adb.PairingCode
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
@@ -177,7 +178,7 @@ class PairingForegroundService : Service() {
     private fun submitPairingCode(code: String) {
         val pairingPort = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
 
-        if (code.length != 6 || !code.all(Char::isDigit)) {
+        if (!PairingCode.isValid(code)) {
             prefs.lastSetupIssue = SetupIssue.PAIRING_CODE
             DiagnosticLogger.record(
                 this,
