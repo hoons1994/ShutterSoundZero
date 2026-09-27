@@ -33,7 +33,8 @@ class ManifestSecurityContractInstrumentedTest {
         )
 
         assertTrue(provider.exported)
-        assertEquals("android.permission.DUMP", provider.permission)
+        assertEquals("android.permission.DUMP", provider.readPermission)
+        assertEquals("android.permission.DUMP", provider.writePermission)
     }
 
     @Test
@@ -89,3 +90,4 @@ class ManifestSecurityContractInstrumentedTest {
     private fun appComponent(className: String): ComponentName =
         ComponentName(targetContext.packageName, targetContext.packageName + "." + className)
 }
+
