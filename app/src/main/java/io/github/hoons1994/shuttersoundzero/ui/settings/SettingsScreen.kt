@@ -71,6 +71,8 @@ import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
+import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
+import io.github.hoons1994.shuttersoundzero.ui.components.CameraMuteFailureDialog
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
 import io.github.hoons1994.shuttersoundzero.security.AppLockSession
@@ -120,6 +122,7 @@ fun SettingsScreen(
     var showReapplyWirelessDebuggingHelp by remember { mutableStateOf(false) }
     var showRestoreWirelessDebuggingHelp by remember { mutableStateOf(false) }
     var restoreResultMessage by remember { mutableStateOf<String?>(null) }
+    var cameraMuteFailure by remember { mutableStateOf<CameraMuteFailure?>(null) }
     var isCscMuted by remember { mutableStateOf(CscMuteManager.isCscShutterSoundMuted(context)) }
     var pendingLocalNetworkAction by remember { mutableStateOf<CameraAction?>(null) }
 
@@ -151,7 +154,8 @@ fun SettingsScreen(
         if (operationState.completionId > 0 && operationState.resultMessage != null) {
             showRestoreConfirm = false
             operationState.appliedMutedState?.let { isCscMuted = it }
-            restoreResultMessage = operationState.resultMessage
+            cameraMuteFailure = operationState.failure
+            restoreResultMessage = if (cameraMuteFailure == null) operationState.resultMessage else null
             cameraSettingsViewModel.consumeCompletion()
         }
     }
@@ -246,7 +250,7 @@ fun SettingsScreen(
                     )
                 } else {
                     ClickableRow(
-                        title = "카메라 무음 다시 적용",
+                        title = if (operationState.isReapplyInProgress) "카메라 무음 다시 적용 중…" else "카메라 무음 다시 적용",
                         subtitle = "카메라 설정이 기본 상태로 돌아온 경우 사용",
                         onClick = {
                             if (!CscMuteManager.hasWritePermission(context)) {
@@ -502,6 +506,25 @@ fun SettingsScreen(
                 },
                 shape = RoundedCornerShape(20.dp),
                 containerColor = MaterialTheme.colorScheme.surface
+            )
+        }
+
+        cameraMuteFailure?.let { failure ->
+            CameraMuteFailureDialog(
+                failure = failure,
+                onDismiss = { cameraMuteFailure = null },
+                onReconnect = onBackClick,
+                reconnectLabel = "홈에서 다시 연결",
+                onOpenSettings = {
+                    if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
+                        context.startActivity(Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", context.packageName, null)
+                        ))
+                    } else {
+                        SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
+                    }
+                }
             )
         }
 

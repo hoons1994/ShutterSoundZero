@@ -24,6 +24,12 @@ object DiagnosticLogger {
         PAIRING_CODE_SUBMITTED,
         PAIRING,
         ADB_PERMISSION_AND_CSC_APPLY,
+        ADB_CONNECT_DISCOVERY,
+        ADB_CONNECT,
+        CSC_WRITE,
+        CSC_VERIFY,
+        CSC_REAPPLY,
+        CSC_RESTORE,
         WIRELESS_DEBUGGING_CLEANUP,
         PAIRING_WORKFLOW
     }
@@ -33,7 +39,8 @@ object DiagnosticLogger {
         INFO,
         SUCCESS,
         FAILURE,
-        TIMEOUT
+        TIMEOUT,
+        CANCELLED
     }
 
     private const val DIRECTORY_NAME = "diagnostics"

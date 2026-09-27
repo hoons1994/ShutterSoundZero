@@ -10,6 +10,7 @@ import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
+import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 
@@ -96,7 +97,7 @@ internal object CameraMuteTileAction {
                 )
                 showMessage(
                     appContext,
-                    appContext.getString(R.string.tile_action_apply_failed)
+                    CameraMuteFailure.from(result.exceptionOrNull()).message + " 앱 홈에서 복구를 진행해 주세요."
                 )
             }
         } finally {
