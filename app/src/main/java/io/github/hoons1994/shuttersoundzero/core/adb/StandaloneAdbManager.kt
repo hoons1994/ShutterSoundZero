@@ -80,8 +80,10 @@ class StandaloneAdbManager(context: Context) {
         onCleanupFailure = { logFailure("ADB resource cleanup failed", it) }
     )
 
-    @Volatile var lastDiscoveredPairingPort: Int? = null
-    @Volatile var lastDiscoveredConnectPort: Int? = null
+    private val pairingDiscoveryPorts = PairingDiscoveryPortState()
+    val lastDiscoveredPairingPort: Int? get() = pairingDiscoveryPorts.pairingPort
+    val lastDiscoveredConnectPort: Int? get() = pairingDiscoveryPorts.connectPort
+    fun clearDiscoveredPorts() = pairingDiscoveryPorts.clearPorts()
     private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
     private val multicastLeaseManager by lazy {
         MulticastLockLeaseManager(::acquireMulticastLockResource, ::releaseMulticastLockResource)
@@ -89,22 +91,18 @@ class StandaloneAdbManager(context: Context) {
     private var pairingMulticastLease: MulticastLockLeaseManager.Lease? = null
     private var pairingMdns: SafeAdbMdnsDiscovery? = null
     private var pairingConnectMdns: SafeAdbMdnsDiscovery? = null
-    @Volatile private var isPairingDiscoveryActive = false
-
     @Synchronized
     fun startPairingDiscovery(onPairingPortDiscovered: (Int) -> Unit, onConnectPortDiscovered: (Int) -> Unit) {
         LocalNetworkAccess.requireGranted(context)
         stopPairingDiscovery()
-        lastDiscoveredPairingPort = null
-        lastDiscoveredConnectPort = null
-        isPairingDiscoveryActive = true
+        val session = pairingDiscoveryPorts.begin()
         try {
             pairingMulticastLease = multicastLeaseManager.acquire()
             pairingMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_PAIRING) { _, port ->
-                if (isPairingDiscoveryActive) onPairingPortDiscovered(port)
+                pairingDiscoveryPorts.onPairingPort(session, port, onPairingPortDiscovered)
             }
             pairingConnectMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT) { _, port ->
-                if (isPairingDiscoveryActive) onConnectPortDiscovered(port)
+                pairingDiscoveryPorts.onConnectPort(session, port, onConnectPortDiscovered)
             }
         } catch (error: Exception) {
             stopPairingDiscovery()
@@ -114,7 +112,7 @@ class StandaloneAdbManager(context: Context) {
 
     @Synchronized
     fun stopPairingDiscovery() {
-        isPairingDiscoveryActive = false
+        pairingDiscoveryPorts.stop()
         val pairing = pairingMdns
         val connect = pairingConnectMdns
         pairingMdns = null
@@ -135,8 +133,6 @@ class StandaloneAdbManager(context: Context) {
         return SafeAdbMdnsDiscovery(context, serviceType, onFailure) { address, port ->
             if (LocalAdbEndpointPolicy.isLocalDeviceAddress(address) && port in 1..65535) {
                 logSensitive { "Local mDNS endpoint: $address:$port for $serviceType" }
-                if (serviceType == SERVICE_TYPE_TLS_PAIRING) lastDiscoveredPairingPort = port
-                else if (serviceType == SERVICE_TYPE_TLS_CONNECT) lastDiscoveredConnectPort = port
                 onDiscovered(address, port)
             } else {
                 Log.w(TAG, "Ignoring invalid or non-local mDNS service")
@@ -317,7 +313,7 @@ class StandaloneAdbManager(context: Context) {
 
     private fun rememberConnectedPort(port: Int) {
         if (port !in 1..65535) return
-        lastDiscoveredConnectPort = port
+        pairingDiscoveryPorts.rememberConnectedPort(port)
         PreferencesRepository.getInstance(context).lastConnectPort = port
     }
 
