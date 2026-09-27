@@ -2,6 +2,7 @@ package io.github.hoons1994.shuttersoundzero.ui.main
 
 import android.app.Application
 import android.content.Context
+import android.media.AudioManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.hoons1994.shuttersoundzero.R
@@ -30,12 +31,22 @@ data class MainUiState(
     val infoMessage: String? = null,
     val errorMessage: String? = null,
     val showSwitchFailureHelp: Boolean = false,
-    val showWirelessDebuggingCleanupHelp: Boolean = false
+    val showWirelessDebuggingCleanupHelp: Boolean = false,
+    val systemVolume: SystemVolumeUiState = SystemVolumeUiState()
+)
+
+data class SystemVolumeUiState(
+    val current: Int? = null,
+    val min: Int = 0,
+    val max: Int = 0,
+    val isFixed: Boolean = false,
+    val error: String? = null
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = PreferencesRepository.getInstance(application)
     private val adbManager = StandaloneAdbManager.getInstance(application)
+    private val audioManager = application.getSystemService(AudioManager::class.java)
 
     private val _uiState = MutableStateFlow(createInitialState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -56,7 +67,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             setupIssue = prefs.lastSetupIssue,
             adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
             adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
-            adbCheckCommand = CscMuteManager.getAdbCheckCommand()
+            adbCheckCommand = CscMuteManager.getAdbCheckCommand(),
+            systemVolume = readSystemVolume()
         )
     }
 
@@ -77,9 +89,44 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 setupIssue = prefs.lastSetupIssue,
                 adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
                 adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
-                adbCheckCommand = CscMuteManager.getAdbCheckCommand()
+                adbCheckCommand = CscMuteManager.getAdbCheckCommand(),
+                systemVolume = readSystemVolume()
             )
         }
+    }
+
+    private fun readSystemVolume(): SystemVolumeUiState = try {
+        SystemVolumeUiState(
+            current = audioManager.getStreamVolume(AudioManager.STREAM_SYSTEM),
+            min = audioManager.getStreamMinVolume(AudioManager.STREAM_SYSTEM),
+            max = audioManager.getStreamMaxVolume(AudioManager.STREAM_SYSTEM),
+            isFixed = audioManager.isVolumeFixed
+        )
+    } catch (_: RuntimeException) {
+        SystemVolumeUiState(error = "시스템 음량을 확인할 수 없습니다.")
+    }
+
+    fun setSystemVolume(index: Int): Int? {
+        val volume = _uiState.value.systemVolume
+        if (volume.current == null || volume.isFixed || volume.max <= volume.min) return volume.current
+
+        val requested = index.coerceIn(volume.min, volume.max)
+        val updated = try {
+            audioManager.setStreamVolume(AudioManager.STREAM_SYSTEM, requested, 0)
+            readSystemVolume().let { actual ->
+                if (actual.current != null && actual.current != requested) {
+                    actual.copy(error = "기기에서 요청한 시스템 음량을 적용하지 않았습니다.")
+                } else {
+                    actual
+                }
+            }
+        } catch (_: SecurityException) {
+            volume.copy(error = "이 기기에서는 시스템 음량 변경이 허용되지 않습니다.")
+        } catch (_: RuntimeException) {
+            volume.copy(error = "시스템 음량을 변경하지 못했습니다.")
+        }
+        _uiState.update { it.copy(systemVolume = updated) }
+        return updated.current
     }
 
     fun startNotificationPairing(context: Context) {

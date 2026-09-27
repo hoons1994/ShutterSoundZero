@@ -34,6 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -42,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,6 +72,7 @@ import io.github.hoons1994.shuttersoundzero.theme.BrandBlueLight
 import io.github.hoons1994.shuttersoundzero.theme.StatusAmber
 import io.github.hoons1994.shuttersoundzero.theme.StatusGreen
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
+import kotlin.math.roundToInt
 
 private val CardRadius = 24.dp
 private val ScreenPadding = 20.dp
@@ -232,6 +237,7 @@ fun MainScreen(
             onSetup = setupAction,
             onReapply = reapplyAction,
             onOpenCamera = openCamera,
+            onSystemVolumeChange = viewModel::setSystemVolume,
             modifier = Modifier.padding(innerPadding)
         )
     }
@@ -320,6 +326,7 @@ internal fun HomeContent(
     onSetup: () -> Unit = {},
     onReapply: () -> Unit = {},
     onOpenCamera: () -> Unit = {},
+    onSystemVolumeChange: (Int) -> Int? = { null },
     modifier: Modifier = Modifier
 ) {
     val homeStatus = resolveHomeStatus(uiState)
@@ -348,7 +355,87 @@ internal fun HomeContent(
             SetupProgressCard(uiState)
         }
 
+        Spacer(modifier = Modifier.height(20.dp))
+        SystemVolumeCard(uiState.systemVolume, onSystemVolumeChange)
+
         Spacer(modifier = Modifier.height(28.dp))
+    }
+}
+
+@Composable
+private fun SystemVolumeCard(
+    volume: SystemVolumeUiState,
+    onVolumeChange: (Int) -> Int?
+) {
+    val current = volume.current
+    val canAdjust = current != null && !volume.isFixed && volume.max > volume.min
+    var selectedVolume by remember(current, volume.error) {
+        mutableFloatStateOf((current ?: volume.min).toFloat())
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = ScreenPadding),
+        shape = RoundedCornerShape(CardRadius),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "시스템 음량",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (current != null) {
+                    Text(
+                        text = "${selectedVolume.roundToInt()} / ${volume.max}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            if (canAdjust) {
+                Slider(
+                    value = selectedVolume,
+                    onValueChange = { selectedVolume = it },
+                    onValueChangeFinished = {
+                        selectedVolume = (
+                            onVolumeChange(selectedVolume.roundToInt()) ?: current
+                        ).toFloat()
+                    },
+                    valueRange = volume.min.toFloat()..volume.max.toFloat(),
+                    steps = (volume.max - volume.min - 1).coerceAtLeast(0),
+                    modifier = Modifier.semantics { contentDescription = "시스템 음량 조절" }
+                )
+            } else {
+                Text(
+                    text = if (volume.isFixed || (volume.max <= volume.min && current != null)) {
+                        "이 기기에서는 시스템 음량을 조절할 수 없습니다."
+                    } else {
+                        volume.error ?: "시스템 음량을 확인하는 중입니다."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (canAdjust) {
+                Text(
+                    text = volume.error ?: "셔터음 외의 시스템 소리도 함께 조절됩니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (volume.error != null) StatusAmber else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
