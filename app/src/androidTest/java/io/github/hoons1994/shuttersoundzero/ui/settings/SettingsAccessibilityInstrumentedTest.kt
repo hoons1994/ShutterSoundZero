@@ -49,7 +49,10 @@ class SettingsAccessibilityInstrumentedTest {
         composeTestRule.onNodeWithText("카메라 설정")
             .performScrollTo()
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("도움말 및 지원")
+        composeTestRule.onNodeWithText("자주 묻는 질문")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("문의 및 지원")
             .performScrollTo()
             .assertIsDisplayed()
     }

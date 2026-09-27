@@ -1,35 +1,27 @@
 package io.github.hoons1994.shuttersoundzero.core.adb
 
 import android.content.Context
-import android.os.Build
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.hoons1994.shuttersoundzero.debug.LocalNetworkPermissionProbeActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
+@SdkSuppress(minSdkVersion = 37)
 class LocalNetworkAccessInstrumentedTest {
-
-    private lateinit var context: Context
-
-    @Before
-    fun setUp() {
-        context = ApplicationProvider.getApplicationContext()
-        assumeTrue("Android 17(API 37)+ only", Build.VERSION.SDK_INT >= 37)
-    }
 
     @Test
     fun freshInstall_failsClosedThenRuntimePermissionFlowGrantsAccess() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
         // Disposable API 37 AVD의 새 설치 상태에서는 ACCESS_LOCAL_NETWORK가 기본 거부다.
         assertFalse(LocalNetworkAccess.isGranted(context))
 
