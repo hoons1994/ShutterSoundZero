@@ -188,7 +188,7 @@ class StandaloneAdbManager(context: Context) {
         "페어링 중 오류가 발생했습니다. 무선 디버깅 상태와 코드를 확인해 주세요."
     ) {
         require(port in 1..65535) { "Invalid pairing port" }
-        require(pairingCode.length == 6 && pairingCode.all { it in '0'..'9' }) { "Invalid pairing code" }
+        require(PairingCode.isValid(pairingCode)) { "Invalid pairing code" }
         val host = LOCAL_ADB_HOST
         val password = pairingCode.toByteArray(Charsets.UTF_8)
         val client = try {
