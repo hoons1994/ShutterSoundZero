@@ -3,8 +3,10 @@ package io.github.hoons1994.shuttersoundzero.ui.main
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -222,5 +224,51 @@ class MainScreenTest {
                 .fetchSemanticsNodes()
                 .isEmpty()
         )
+    }
+
+    @Test
+    fun ringerMutedVolumeExplainsRestrictionAndOpensPhoneSettings() {
+        var opened = false
+        composeTestRule.setContent {
+            HomeContent(
+                uiState = MainUiState(systemVolume = SystemVolumeUiState(current = 0, max = 15, isRingerMuted = true)),
+                onOpenSoundSettings = { opened = true }
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("시스템 음량 조절").performScrollTo().assertIsNotEnabled()
+        composeTestRule.onNodeWithText(
+            "진동·무음 모드에서는 시스템 소리가 음소거됩니다. 휴대전화를 소리 모드로 전환한 뒤 조절해 주세요."
+        ).fetchSemanticsNode()
+        composeTestRule.onNodeWithText("휴대전화 음량 설정").performScrollTo().performClick()
+        assertTrue(opened)
+    }
+
+    @Test
+    fun zeroVolumeInSoundModeCanStillBeRaised() {
+        showHome(MainUiState(systemVolume = SystemVolumeUiState(current = 0, max = 15, isStreamMuted = true)))
+
+        composeTestRule.onNodeWithContentDescription("시스템 음량 조절").performScrollTo().assertIsEnabled()
+    }
+
+    @Test
+    fun pendingVolumeChangeKeepsRequestedValueWithoutReportingCompletion() {
+        showHome(MainUiState(systemVolume = SystemVolumeUiState(current = 2, max = 15, requested = 5)))
+
+        composeTestRule.onNodeWithContentDescription("시스템 음량 조절").performScrollTo().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("5 / 15").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("시스템 음량을 적용하고 있습니다.").fetchSemanticsNode()
+    }
+
+    @Test
+    fun rejectedVolumeChangeOffersNativeSettings() {
+        showHome(MainUiState(systemVolume = SystemVolumeUiState(
+            current = 2,
+            max = 15,
+            error = "기기에서 음량 변경을 적용하지 않았습니다. 휴대전화 음량 설정에서 직접 조절해 주세요."
+        )))
+
+        composeTestRule.onNodeWithText("휴대전화 음량 설정").performScrollTo().assertHasClickAction()
+        composeTestRule.onNodeWithText("2 / 15").fetchSemanticsNode()
     }
 }

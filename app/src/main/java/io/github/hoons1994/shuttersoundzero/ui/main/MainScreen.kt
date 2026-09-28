@@ -1,9 +1,17 @@
 package io.github.hoons1994.shuttersoundzero.ui.main
 
 import android.Manifest
+import android.app.NotificationManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.database.ContentObserver
+import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -190,8 +198,31 @@ fun MainScreen(
                 viewModel.refreshState()
             }
         }
+        val volumeObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                viewModel.refreshSystemVolume()
+            }
+        }
+        val ringerReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                viewModel.refreshSystemVolume()
+            }
+        }
+        context.contentResolver.registerContentObserver(android.provider.Settings.System.CONTENT_URI, true, volumeObserver)
+        ContextCompat.registerReceiver(
+            context,
+            ringerReceiver,
+            IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION).apply {
+                addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            context.contentResolver.unregisterContentObserver(volumeObserver)
+            context.unregisterReceiver(ringerReceiver)
+        }
     }
 
     LaunchedEffect(uiState.infoMessage, uiState.errorMessage) {
@@ -252,6 +283,13 @@ fun MainScreen(
                 )
             },
             onSystemVolumeChange = viewModel::setSystemVolume,
+            onOpenSoundSettings = {
+                try {
+                    context.startActivity(Intent(android.provider.Settings.ACTION_SOUND_SETTINGS))
+                } catch (_: Exception) {
+                    Toast.makeText(context, R.string.system_volume_settings_unavailable, Toast.LENGTH_SHORT).show()
+                }
+            },
             modifier = Modifier.padding(innerPadding)
         )
     }
@@ -361,7 +399,8 @@ internal fun HomeContent(
     onOpenSoftwareInfo: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
     onSystemVolumeChange: (Int) -> Int? = { null },
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenSoundSettings: () -> Unit = {}
 ) {
     val homeStatus = resolveHomeStatus(uiState)
 
@@ -392,7 +431,7 @@ internal fun HomeContent(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-        SystemVolumeCard(uiState.systemVolume, onSystemVolumeChange)
+        SystemVolumeCard(uiState.systemVolume, onSystemVolumeChange, onOpenSoundSettings)
 
         Spacer(modifier = Modifier.height(28.dp))
     }
@@ -401,12 +440,13 @@ internal fun HomeContent(
 @Composable
 private fun SystemVolumeCard(
     volume: SystemVolumeUiState,
-    onVolumeChange: (Int) -> Int?
+    onVolumeChange: (Int) -> Int?,
+    onOpenSoundSettings: () -> Unit
 ) {
     val current = volume.current
     val canAdjust = current != null && !volume.isFixed && volume.max > volume.min
-    var selectedVolume by remember(current, volume.error) {
-        mutableFloatStateOf((current ?: volume.min).toFloat())
+    var selectedVolume by remember(current, volume.requested, volume.error) {
+        mutableFloatStateOf((volume.requested ?: current ?: volume.min).toFloat())
     }
 
     Card(
@@ -425,7 +465,7 @@ private fun SystemVolumeCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "시스템 음량",
+                    text = stringResource(R.string.system_volume_title),
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
@@ -441,6 +481,7 @@ private fun SystemVolumeCard(
 
             if (canAdjust) {
                 Slider(
+                    enabled = !volume.isRingerMuted && volume.requested == null,
                     value = selectedVolume,
                     onValueChange = { selectedVolume = it },
                     onValueChangeFinished = {
@@ -455,9 +496,9 @@ private fun SystemVolumeCard(
             } else {
                 Text(
                     text = if (volume.isFixed || (volume.max <= volume.min && current != null)) {
-                        "이 기기에서는 시스템 음량을 조절할 수 없습니다."
+                        stringResource(R.string.system_volume_fixed)
                     } else {
-                        volume.error ?: "시스템 음량을 확인하는 중입니다."
+                        volume.error ?: stringResource(R.string.system_volume_loading)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -466,10 +507,17 @@ private fun SystemVolumeCard(
 
             if (canAdjust) {
                 Text(
-                    text = volume.error ?: "셔터음 외의 시스템 소리도 함께 조절됩니다.",
+                    text = when {
+                        volume.isRingerMuted -> stringResource(R.string.system_volume_ringer_muted)
+                        volume.requested != null -> stringResource(R.string.system_volume_applying)
+                        else -> volume.error ?: stringResource(R.string.system_volume_description)
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (volume.error != null) StatusAmber else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (volume.error != null || volume.isRingerMuted) StatusAmber else MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            TextButton(onClick = onOpenSoundSettings) {
+                Text(stringResource(R.string.system_volume_open_settings))
             }
         }
     }

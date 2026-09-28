@@ -1,6 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.main
 
 import android.app.Application
+import android.app.NotificationManager
 import android.content.Context
 import android.media.AudioManager
 import androidx.lifecycle.AndroidViewModel
@@ -10,6 +11,7 @@ import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
+import io.github.hoons1994.shuttersoundzero.core.SystemVolumeVerifier
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
@@ -45,7 +47,10 @@ data class SystemVolumeUiState(
     val min: Int = 0,
     val max: Int = 0,
     val isFixed: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val isRingerMuted: Boolean = false,
+    val isStreamMuted: Boolean = false,
+    val requested: Int? = null
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -97,7 +102,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
                 adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
                 adbCheckCommand = CscMuteManager.getAdbCheckCommand(),
-                systemVolume = readSystemVolume()
+                systemVolume = readSystemVolume().copy(requested = current.systemVolume.requested)
             )
         }
     }
@@ -107,33 +112,78 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             current = audioManager.getStreamVolume(AudioManager.STREAM_SYSTEM),
             min = audioManager.getStreamMinVolume(AudioManager.STREAM_SYSTEM),
             max = audioManager.getStreamMaxVolume(AudioManager.STREAM_SYSTEM),
-            isFixed = audioManager.isVolumeFixed
+            isFixed = audioManager.isVolumeFixed,
+            isRingerMuted = audioManager.ringerMode != AudioManager.RINGER_MODE_NORMAL,
+            isStreamMuted = audioManager.isStreamMute(AudioManager.STREAM_SYSTEM)
         )
     } catch (_: RuntimeException) {
-        SystemVolumeUiState(error = "시스템 음량을 확인할 수 없습니다.")
+        SystemVolumeUiState(error = getApplication<Application>().getString(R.string.system_volume_read_failed))
     }
 
     fun setSystemVolume(index: Int): Int? {
-        val volume = _uiState.value.systemVolume
-        if (volume.current == null || volume.isFixed || volume.max <= volume.min) return volume.current
+        val existing = _uiState.value.systemVolume
+        if (existing.requested != null) return existing.requested
+        val volume = readSystemVolume()
+        if (volume.current == null || volume.isFixed || volume.isRingerMuted || volume.max <= volume.min) {
+            _uiState.update { it.copy(systemVolume = volume) }
+            return volume.current
+        }
 
         val requested = index.coerceIn(volume.min, volume.max)
-        val updated = try {
+        try {
             audioManager.setStreamVolume(AudioManager.STREAM_SYSTEM, requested, 0)
-            readSystemVolume().let { actual ->
-                if (actual.current != null && actual.current != requested) {
-                    actual.copy(error = "기기에서 요청한 시스템 음량을 적용하지 않았습니다.")
-                } else {
-                    actual
+        } catch (_: SecurityException) {
+            _uiState.update { it.copy(systemVolume = volume.copy(
+                error = getApplication<Application>().getString(R.string.system_volume_permission_blocked)
+            )) }
+            return volume.current
+        } catch (_: RuntimeException) {
+            _uiState.update { it.copy(systemVolume = volume.copy(
+                error = getApplication<Application>().getString(R.string.system_volume_change_failed)
+            )) }
+            return volume.current
+        }
+
+        // Keep the requested thumb position separate from the last confirmed audio-service value.
+        _uiState.update { it.copy(systemVolume = volume.copy(requested = requested)) }
+        viewModelScope.launch {
+            SystemVolumeVerifier.readAfterChange(requested) {
+                try {
+                    audioManager.getStreamVolume(AudioManager.STREAM_SYSTEM)
+                } catch (_: RuntimeException) {
+                    null
                 }
             }
-        } catch (_: SecurityException) {
-            volume.copy(error = "이 기기에서는 시스템 음량 변경이 허용되지 않습니다.")
-        } catch (_: RuntimeException) {
-            volume.copy(error = "시스템 음량을 변경하지 못했습니다.")
+            val actual = readSystemVolume()
+            val updated = if (actual.current != null && actual.current != requested && !actual.isRingerMuted) {
+                actual.copy(error = getApplication<Application>().getString(
+                    if (actual.isStreamMuted && isDoNotDisturbEnabled()) {
+                        R.string.system_volume_dnd_blocked
+                    } else {
+                        R.string.system_volume_not_applied
+                    }
+                ))
+            } else {
+                actual
+            }
+            _uiState.update { it.copy(systemVolume = updated) }
         }
-        _uiState.update { it.copy(systemVolume = updated) }
-        return updated.current
+        return requested
+    }
+
+    fun refreshSystemVolume() {
+        _uiState.update { current ->
+            current.copy(systemVolume = readSystemVolume().copy(requested = current.systemVolume.requested))
+        }
+    }
+
+    private fun isDoNotDisturbEnabled(): Boolean = try {
+        getApplication<Application>().getSystemService(NotificationManager::class.java).currentInterruptionFilter.let {
+            it != NotificationManager.INTERRUPTION_FILTER_ALL &&
+                it != NotificationManager.INTERRUPTION_FILTER_UNKNOWN
+        }
+    } catch (_: RuntimeException) {
+        false
     }
 
     fun startNotificationPairing(context: Context) {
