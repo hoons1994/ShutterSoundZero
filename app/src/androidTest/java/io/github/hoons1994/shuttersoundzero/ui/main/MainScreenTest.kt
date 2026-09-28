@@ -2,6 +2,7 @@ package io.github.hoons1994.shuttersoundzero.ui.main
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -91,7 +92,7 @@ class MainScreenTest {
     }
 
     @Test
-    fun reapplyHome_showsOnlyOneRecoveryAction() {
+    fun reapplyHome_separatesReapplyFromReconnection() {
         showHome(
             MainUiState(
                 isCscMuted = false,
@@ -101,6 +102,7 @@ class MainScreenTest {
 
         composeTestRule.onNodeWithText("조치 필요").fetchSemanticsNode()
         composeTestRule.onNodeWithText("카메라 무음 다시 적용 필요").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("기기 다시 연결").assertHasClickAction()
         assertEquals(
             1,
             composeTestRule.onAllNodesWithText("다시 적용하기").fetchSemanticsNodes().size
@@ -127,6 +129,29 @@ class MainScreenTest {
             "숫자 6자리를 정확히 입력해 주세요. 연결 화면의 코드가 바뀌었다면 새 코드를 사용해 주세요."
         ).fetchSemanticsNode()
         composeTestRule.onNodeWithText("알림 팝업 설정 열기").assertHasClickAction()
+    }
+
+    @Test
+    fun existingPermissionDoesNotBlockStartingPairingAgain() {
+        var started = false
+        composeTestRule.setContent {
+            HomeContent(
+                uiState = MainUiState(isCscMuted = true, hasCscPermission = true),
+                onSetup = { started = true }
+            )
+        }
+        composeTestRule.onNodeWithText("기기 다시 연결").performScrollTo().performClick()
+        assertTrue(started)
+    }
+
+    @Test
+    fun reapplyInProgressDoesNotShowPrematureSuccessOrAllowRepeatedRequests() {
+        showHome(MainUiState(hasCscPermission = true, isCscChangeInProgress = true))
+        composeTestRule.onNodeWithText("연결 및 적용 중…").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("기기 다시 연결").assertIsNotEnabled()
+        assertTrue(
+            composeTestRule.onAllNodesWithText("카메라 무음 설정 완료").fetchSemanticsNodes().isEmpty()
+        )
     }
 
     @Test

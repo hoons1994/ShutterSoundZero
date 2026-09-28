@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.5.7-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.5.8-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터사운드 제로 안내 인포그래픽" width="720" />
@@ -19,13 +19,13 @@
 
 접근성 서비스를 이용해 화면이나 카메라 실행을 상시 감시하지 않습니다. 최초 1회 로컬 무선 ADB로 `WRITE_SECURE_SETTINGS` 권한을 연동한 뒤, 필요할 때만 무선 디버깅을 켜서 실제 CSC 값을 변경합니다.
 
-현재 최신 안정 버전은 v1.5.7입니다.
+현재 최신 안정 버전은 v1.5.8입니다.
 
 ## 📱 다운로드
 
 - 최신 APK: [GitHub Releases](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 - 지원 환경: 삼성 갤럭시 / Android 11 이상
-- v1.5.3 이하에서 전환: v1.5.4부터 새 패키지 ID와 새 서명키를 사용하므로 기존 앱 위에 설치할 수 없습니다. 기존 앱을 삭제한 뒤 v1.5.7을 새로 설치하고 1회 설정을 다시 진행해 주세요.
+- v1.5.3 이하에서 전환: v1.5.4부터 새 패키지 ID와 새 서명키를 사용하므로 기존 앱 위에 설치할 수 없습니다. 기존 앱을 삭제한 뒤 v1.5.8을 새로 설치하고 1회 설정을 다시 진행해 주세요.
 
 ## ✨ 주요 기능
 
@@ -69,11 +69,14 @@ One UI의 알림 팝업 스타일이 간략히 보기라서 코드 입력이 불
 - 셔터음 설정이 그대로 유지됨: 홈에 [카메라 무음 설정 완료]가 표시되며 아무 작업도 필요하지 않습니다.
 - 셔터음이 다시 들리지만 권한 연동은 유지됨: 홈의 [다시 적용하기]를 사용합니다. 설정의 카메라 설정 → [카메라 무음 다시 적용]에서도 같은 복구 흐름을 시작할 수 있습니다.
 - [1회 설정 필요]가 표시됨: 무선 디버깅을 켜고 [1회 설정 시작]으로 다시 연동합니다.
+- 무선 디버깅을 켰는데도 연결되지 않음: Wi-Fi 연결과 무선 디버깅의 연결 허용 여부를 확인하고 껐다 켠 뒤 다시 시도합니다. 계속 실패하면 홈의 [기기 다시 연결]에서 새 6자리 코드로 페어링합니다. 앱 권한이 남아 있어도 기존 ADB 페어링은 만료되거나 해제될 수 있습니다.
 - 원래 셔터음으로 복원: 설정 → 카메라 설정 → [카메라 셔터음 원래대로 복원]을 사용합니다.
 
 일반적인 재부팅에서는 CSC 셔터음 설정이 유지되지만, 재부팅이나 One UI·Android 업데이트 후 실제 CSC 값이 초기화된 경우에는 재적용이 필요합니다.
 
 복원·재적용 후에는 이전 로컬 ADB 세션을 정리하고, CSC 반영이 잠시 늦는 경우를 고려해 실제 상태를 짧게 재확인합니다.
+
+연결 서비스 탐색, ADB 연결, CSC 쓰기와 검증 결과를 별도로 기록합니다. 반복해서 실패하면 설정 → 도움말의 오류 신고에서 진단 정보를 포함해 주세요.
 
 ## ⬆️ 앱 업데이트
 

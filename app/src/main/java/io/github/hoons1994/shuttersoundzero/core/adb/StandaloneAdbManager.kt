@@ -9,6 +9,7 @@ import android.util.Log
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
+import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticLogger
 import io.github.muntashirakon.adb.AdbShellIdentity
 import io.github.muntashirakon.adb.CancellableAdbConnection
 import io.github.muntashirakon.adb.CancellablePairingConnection
@@ -170,7 +171,8 @@ class StandaloneAdbManager(context: Context) {
         withContext(Dispatchers.IO) {
             val result = operationRunner.run(block)
             val error = result.exceptionOrNull()
-            if (error == null || error is LocalNetworkPermissionRequiredException) result
+            if (error == null || error is LocalNetworkPermissionRequiredException ||
+                error is AdbServiceNotFoundException || error is AdbConnectionFailedException) result
             else {
                 logFailure(message, error)
                 val userMessage = when (error) {
@@ -183,6 +185,21 @@ class StandaloneAdbManager(context: Context) {
                 Result.failure(IOException(userMessage, error))
             }
         }
+
+    private suspend fun <T> diagnosed(stage: DiagnosticLogger.Stage, block: suspend () -> T): T {
+        DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.STARTED)
+        try {
+            return block().also {
+                DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.SUCCESS)
+            }
+        } catch (error: CancellationException) {
+            DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.CANCELLED)
+            throw error
+        } catch (error: Exception) {
+            DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.FAILURE, error)
+            throw error
+        }
+    }
 
     suspend fun pairLocal(port: Int, pairingCode: String): Result<Unit> = operation(
         "페어링 중 오류가 발생했습니다. 무선 디버깅 상태와 코드를 확인해 주세요."
@@ -252,34 +269,53 @@ class StandaloneAdbManager(context: Context) {
     suspend fun setCameraMute(enableMute: Boolean): Result<Unit> = operation(
         "셔터음 설정 변경 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."
     ) {
-        ensureConnection(null, 4_000)
-        applyAndVerifyMute(enableMute)
-        PreferencesRepository.getInstance(context).shouldMuteOnBoot = enableMute
+        diagnosed(if (enableMute) DiagnosticLogger.Stage.CSC_REAPPLY else DiagnosticLogger.Stage.CSC_RESTORE) {
+            ensureConnection(null, 4_000)
+            applyAndVerifyMute(enableMute)
+            PreferencesRepository.getInstance(context).shouldMuteOnBoot = enableMute
+        }
     }
 
     private suspend fun applyAndVerifyMute(mute: Boolean) {
         val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
-        executeShellCommand(AdbShellCommands.setCameraMute(mute, userId))
-        if (!CscStateVerifier.waitFor(mute) { CscMuteManager.isCscShutterSoundMuted(context) }) {
-            throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
+        diagnosed(DiagnosticLogger.Stage.CSC_WRITE) {
+            executeShellCommand(AdbShellCommands.setCameraMute(mute, userId))
+        }
+        diagnosed(DiagnosticLogger.Stage.CSC_VERIFY) {
+            if (!CscStateVerifier.waitFor(mute) { CscMuteManager.isCscShutterSoundMuted(context) }) {
+                throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
+            }
         }
     }
 
     private suspend fun ensureConnection(requestedPort: Int?, discoveryTimeout: Long) {
         if (connection?.isConnected == true) return
         val prefs = PreferencesRepository.getInstance(context)
-        val host = LOCAL_ADB_HOST
-        val cached = lastDiscoveredConnectPort ?: prefs.lastConnectPort.takeIf { it > 0 }
-        for (port in listOfNotNull(requestedPort, cached).filter { it in 1..65535 }.distinct()) {
-            try {
-                if (connectInterruptibly(host, port)) {
-                    rememberConnectedPort(port)
-                    return
+        try {
+            val port = AdbConnectionResolver.resolve(
+                candidatePorts = listOfNotNull(requestedPort, lastDiscoveredConnectPort, prefs.lastConnectPort),
+                connect = { port ->
+                    diagnosed(DiagnosticLogger.Stage.ADB_CONNECT) {
+                        if (!connectInterruptibly(LOCAL_ADB_HOST, port)) throw IOException("ADB connection did not complete")
+                        true
+                    }
+                },
+                discover = {
+                    diagnosed(DiagnosticLogger.Stage.ADB_CONNECT_DISCOVERY) {
+                        discoverLocalTlsPort(discoveryTimeout) ?: throw AdbServiceNotFoundException()
+                    }
                 }
-            } catch (error: CancellationException) { throw error }
-            catch (error: Exception) { logFailure("Direct ADB connection failed", error) }
+            )
+            rememberConnectedPort(port)
+        } catch (error: AdbServiceNotFoundException) {
+            clearDiscoveredPorts()
+            prefs.clearTransientAdbConnectionState()
+            throw error
+        } catch (error: AdbConnectionFailedException) {
+            clearDiscoveredPorts()
+            prefs.clearTransientAdbConnectionState()
+            throw error
         }
-        if (!connectLocalTls(discoveryTimeout)) throw IOException("무선 디버깅에 연결할 수 없습니다.")
     }
 
     private suspend fun connectInterruptibly(host: String, port: Int): Boolean {
@@ -317,7 +353,7 @@ class StandaloneAdbManager(context: Context) {
         PreferencesRepository.getInstance(context).lastConnectPort = port
     }
 
-    private suspend fun connectLocalTls(timeoutMs: Long): Boolean {
+    private suspend fun discoverLocalTlsPort(timeoutMs: Long): Int? {
         LocalNetworkAccess.requireGranted(context)
         val endpoint = AtomicReference<Pair<InetAddress, Int>?>(null)
         val failure = AtomicReference<IOException?>(null)
@@ -330,15 +366,12 @@ class StandaloneAdbManager(context: Context) {
         return try {
             val found = runInterruptible(Dispatchers.IO) { discovered.await(timeoutMs, TimeUnit.MILLISECONDS) }
             if (!found) {
-                failure.get()?.let { throw it }
-                false
+                failure.get()?.let { throw AdbServiceNotFoundException(it) }
+                null
             } else {
-                val (_, port) = endpoint.get() ?: return false
                 // mDNS validates that the service belongs to this device, but only its port is
                 // consumed. Never send credentials to a Wi-Fi address that may later change owner.
-                val connected = connectInterruptibly(LOCAL_ADB_HOST, port)
-                if (connected) rememberConnectedPort(port)
-                connected
+                endpoint.get()?.second
             }
         } finally { mdns.stop() }
     }

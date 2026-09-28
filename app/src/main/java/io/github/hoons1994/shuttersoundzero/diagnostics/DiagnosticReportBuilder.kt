@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
+import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 
 object DiagnosticReportBuilder {
@@ -45,12 +46,14 @@ object DiagnosticReportBuilder {
             appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
             appendLine("One UI: ${detectOneUiVersion()}")
             appendLine("보안 패치: ${Build.VERSION.SECURITY_PATCH.ifBlank { "알 수 없음" }}")
+            appendLine("소프트웨어 빌드: ${Build.DISPLAY}")
             appendLine()
             appendLine("[현재 상태]")
             appendLine("WRITE_SECURE_SETTINGS: ${yesNo(CscMuteManager.hasWritePermission(context))}")
             appendLine("CSC 카메라 무음: ${yesNo(CscMuteManager.isCscShutterSoundMuted(context))}")
             appendLine("개발자 옵션: ${yesNo(DeveloperOptionsManager.isDeveloperOptionsEnabled(context))}")
             appendLine("무선 디버깅: ${yesNo(DeveloperOptionsManager.isWirelessDebuggingEnabled(context))}")
+            appendLine("로컬 네트워크 접근: ${yesNo(LocalNetworkAccess.isGranted(context))}")
             appendLine("저장된 ADB 연결 정보: ${if (prefs.lastConnectPort in 1..65535) "있음" else "없음"}")
             appendLine()
             appendLine("[최근 진단 이벤트]")

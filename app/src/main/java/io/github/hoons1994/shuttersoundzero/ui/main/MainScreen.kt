@@ -69,6 +69,8 @@ import io.github.hoons1994.shuttersoundzero.Settings
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 import io.github.hoons1994.shuttersoundzero.core.WifiConnectionStatus
+import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
+import io.github.hoons1994.shuttersoundzero.ui.components.CameraMuteFailureDialog
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import io.github.hoons1994.shuttersoundzero.theme.BrandBlueLight
 import io.github.hoons1994.shuttersoundzero.theme.StatusAmber
@@ -270,6 +272,24 @@ fun MainScreen(
         )
     }
 
+    uiState.cameraMuteFailure?.let { failure ->
+        CameraMuteFailureDialog(
+            failure = failure,
+            onDismiss = viewModel::dismissCameraMuteFailure,
+            onReconnect = setupAction,
+            onOpenSettings = {
+                if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
+                    context.startActivity(Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", context.packageName, null)
+                    ))
+                } else {
+                    SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
+                }
+            }
+        )
+    }
+
     if (uiState.showSwitchFailureHelp) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissSwitchFailureHelp() },
@@ -356,6 +376,8 @@ internal fun HomeContent(
         StatusHeroCard(
             status = homeStatus,
             setupIssue = uiState.setupIssue,
+            isInProgress = uiState.isCscChangeInProgress,
+            onReconnect = onSetup,
             onPrimaryAction = when (homeStatus) {
                 HomeStatus.READY -> null
                 HomeStatus.REAPPLY_REQUIRED -> onReapply
@@ -492,6 +514,8 @@ private fun AppHeader(onSettingsClick: () -> Unit) {
 private fun StatusHeroCard(
     status: HomeStatus,
     setupIssue: SetupIssue?,
+    isInProgress: Boolean,
+    onReconnect: () -> Unit,
     onPrimaryAction: (() -> Unit)?,
     onCameraAction: () -> Unit
 ) {
@@ -507,7 +531,7 @@ private fun StatusHeroCard(
     }
     val subtitle = when (status) {
         HomeStatus.READY -> "진동·무음 모드에서 촬영음이 나지 않도록 설정되어 있습니다."
-        HomeStatus.REAPPLY_REQUIRED -> "기기 연결은 유지되어 있습니다. 다시 적용하면 필요한 설정을 안내합니다."
+        HomeStatus.REAPPLY_REQUIRED -> "앱 권한은 유지되어 있습니다. 무선 디버깅을 켜고 다시 적용해 주세요. 연결이 안 되면 기기를 다시 연결할 수 있습니다."
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
             "문제가 생긴 단계를 아래에 표시했습니다. 해당 단계부터 다시 진행하면 됩니다."
         } else {
@@ -578,15 +602,21 @@ private fun StatusHeroCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Button(
                     onClick = { onPrimaryAction?.invoke() },
+                    enabled = !isInProgress,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
                 ) {
                     Text(
-                        text = primaryLabel.orEmpty(),
+                        text = if (isInProgress) "연결 및 적용 중…" else primaryLabel.orEmpty(),
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
+                }
+            }
+            if (status != HomeStatus.SETUP_REQUIRED) {
+                TextButton(onClick = onReconnect, enabled = !isInProgress) {
+                    Text("기기 다시 연결")
                 }
             }
         }

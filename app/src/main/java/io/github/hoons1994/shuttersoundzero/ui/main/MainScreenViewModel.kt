@@ -11,6 +11,7 @@ import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
+import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
@@ -33,6 +34,8 @@ data class MainUiState(
     val infoMessage: String? = null,
     val errorMessage: String? = null,
     val showSwitchFailureHelp: Boolean = false,
+    val cameraMuteFailure: CameraMuteFailure? = null,
+    val isCscChangeInProgress: Boolean = false,
     val showWirelessDebuggingCleanupHelp: Boolean = false,
     val systemVolume: SystemVolumeUiState = SystemVolumeUiState()
 )
@@ -137,7 +140,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         prefs.clearTransientAdbConnectionState()
         prefs.lastSetupIssue = null
         adbManager.clearDiscoveredPorts()
-        _uiState.update { it.copy(setupIssue = null) }
+        _uiState.update { it.copy(setupIssue = null, cameraMuteFailure = null) }
         startPairingNow(context)
     }
 
@@ -162,6 +165,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun toggleCscMute(enableMute: Boolean) {
+        if (_uiState.value.isCscChangeInProgress) return
         val app = getApplication<Application>()
 
         if (!CscMuteManager.isSamsungDevice()) {
@@ -201,50 +205,58 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
-        // UI만 낙관적으로 갱신한다. 영구 사용자 의도는 실제 CSC 적용을 확인한
-        // StandaloneAdbManager만 변경해 교차 진입점의 stale write를 막는다.
-        _uiState.update { it.copy(isCscMuted = enableMute) }
+        // 실제 CSC 적용을 확인하기 전에는 완료 상태를 표시하지 않는다.
+        _uiState.update { it.copy(isCscChangeInProgress = true, cameraMuteFailure = null) }
 
         viewModelScope.launch {
-            val adbResult = adbManager.setCameraMute(enableMute)
-            val actualStateMatchesRequest = adbResult.isSuccess && CscStateVerifier.waitFor(enableMute) {
-                CscMuteManager.isCscShutterSoundMuted(app)
-            }
-            refreshState()
+            try {
+                val adbResult = adbManager.setCameraMute(enableMute)
+                val actualStateMatchesRequest = adbResult.isSuccess && CscStateVerifier.waitFor(enableMute) {
+                    CscMuteManager.isCscShutterSoundMuted(app)
+                }
+                refreshState()
 
-            if (actualStateMatchesRequest) {
-                if (enableMute) {
-                    prefs.lastSetupIssue = null
+                if (actualStateMatchesRequest) {
+                    if (enableMute) {
+                        prefs.lastSetupIssue = null
+                    }
+                    val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(app)
+                    _uiState.update {
+                        it.copy(
+                            isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
+                            setupIssue = prefs.lastSetupIssue,
+                            infoMessage = when {
+                                enableMute && wirelessCleanup.isSuccess ->
+                                    app.getString(R.string.main_mute_applied_wireless_disabled)
+                                !enableMute && wirelessCleanup.isSuccess ->
+                                    app.getString(R.string.main_restore_applied_wireless_disabled)
+                                enableMute ->
+                                    app.getString(R.string.main_mute_applied_disable_wireless_manually)
+                                else ->
+                                    app.getString(R.string.main_restore_applied_disable_wireless_manually)
+                            },
+                            errorMessage = null,
+                            showWirelessDebuggingCleanupHelp = wirelessCleanup.isFailure
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            showSwitchFailureHelp = false,
+                            cameraMuteFailure = CameraMuteFailure.from(adbResult.exceptionOrNull()),
+                            errorMessage = null,
+                            infoMessage = null
+                        )
+                    }
                 }
-                val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(app)
-                _uiState.update {
-                    it.copy(
-                        isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
-                        setupIssue = prefs.lastSetupIssue,
-                        infoMessage = when {
-                            enableMute && wirelessCleanup.isSuccess ->
-                                app.getString(R.string.main_mute_applied_wireless_disabled)
-                            !enableMute && wirelessCleanup.isSuccess ->
-                                app.getString(R.string.main_restore_applied_wireless_disabled)
-                            enableMute ->
-                                app.getString(R.string.main_mute_applied_disable_wireless_manually)
-                            else ->
-                                app.getString(R.string.main_restore_applied_disable_wireless_manually)
-                        },
-                        errorMessage = null,
-                        showWirelessDebuggingCleanupHelp = wirelessCleanup.isFailure
-                    )
-                }
-            } else {
-                _uiState.update {
-                    it.copy(
-                        showSwitchFailureHelp = true,
-                        errorMessage = null,
-                        infoMessage = null
-                    )
-                }
+            } finally {
+                _uiState.update { it.copy(isCscChangeInProgress = false) }
             }
         }
+    }
+
+    fun dismissCameraMuteFailure() {
+        _uiState.update { it.copy(cameraMuteFailure = null) }
     }
 
     fun dismissSwitchFailureHelp() {

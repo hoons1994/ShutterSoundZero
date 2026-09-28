@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
-import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkPermissionRequiredException
+import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import kotlinx.coroutines.CancellationException
@@ -20,7 +20,8 @@ internal data class CameraSettingsOperationUiState(
     val isRestoreInProgress: Boolean = false,
     val completionId: Long = 0,
     val resultMessage: String? = null,
-    val appliedMutedState: Boolean? = null
+    val appliedMutedState: Boolean? = null,
+    val failure: CameraMuteFailure? = null
 )
 
 /** Keeps user-started CSC changes alive while the settings destination leaves composition. */
@@ -36,7 +37,8 @@ internal class CameraSettingsOperationViewModel(application: Application) : Andr
                     isReapplyInProgress = mute,
                     isRestoreInProgress = !mute,
                     resultMessage = null,
-                    appliedMutedState = null
+                    appliedMutedState = null,
+                    failure = null
                 )
             }
         }
@@ -44,6 +46,7 @@ internal class CameraSettingsOperationViewModel(application: Application) : Andr
         viewModelScope.launch {
             var resultMessage = "카메라 셔터음 설정을 변경하지 못했습니다. 다시 시도해 주세요."
             var appliedMutedState: Boolean? = null
+            var failure: CameraMuteFailure? = null
             try {
                 val context = getApplication<Application>()
                 val result = StandaloneAdbManager.getInstance(context).setCameraMute(mute)
@@ -62,25 +65,14 @@ internal class CameraSettingsOperationViewModel(application: Application) : Andr
                         else -> "카메라 셔터음은 복원했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
                     }
                 } else {
-                    val error = result.exceptionOrNull()
-                    resultMessage = if (error is LocalNetworkPermissionRequiredException) {
-                        LOCAL_NETWORK_PERMISSION_MESSAGE
-                    } else if (mute) {
-                        "다시 적용하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
-                    } else {
-                        "카메라 셔터음을 복원하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
-                    }
+                    failure = CameraMuteFailure.from(result.exceptionOrNull())
+                    resultMessage = failure.message
                 }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                resultMessage = if (error is LocalNetworkPermissionRequiredException) {
-                    LOCAL_NETWORK_PERMISSION_MESSAGE
-                } else if (mute) {
-                    "다시 적용하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
-                } else {
-                    "카메라 셔터음을 복원하지 못했습니다. 무선 디버깅이 켜져 있는지 확인한 뒤 다시 시도해 주세요."
-                }
+                failure = CameraMuteFailure.from(error)
+                resultMessage = failure.message
             } finally {
                 _uiState.update {
                     it.copy(
@@ -88,7 +80,8 @@ internal class CameraSettingsOperationViewModel(application: Application) : Andr
                         isRestoreInProgress = false,
                         completionId = it.completionId + 1,
                         resultMessage = resultMessage,
-                        appliedMutedState = appliedMutedState
+                        appliedMutedState = appliedMutedState,
+                        failure = failure
                     )
                 }
             }
@@ -97,12 +90,8 @@ internal class CameraSettingsOperationViewModel(application: Application) : Andr
 
     fun consumeCompletion() {
         _uiState.update {
-            it.copy(resultMessage = null, appliedMutedState = null)
+            it.copy(resultMessage = null, appliedMutedState = null, failure = null)
         }
     }
 
-    private companion object {
-        const val LOCAL_NETWORK_PERMISSION_MESSAGE =
-            "카메라 설정을 바꾸려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용한 뒤 다시 시도해 주세요."
-    }
 }
