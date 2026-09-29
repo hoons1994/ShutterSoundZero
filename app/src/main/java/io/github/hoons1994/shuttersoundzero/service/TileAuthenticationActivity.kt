@@ -35,6 +35,7 @@ class TileAuthenticationActivity : ComponentActivity() {
     }
 
     private lateinit var viewModel: TileAuthenticationViewModel
+    private var authenticationRequest: AppLockAuthenticator.AuthenticationRequest? = null
     private var statusMessage by mutableStateOf("빠른 설정 타일을 인증하는 중입니다.")
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,6 +74,16 @@ class TileAuthenticationActivity : ComponentActivity() {
         authenticateAndRun()
     }
 
+    override fun onDestroy() {
+        authenticationRequest?.cancel()
+        authenticationRequest = null
+        if (::viewModel.isInitialized) {
+            if (isChangingConfigurations) viewModel.restartAuthentication()
+            else viewModel.cancelAuthentication()
+        }
+        super.onDestroy()
+    }
+
     private fun authenticateAndRun() {
         if (!intent.hasExtra(EXTRA_TARGET_MUTED)) {
             finish()
@@ -91,7 +102,7 @@ class TileAuthenticationActivity : ComponentActivity() {
             return
         }
 
-        AppLockAuthenticator.authenticate(
+        authenticationRequest = AppLockAuthenticator.authenticate(
             activity = this,
             title = "빠른 설정 타일 인증",
             subtitle = "카메라 셔터음 설정을 변경하려면 본인 확인해 주세요.",

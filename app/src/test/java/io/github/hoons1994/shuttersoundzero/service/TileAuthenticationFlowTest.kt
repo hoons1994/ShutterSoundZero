@@ -6,6 +6,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TileAuthenticationFlowTest {
+    @Test fun destroyedAuthenticationOwnerCanBeReplacedAfterRotation() {
+        val flow = TileAuthenticationFlow()
+        assertTrue(flow.beginAuthentication())
+        flow.restartAuthentication()
+        assertEquals(TileAuthenticationFlowState.IDLE, flow.state.value)
+        assertTrue(flow.beginAuthentication())
+        assertTrue(flow.beginAction())
+    }
+
+    @Test fun rotationCannotRestartAnAlreadyRunningAction() {
+        val flow = TileAuthenticationFlow()
+        assertTrue(flow.beginAuthentication())
+        assertTrue(flow.beginAction())
+        flow.restartAuthentication()
+        assertEquals(TileAuthenticationFlowState.RUNNING, flow.state.value)
+        assertFalse(flow.beginAuthentication())
+        assertFalse(flow.beginAction())
+    }
+
     @Test
     fun `authenticated action can start only once`() {
         val flow = TileAuthenticationFlow()

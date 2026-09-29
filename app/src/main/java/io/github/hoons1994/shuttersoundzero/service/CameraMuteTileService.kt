@@ -27,6 +27,7 @@ class CameraMuteTileService : TileService() {
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var actionInProgress = false
 
     override fun onDestroy() {
         super.onDestroy()
@@ -40,6 +41,7 @@ class CameraMuteTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
+        if (actionInProgress) return
         val prefs = PreferencesRepository.getInstance(applicationContext)
         when (TileActionSecurityPolicy.decide(isLocked, prefs.isAppLockEnabled)) {
             TileActionSecurityDecision.REQUEST_DEVICE_UNLOCK -> unlockAndRun {
@@ -79,24 +81,36 @@ class CameraMuteTileService : TileService() {
     }
 
     private fun executeAuthorizedAction() {
+        if (actionInProgress) return
+        actionInProgress = true
         serviceScope.launch {
-            CameraMuteTileAction.execute(applicationContext, ::showOptimisticTileState)
+            try {
+                CameraMuteTileAction.execute(applicationContext, ::showProcessingTileState)
+            } finally {
+                actionInProgress = false
+                // The visible non-active tile must be refreshed directly, including on failure.
+                updateTileState()
+            }
         }
     }
 
     private fun targetMuted(): Boolean =
         !CscMuteManager.isCscShutterSoundMuted(applicationContext)
 
-    private fun showOptimisticTileState(targetMuted: Boolean) {
+    private fun showProcessingTileState() {
         qsTile?.let { tile ->
             tile.icon = Icon.createWithResource(this, R.drawable.ic_qs_camera_mute)
-            tile.state = if (targetMuted) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-            tile.subtitle = if (targetMuted) getString(R.string.tile_muted) else getString(R.string.tile_unmuted)
+            tile.state = Tile.STATE_UNAVAILABLE
+            tile.subtitle = getString(R.string.camera_settings_applying)
             tile.updateTile()
         }
     }
 
     private fun updateTileState() {
+        if (actionInProgress) {
+            showProcessingTileState()
+            return
+        }
         val tile = qsTile ?: return
         val context = applicationContext
         val prefs = PreferencesRepository.getInstance(context)

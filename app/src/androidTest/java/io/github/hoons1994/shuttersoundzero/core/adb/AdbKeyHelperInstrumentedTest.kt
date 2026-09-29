@@ -6,6 +6,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
 import org.junit.After
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
+import java.io.IOException
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -45,5 +48,10 @@ class AdbKeyHelperInstrumentedTest {
         identityFiles.forEach { file ->
             assertFalse("Expected ${file.name} to be removed", file.exists())
         }
+    }
+
+    @Test fun failedExistingIdentityLoadPreservesCurrentAndLegacyFiles() {
+        assertThrows(IOException::class.java) { AdbKeyHelper.getOrCreateKeyPairAndCertificate(context) }
+        identityFiles.forEach { file -> assertEquals("stale-test-data", file.readText()) }
     }
 }

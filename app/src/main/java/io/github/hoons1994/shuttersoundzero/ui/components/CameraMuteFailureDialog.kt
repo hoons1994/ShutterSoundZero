@@ -5,6 +5,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
+import io.github.hoons1994.shuttersoundzero.core.adb.PAIRING_RECOVERY_LABEL
 
 @Composable
 internal fun CameraMuteFailureDialog(
@@ -12,7 +13,7 @@ internal fun CameraMuteFailureDialog(
     onDismiss: () -> Unit,
     onReconnect: () -> Unit,
     onOpenSettings: () -> Unit,
-    reconnectLabel: String = "기기 다시 연결"
+    reconnectLabel: String = PAIRING_RECOVERY_LABEL
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,

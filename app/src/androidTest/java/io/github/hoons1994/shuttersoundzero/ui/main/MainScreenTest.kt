@@ -7,6 +7,8 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -18,6 +20,17 @@ import org.junit.Test
 
 /** UI smoke tests for the state-focused home flow. */
 class MainScreenTest {
+    @Test fun pendingCameraChangeNeverShowsCompletionOrAllowsAnotherAction() {
+        showHome(MainUiState(
+            isCscMuted = true,
+            hasCscPermission = true,
+            isCscChangeInProgress = true
+        ))
+        composeTestRule.onNodeWithText("카메라 무음 설정 완료").assertDoesNotExist()
+        composeTestRule.onNodeWithText("카메라 열어보기").assertDoesNotExist()
+        composeTestRule.onNode(hasText("카메라 설정 변경 중") and hasClickAction()).assertIsNotEnabled()
+    }
+
 
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
@@ -94,17 +107,22 @@ class MainScreenTest {
     }
 
     @Test
-    fun reapplyHome_separatesReapplyFromReconnection() {
-        showHome(
-            MainUiState(
-                isCscMuted = false,
-                hasCscPermission = true
+    fun reapplyHomeOpensWirelessDebuggingWithoutStartingPairingAgain() {
+        var opened = false
+        var pairingStarted = false
+        composeTestRule.setContent {
+            HomeContent(
+                uiState = MainUiState(isCscMuted = false, hasCscPermission = true),
+                onSetup = { pairingStarted = true },
+                onOpenWirelessDebugging = { opened = true }
             )
-        )
+        }
 
         composeTestRule.onNodeWithText("조치 필요").fetchSemanticsNode()
         composeTestRule.onNodeWithText("카메라 무음 다시 적용 필요").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("기기 다시 연결").assertHasClickAction()
+        composeTestRule.onNodeWithText("무선 디버깅 다시 켜기").performScrollTo().performClick()
+        assertTrue(opened)
+        assertTrue(!pairingStarted)
         assertEquals(
             1,
             composeTestRule.onAllNodesWithText("다시 적용하기").fetchSemanticsNodes().size
@@ -134,23 +152,26 @@ class MainScreenTest {
     }
 
     @Test
-    fun existingPermissionDoesNotBlockStartingPairingAgain() {
-        var started = false
+    fun readyHomeOpensWirelessDebuggingWithoutStartingPairingAgain() {
+        var opened = false
+        var pairingStarted = false
         composeTestRule.setContent {
             HomeContent(
                 uiState = MainUiState(isCscMuted = true, hasCscPermission = true),
-                onSetup = { started = true }
+                onSetup = { pairingStarted = true },
+                onOpenWirelessDebugging = { opened = true }
             )
         }
-        composeTestRule.onNodeWithText("기기 다시 연결").performScrollTo().performClick()
-        assertTrue(started)
+        composeTestRule.onNodeWithText("무선 디버깅 다시 켜기").performScrollTo().performClick()
+        assertTrue(opened)
+        assertTrue(!pairingStarted)
     }
 
     @Test
     fun reapplyInProgressDoesNotShowPrematureSuccessOrAllowRepeatedRequests() {
         showHome(MainUiState(hasCscPermission = true, isCscChangeInProgress = true))
-        composeTestRule.onNodeWithText("연결 및 적용 중…").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("기기 다시 연결").assertIsNotEnabled()
+        composeTestRule.onNode(hasText("카메라 설정 변경 중") and hasClickAction()).assertIsNotEnabled()
+        composeTestRule.onNodeWithText("무선 디버깅 다시 켜기").assertIsNotEnabled()
         assertTrue(
             composeTestRule.onAllNodesWithText("카메라 무음 설정 완료").fetchSemanticsNodes().isEmpty()
         )

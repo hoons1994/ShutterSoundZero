@@ -1,6 +1,5 @@
 package io.github.hoons1994.shuttersoundzero.ui.settings
 
-import android.app.Activity
 import android.database.ContentObserver
 import android.content.Context
 import android.content.ContextWrapper
@@ -13,6 +12,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -91,7 +91,8 @@ private enum class CameraAction { REAPPLY, RESTORE }
 @Composable
 fun SettingsScreen(
     onBackClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPairingRecoveryRequested: () -> Unit = onBackClick
 ) {
     val context = LocalContext.current
     val prefs = remember { PreferencesRepository.getInstance(context) }
@@ -111,6 +112,12 @@ fun SettingsScreen(
     }
     var isAppLockEnabled by remember { mutableStateOf(prefs.isAppLockEnabled) }
     var isLockSetupInProgress by remember { mutableStateOf(false) }
+    var lockAuthenticationRequest by remember {
+        mutableStateOf<AppLockAuthenticator.AuthenticationRequest?>(null)
+    }
+    DisposableEffect(Unit) {
+        onDispose { lockAuthenticationRequest?.cancel() }
+    }
     var lockErrorMessage by remember { mutableStateOf<String?>(null) }
 
     var showDeveloperOptionsConfirm by remember { mutableStateOf(false) }
@@ -294,7 +301,7 @@ fun SettingsScreen(
                         }
 
                         isLockSetupInProgress = true
-                        AppLockAuthenticator.authenticate(
+                        lockAuthenticationRequest = AppLockAuthenticator.authenticate(
                             activity = activity,
                             title = if (enabled) "앱 잠금 설정" else "앱 잠금 해제",
                             subtitle = if (enabled) {
@@ -513,8 +520,7 @@ fun SettingsScreen(
             CameraMuteFailureDialog(
                 failure = failure,
                 onDismiss = { cameraMuteFailure = null },
-                onReconnect = onBackClick,
-                reconnectLabel = "홈에서 다시 연결",
+                onReconnect = onPairingRecoveryRequested,
                 onOpenSettings = {
                     if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
                         context.startActivity(Intent(
@@ -708,13 +714,13 @@ private fun currentVersionName(context: Context): String {
     return packageInfo.versionName ?: "-"
 }
 
-private fun Context.findActivity(): Activity? {
+private fun Context.findActivity(): ComponentActivity? {
     var currentContext: Context = this
     while (currentContext is ContextWrapper) {
-        if (currentContext is Activity) return currentContext
+        if (currentContext is ComponentActivity) return currentContext
         currentContext = currentContext.baseContext
     }
-    return currentContext as? Activity
+    return currentContext as? ComponentActivity
 }
 
 @Composable

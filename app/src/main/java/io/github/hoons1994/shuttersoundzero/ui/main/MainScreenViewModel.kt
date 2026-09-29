@@ -264,8 +264,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 val actualStateMatchesRequest = adbResult.isSuccess && CscStateVerifier.waitFor(enableMute) {
                     CscMuteManager.isCscShutterSoundMuted(app)
                 }
-                refreshState()
-
                 if (actualStateMatchesRequest) {
                     if (enableMute) {
                         prefs.lastSetupIssue = null
@@ -300,6 +298,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     }
                 }
             } finally {
+                refreshState()
                 _uiState.update { it.copy(isCscChangeInProgress = false) }
             }
         }
