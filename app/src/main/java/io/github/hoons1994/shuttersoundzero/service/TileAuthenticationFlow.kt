@@ -52,6 +52,13 @@ internal class TileAuthenticationFlow {
         )
     }
 
+    fun restartAuthentication() {
+        mutableState.compareAndSet(
+            TileAuthenticationFlowState.AUTHENTICATING,
+            TileAuthenticationFlowState.IDLE
+        )
+    }
+
     fun authenticationUnavailable() {
         mutableState.compareAndSet(
             TileAuthenticationFlowState.AUTHENTICATING,

@@ -13,14 +13,12 @@ import java.io.File
 import java.io.IOException
 import java.math.BigInteger
 import java.nio.ByteBuffer
-import java.security.KeyFactory
+import java.nio.file.Files
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.cert.Certificate
-import java.security.cert.CertificateFactory
-import java.security.spec.PKCS8EncodedKeySpec
 import java.util.Date
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -76,13 +74,19 @@ object AdbKeyHelper {
         val privFile = File(context.noBackupFilesDir, ENCRYPTED_PRIV_KEY_FILE)
         val certFile = File(context.noBackupFilesDir, CERT_FILE)
 
+        // An unavailable Keystore or an incorrect clock must not destroy an existing pairing.
+        if (!Files.notExists(privFile.toPath())) {
+            val identity = loadIdentity(privFile, certFile)
+                ?: throw IOException("Existing ADB identity could not be loaded")
+            deleteLegacyIdentityFiles(context)
+            return identity
+        }
+
         migrateLegacyIdentityIfNeeded(context, privFile, certFile)
 
         loadIdentity(privFile, certFile)?.let { return it }
 
-        // 손상되거나 한쪽만 남은 identity는 새로 생성한다.
-        privFile.delete()
-        certFile.delete()
+        // loadIdentity returns null only when neither identity file exists.
 
         // 2048비트 RSA 키페어 생성
         val keyGen = KeyPairGenerator.getInstance("RSA")
@@ -110,7 +114,12 @@ object AdbKeyHelper {
         val cert = JcaX509CertificateConverter().getCertificate(certHolder)
 
         return try {
-            writeEncryptedPrivateKey(privFile, keyPair.private.encoded)
+            val encodedKey = keyPair.private.encoded
+            try {
+                writeEncryptedPrivateKey(privFile, encodedKey)
+            } finally {
+                encodedKey.fill(0)
+            }
             certFile.writeBytes(cert.encoded)
 
             loadIdentity(privFile, certFile)
@@ -124,43 +133,16 @@ object AdbKeyHelper {
     }
 
     private fun loadIdentity(privFile: File, certFile: File): Pair<PrivateKey, Certificate>? {
-        if (!privFile.exists() || !certFile.exists()) return null
-
         return try {
-            val privateKeyBytes = decryptPrivateKey(privFile.readBytes())
-            val keySpec = PKCS8EncodedKeySpec(privateKeyBytes)
-            val privateKey = KeyFactory.getInstance("RSA").generatePrivate(keySpec)
-            val cert = certFile.inputStream().use {
-                CertificateFactory.getInstance("X.509").generateCertificate(it)
-            }
-
-            if (!AdbIdentityValidator.isValid(privateKey, cert)) {
-                Log.w(TAG, "Persisted ADB identity failed cryptographic validation")
-                return null
-            }
-
-            Pair(privateKey, cert)
+            AdbIdentityLoader.load(privFile, certFile, ::decryptPrivateKey)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load existing encrypted ADB identity: ${e.javaClass.simpleName}")
-            null
+            throw IOException("Unable to load ADB identity; existing pairing files have been preserved", e)
         }
     }
 
     private fun loadLegacyIdentity(privFile: File, certFile: File): Pair<PrivateKey, Certificate>? {
-        if (!privFile.exists() || !certFile.exists()) return null
-
-        return try {
-            val keySpec = PKCS8EncodedKeySpec(privFile.readBytes())
-            val privateKey = KeyFactory.getInstance("RSA").generatePrivate(keySpec)
-            val cert = certFile.inputStream().use {
-                CertificateFactory.getInstance("X.509").generateCertificate(it)
-            }
-
-            if (!AdbIdentityValidator.isValid(privateKey, cert)) return null
-            Pair(privateKey, cert)
-        } catch (_: Exception) {
-            null
-        }
+        return AdbIdentityLoader.load(privFile, certFile, { it })
     }
 
     private fun writeEncryptedPrivateKey(target: File, privateKeyBytes: ByteArray) {
@@ -215,15 +197,14 @@ object AdbKeyHelper {
         val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
         cipher.init(
             Cipher.DECRYPT_MODE,
-            getOrCreateWrappingKey(),
+            getWrappingKey() ?: throw IOException("ADB identity wrapping key is unavailable"),
             GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv)
         )
         return cipher.doFinal(encrypted)
     }
 
     private fun getOrCreateWrappingKey(): SecretKey {
-        val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
-        (keyStore.getKey(WRAPPING_KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        getWrappingKey()?.let { return it }
 
         val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER)
         keyGenerator.init(
@@ -239,6 +220,11 @@ object AdbKeyHelper {
         return keyGenerator.generateKey()
     }
 
+    private fun getWrappingKey(): SecretKey? {
+        val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
+        return keyStore.getKey(WRAPPING_KEY_ALIAS, null) as? SecretKey
+    }
+
     /**
      * 이전 버전의 평문 PKCS#8 개인키를 암호화 저장 형식으로 1회 이전한다.
      *
@@ -251,23 +237,23 @@ object AdbKeyHelper {
         targetPrivFile: File,
         targetCertFile: File
     ) {
-        if (loadIdentity(targetPrivFile, targetCertFile) != null) {
-            deleteLegacyIdentityFiles(context)
-            return
-        }
-
-        targetPrivFile.delete()
-
         val candidates = listOf(
             File(context.noBackupFilesDir, LEGACY_PRIV_KEY_FILE) to targetCertFile,
             File(context.filesDir, LEGACY_PRIV_KEY_FILE) to File(context.filesDir, CERT_FILE)
         )
 
         for ((legacyPrivFile, legacyCertFile) in candidates) {
+            if (Files.notExists(legacyPrivFile.toPath())) continue
             val legacyIdentity = loadLegacyIdentity(legacyPrivFile, legacyCertFile) ?: continue
+            val previousCertificate = targetCertFile.takeIf { it.exists() }?.readBytes()
 
             try {
-                writeEncryptedPrivateKey(targetPrivFile, legacyIdentity.first.encoded)
+                val encodedKey = legacyIdentity.first.encoded
+                try {
+                    writeEncryptedPrivateKey(targetPrivFile, encodedKey)
+                } finally {
+                    encodedKey.fill(0)
+                }
                 if (legacyCertFile.absolutePath != targetCertFile.absolutePath) {
                     legacyCertFile.copyTo(targetCertFile, overwrite = true)
                 }
@@ -284,11 +270,18 @@ object AdbKeyHelper {
                 Log.i(TAG, "Migrated ADB identity to Android Keystore encrypted storage")
                 return
             } catch (e: Exception) {
+                // Only the encrypted copy created by this migration is disposable.
                 targetPrivFile.delete()
                 if (legacyCertFile.absolutePath != targetCertFile.absolutePath) {
-                    targetCertFile.delete()
+                    try {
+                        if (previousCertificate != null) targetCertFile.writeBytes(previousCertificate)
+                        else targetCertFile.delete()
+                    } catch (restoreError: Exception) {
+                        e.addSuppressed(restoreError)
+                    }
                 }
                 Log.w(TAG, "Unable to migrate legacy ADB identity: ${e.javaClass.simpleName}")
+                throw IOException("Unable to migrate ADB identity; legacy pairing files have been preserved", e)
             }
         }
     }

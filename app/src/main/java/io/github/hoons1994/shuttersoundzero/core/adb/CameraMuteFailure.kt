@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.core.adb
 
+internal const val PAIRING_RECOVERY_LABEL = "6자리 코드로 다시 연결"
+
 /** Actionable failure categories shared by home, settings and the quick-settings tile. */
 enum class CameraMuteFailure(val title: String, val message: String) {
     LOCAL_NETWORK_PERMISSION(
@@ -8,11 +10,11 @@ enum class CameraMuteFailure(val title: String, val message: String) {
     ),
     DISCOVERY(
         "무선 디버깅 연결을 찾지 못했어요",
-        "Wi-Fi 연결과 무선 디버깅 화면의 연결 허용 여부를 확인해 주세요. 무선 디버깅을 껐다 켠 뒤 다시 시도하고, 계속 실패하면 [기기 다시 연결]에서 새 6자리 코드로 연결해 주세요."
+        "Wi-Fi 연결과 무선 디버깅 화면의 연결 허용 여부를 확인해 주세요. 무선 디버깅을 껐다 켠 뒤 다시 시도하고, 계속 실패하면 앱의 연결 오류 안내에서 [$PAIRING_RECOVERY_LABEL]을 눌러 새 코드로 연결해 주세요."
     ),
     CONNECTION(
         "기기에 연결하지 못했어요",
-        "기존 페어링이 만료되거나 해제됐을 수 있습니다. [기기 다시 연결]에서 새 6자리 코드로 연결해 주세요. 무선 디버깅을 켜는 것만으로는 연결이 복구되지 않을 수 있습니다."
+        "기존 페어링이 만료되거나 해제됐을 수 있습니다. 앱의 연결 오류 안내에서 [$PAIRING_RECOVERY_LABEL]을 눌러 새 코드로 연결해 주세요. 무선 디버깅을 켜는 것만으로는 연결이 복구되지 않을 수 있습니다."
     ),
     APPLY(
         "카메라 설정을 변경하지 못했어요",

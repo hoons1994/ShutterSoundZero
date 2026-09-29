@@ -75,6 +75,7 @@ import androidx.navigation3.runtime.NavKey
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.Settings
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
+import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 import io.github.hoons1994.shuttersoundzero.core.WifiConnectionStatus
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
@@ -91,6 +92,7 @@ private val ScreenPadding = 20.dp
 private const val AccessLocalNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
 
 internal enum class HomeStatus {
+    APPLYING,
     READY,
     REAPPLY_REQUIRED,
     SETUP_REQUIRED
@@ -104,6 +106,7 @@ internal enum class StepVisualState {
 }
 
 internal fun resolveHomeStatus(uiState: MainUiState): HomeStatus = when {
+    uiState.isCscChangeInProgress -> HomeStatus.APPLYING
     uiState.isCscMuted && uiState.hasCscPermission -> HomeStatus.READY
     uiState.hasCscPermission -> HomeStatus.REAPPLY_REQUIRED
     else -> HomeStatus.SETUP_REQUIRED
@@ -113,7 +116,9 @@ internal fun resolveHomeStatus(uiState: MainUiState): HomeStatus = when {
 fun MainScreen(
     modifier: Modifier = Modifier,
     onItemClick: (NavKey) -> Unit = {},
-    viewModel: MainScreenViewModel = viewModel()
+    viewModel: MainScreenViewModel = viewModel(),
+    pairingRecoveryRequested: Boolean = false,
+    onPairingRecoveryHandled: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -192,7 +197,7 @@ fun MainScreen(
         }
     }
 
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, context, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshState()
@@ -203,12 +208,34 @@ fun MainScreen(
                 viewModel.refreshSystemVolume()
             }
         }
+        // Opening Quick Settings does not necessarily pause/resume this Activity.
+        // Observe the actual settings changed by a tile instead of waiting for ON_RESUME.
+        val stateObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                viewModel.refreshState()
+            }
+        }
         val ringerReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 viewModel.refreshSystemVolume()
             }
         }
         context.contentResolver.registerContentObserver(android.provider.Settings.System.CONTENT_URI, true, volumeObserver)
+        context.contentResolver.registerContentObserver(
+            android.provider.Settings.System.getUriFor(CscMuteManager.CSC_KEY),
+            false,
+            stateObserver
+        )
+        context.contentResolver.registerContentObserver(
+            DeveloperOptionsManager.wirelessDebuggingUri,
+            false,
+            stateObserver
+        )
+        context.contentResolver.registerContentObserver(
+            android.provider.Settings.Global.getUriFor(android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED),
+            false,
+            stateObserver
+        )
         ContextCompat.registerReceiver(
             context,
             ringerReceiver,
@@ -221,6 +248,7 @@ fun MainScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             context.contentResolver.unregisterContentObserver(volumeObserver)
+            context.contentResolver.unregisterContentObserver(stateObserver)
             context.unregisterReceiver(ringerReceiver)
         }
     }
@@ -262,6 +290,13 @@ fun MainScreen(
         }
     }
 
+    LaunchedEffect(pairingRecoveryRequested) {
+        if (pairingRecoveryRequested) {
+            onPairingRecoveryHandled()
+            setupAction()
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         modifier = modifier.fillMaxSize(),
@@ -273,6 +308,7 @@ fun MainScreen(
             onSetup = setupAction,
             onReapply = reapplyAction,
             onOpenCamera = openCamera,
+            onOpenWirelessDebugging = { SetupSettingsNavigator.openPairingSetupScreen(context) },
             onOpenSoftwareInfo = { SetupSettingsNavigator.openSoftwareInfoSettings(context) },
             onOpenAppSettings = {
                 context.startActivity(
@@ -400,7 +436,8 @@ internal fun HomeContent(
     onOpenAppSettings: () -> Unit = {},
     onSystemVolumeChange: (Int) -> Int? = { null },
     modifier: Modifier = Modifier,
-    onOpenSoundSettings: () -> Unit = {}
+    onOpenSoundSettings: () -> Unit = {},
+    onOpenWirelessDebugging: () -> Unit = {}
 ) {
     val homeStatus = resolveHomeStatus(uiState)
 
@@ -416,8 +453,10 @@ internal fun HomeContent(
             status = homeStatus,
             setupIssue = uiState.setupIssue,
             isInProgress = uiState.isCscChangeInProgress,
-            onReconnect = onSetup,
+            isWirelessDebuggingEnabled = uiState.isWirelessDebuggingEnabled,
+            onOpenWirelessDebugging = onOpenWirelessDebugging,
             onPrimaryAction = when (homeStatus) {
+                HomeStatus.APPLYING -> null
                 HomeStatus.READY -> null
                 HomeStatus.REAPPLY_REQUIRED -> onReapply
                 HomeStatus.SETUP_REQUIRED -> onSetup
@@ -563,12 +602,14 @@ private fun StatusHeroCard(
     status: HomeStatus,
     setupIssue: SetupIssue?,
     isInProgress: Boolean,
-    onReconnect: () -> Unit,
+    isWirelessDebuggingEnabled: Boolean,
+    onOpenWirelessDebugging: () -> Unit,
     onPrimaryAction: (() -> Unit)?,
     onCameraAction: () -> Unit
 ) {
     val hasSetupIssue = status == HomeStatus.SETUP_REQUIRED && setupIssue != null
     val title = when (status) {
+        HomeStatus.APPLYING -> stringResource(R.string.camera_settings_applying)
         HomeStatus.READY -> "카메라 무음 설정 완료"
         HomeStatus.REAPPLY_REQUIRED -> "카메라 무음 다시 적용 필요"
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
@@ -578,8 +619,9 @@ private fun StatusHeroCard(
         }
     }
     val subtitle = when (status) {
+        HomeStatus.APPLYING -> "실제 적용 상태를 확인하고 있습니다. 완료될 때까지 기다려 주세요."
         HomeStatus.READY -> "진동·무음 모드에서 촬영음이 나지 않도록 설정되어 있습니다."
-        HomeStatus.REAPPLY_REQUIRED -> "앱 권한은 유지되어 있습니다. 무선 디버깅을 켜고 다시 적용해 주세요. 연결이 안 되면 기기를 다시 연결할 수 있습니다."
+        HomeStatus.REAPPLY_REQUIRED -> "앱 권한은 유지되어 있습니다. 무선 디버깅을 켠 뒤 [다시 적용하기]를 눌러 주세요."
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
             "문제가 생긴 단계를 아래에 표시했습니다. 해당 단계부터 다시 진행하면 됩니다."
         } else {
@@ -587,16 +629,19 @@ private fun StatusHeroCard(
         }
     }
     val badgeText = when (status) {
+        HomeStatus.APPLYING -> "처리 중"
         HomeStatus.READY -> "정상"
         HomeStatus.REAPPLY_REQUIRED -> "조치 필요"
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "확인 필요" else "설정 필요"
     }
     val badgeColor = when (status) {
+        HomeStatus.APPLYING -> BrandBlueLight
         HomeStatus.READY -> StatusGreen
         HomeStatus.REAPPLY_REQUIRED -> StatusAmber
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) StatusAmber else BrandBlueLight
     }
     val primaryLabel = when (status) {
+        HomeStatus.APPLYING -> stringResource(R.string.camera_settings_applying)
         HomeStatus.READY -> null
         HomeStatus.REAPPLY_REQUIRED -> "다시 적용하기"
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "1회 설정 다시 시작" else "1회 설정 시작"
@@ -656,15 +701,23 @@ private fun StatusHeroCard(
                     colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)
                 ) {
                     Text(
-                        text = if (isInProgress) "연결 및 적용 중…" else primaryLabel.orEmpty(),
+                        text = primaryLabel.orEmpty(),
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                 }
             }
             if (status != HomeStatus.SETUP_REQUIRED) {
-                TextButton(onClick = onReconnect, enabled = !isInProgress) {
-                    Text("기기 다시 연결")
+                TextButton(
+                    onClick = onOpenWirelessDebugging,
+                    enabled = !isInProgress
+                ) {
+                    Text(
+                        stringResource(
+                            if (isWirelessDebuggingEnabled) R.string.main_open_wireless_debugging_settings
+                            else R.string.main_reenable_wireless_debugging
+                        )
+                    )
                 }
             }
         }

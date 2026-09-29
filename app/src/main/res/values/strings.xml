@@ -4,6 +4,9 @@
     <string name="tile_muted">셔터사운드 제로 켜짐</string>
     <string name="tile_unmuted">셔터사운드 제로 꺼짐</string>
     <string name="tile_permission_required">권한 필요</string>
+    <string name="camera_settings_applying">카메라 설정 변경 중</string>
+    <string name="main_reenable_wireless_debugging">무선 디버깅 다시 켜기</string>
+    <string name="main_open_wireless_debugging_settings">무선 디버깅 설정 열기</string>
 
     <string name="main_local_network_reapply_prompt">Android 17에서 무선 ADB 재적용을 사용하려면 로컬 네트워크 권한이 필요합니다. [앱 설정]에서 허용해 주세요.</string>
     <string name="main_non_samsung_device_warning">안내: 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.</string>

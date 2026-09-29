@@ -27,7 +27,7 @@ class CameraMuteFailureDialogTest {
                 onOpenSettings = { openedSettings = true }
             )
         }
-        composeTestRule.onNodeWithText("기기 다시 연결").performClick()
+        composeTestRule.onNodeWithText("6자리 코드로 다시 연결").performClick()
         assertTrue(dismissed)
         assertTrue(reconnected)
         assertFalse(openedSettings)
@@ -53,7 +53,7 @@ class CameraMuteFailureDialogTest {
         composeTestRule.setContent {
             CameraMuteFailureDialog(CameraMuteFailure.APPLY, {}, {}, {})
         }
-        assertTrue(composeTestRule.onAllNodesWithText("기기 다시 연결").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeTestRule.onAllNodesWithText("6자리 코드로 다시 연결").fetchSemanticsNodes().isEmpty())
         assertTrue(composeTestRule.onAllNodesWithText("무선 디버깅 설정").fetchSemanticsNodes().isEmpty())
         composeTestRule.onNodeWithText("확인").performClick()
     }

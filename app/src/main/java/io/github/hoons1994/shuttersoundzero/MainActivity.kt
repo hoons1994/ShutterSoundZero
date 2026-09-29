@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
     private var appLockPreferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     private var isAppUnlocked by mutableStateOf(true)
     private var authenticationInProgress = false
+    private var authenticationRequest: AppLockAuthenticator.AuthenticationRequest? = null
     private var autoPromptPending = false
     private var localNetworkPermissionRequestInProgress = false
     private var localNetworkPermissionDeniedThisSession = false
@@ -124,16 +126,26 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         updateWindowSecurity()
+        if (::prefs.isInitialized && prefs.isAppLockEnabled &&
+            !AppLockSession.isUnlocked && !AppLockAuthenticator.isAuthenticating(this)
+        ) {
+            isAppUnlocked = false
+            autoPromptPending = true
+        }
         if (
             ::prefs.isInitialized &&
             autoPromptPending &&
             prefs.isAppLockEnabled &&
             !isAppUnlocked &&
-            !authenticationInProgress
+            !authenticationInProgress &&
+            !AppLockAuthenticator.isAuthenticating(this)
         ) {
             autoPromptPending = false
             window.decorView.post {
-                if (!isFinishing && prefs.isAppLockEnabled && !isAppUnlocked) {
+                if (!isFinishing && !isDestroyed &&
+                    lifecycle.currentState == Lifecycle.State.RESUMED &&
+                    prefs.isAppLockEnabled && !isAppUnlocked
+                ) {
                     requestAppUnlock()
                 }
             }
@@ -142,7 +154,8 @@ class MainActivity : ComponentActivity() {
         if (
             ::prefs.isInitialized &&
             (!prefs.isAppLockEnabled || isAppUnlocked) &&
-            !authenticationInProgress
+            !authenticationInProgress &&
+            !AppLockAuthenticator.isAuthenticating(this)
         ) {
             requestLocalNetworkPermissionForExistingLinkageIfNeeded()
         }
@@ -158,18 +171,23 @@ class MainActivity : ComponentActivity() {
         if (
             ::prefs.isInitialized &&
             prefs.isAppLockEnabled &&
-            !authenticationInProgress &&
             !isChangingConfigurations
         ) {
             AppLockSession.lock()
-            isAppUnlocked = false
-            autoPromptPending = true
-            unlockErrorMessage = null
+            // Keep a settings prompt's owner composed while the system credential UI is open.
+            // Its success callback is deferred until RESUMED; the global session stays locked.
+            if (!AppLockAuthenticator.isAuthenticating(this)) {
+                isAppUnlocked = false
+                autoPromptPending = true
+                unlockErrorMessage = null
+            }
         }
         super.onStop()
     }
 
     override fun onDestroy() {
+        authenticationRequest?.cancel()
+        authenticationRequest = null
         if (::prefs.isInitialized) {
             appLockPreferenceListener?.let(prefs::unregisterAppLockChangeListener)
         }
@@ -178,12 +196,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestAppUnlock() {
+        if (isFinishing || isDestroyed || lifecycle.currentState != Lifecycle.State.RESUMED) return
         if (!prefs.isAppLockEnabled) {
             AppLockSession.unlock()
             isAppUnlocked = true
             return
         }
-        if (authenticationInProgress) return
+        if (authenticationInProgress || AppLockAuthenticator.isAuthenticating(this)) return
 
         unlockErrorMessage = null
         if (!AppLockAuthenticator.canAuthenticate(this)) {
@@ -192,12 +211,13 @@ class MainActivity : ComponentActivity() {
         }
 
         authenticationInProgress = true
-        AppLockAuthenticator.authenticate(
+        authenticationRequest = AppLockAuthenticator.authenticate(
             activity = this,
             title = getString(R.string.app_lock_prompt_title),
             subtitle = getString(R.string.app_lock_prompt_subtitle),
             onSuccess = {
                 authenticationInProgress = false
+                autoPromptPending = false
                 unlockErrorMessage = null
                 AppLockSession.unlock()
                 isAppUnlocked = true

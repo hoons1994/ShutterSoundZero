@@ -3,6 +3,7 @@ package io.github.hoons1994.shuttersoundzero.core
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.provider.Settings
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteOperationGate
 
@@ -19,6 +20,9 @@ object DeveloperOptionsManager {
 
     // Settings.Global.ADB_WIFI_ENABLED is a hidden framework constant.
     private const val ADB_WIFI_ENABLED = "adb_wifi_enabled"
+
+    internal val wirelessDebuggingUri: Uri
+        get() = Settings.Global.getUriFor(ADB_WIFI_ENABLED)
 
     /** 개발자 옵션 활성화 여부를 읽는다. */
     fun isDeveloperOptionsEnabled(context: Context): Boolean {
@@ -39,12 +43,11 @@ object DeveloperOptionsManager {
     }
 
     fun isWirelessDebuggingEnabled(context: Context): Boolean {
-        return Settings.Global.getInt(
-            context.contentResolver,
-            ADB_WIFI_ENABLED,
-            0
-        ) != 0
+        return runCatching { readWirelessDebuggingEnabled(context) }.getOrDefault(false)
     }
+
+    private fun readWirelessDebuggingEnabled(context: Context): Boolean =
+        Settings.Global.getInt(context.contentResolver, ADB_WIFI_ENABLED, 0) != 0
 
     /**
      * 설정 작업이 끝난 뒤 무선 디버깅만 끈다.
@@ -71,7 +74,8 @@ object DeveloperOptionsManager {
                     0
                 )
                 check(changed) { "무선 디버깅 설정을 변경하지 못했습니다." }
-                check(!isWirelessDebuggingEnabled(context)) {
+                // A failed read must not be reported as successful cleanup.
+                check(!readWirelessDebuggingEnabled(context)) {
                     "무선 디버깅이 아직 활성화되어 있습니다."
                 }
             }

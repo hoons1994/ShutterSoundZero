@@ -25,6 +25,8 @@ internal class TileAuthenticationViewModel(application: Application) : AndroidVi
 
     fun cancelAuthentication() = flow.cancel()
 
+    fun restartAuthentication() = flow.restartAuthentication()
+
     fun authenticationUnavailable() = flow.authenticationUnavailable()
 
     fun authenticationError() = flow.authenticationError()

@@ -49,6 +49,19 @@ class MainActivityAppLockInstrumentedTest {
         }
     }
 
+    @Test fun leavingForegroundDuringAuthenticationStillLocksTheSession() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                MainActivity::class.java.getDeclaredField("authenticationInProgress").apply {
+                    isAccessible = true
+                    setBoolean(activity, true)
+                }
+            }
+            scenario.moveToState(Lifecycle.State.CREATED)
+            assertFalse(AppLockSession.isUnlocked)
+        }
+    }
+
     @Test
     fun configurationChange_preservesUnlockedSession() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->

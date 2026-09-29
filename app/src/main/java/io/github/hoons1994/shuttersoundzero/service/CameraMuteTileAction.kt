@@ -19,17 +19,17 @@ internal object CameraMuteTileAction {
 
     suspend fun execute(
         context: Context,
-        onTargetState: (Boolean) -> Unit = {}
+        onStarted: () -> Unit = {}
     ) {
         val appContext = context.applicationContext
         val targetMuted = !CscMuteManager.isCscShutterSoundMuted(appContext)
-        executeTarget(appContext, targetMuted, onTargetState)
+        executeTarget(appContext, targetMuted, onStarted)
     }
 
     suspend fun executeTarget(
         context: Context,
         targetMuted: Boolean,
-        onTargetState: (Boolean) -> Unit = {}
+        onStarted: () -> Unit = {}
     ) {
         val appContext = context.applicationContext
         val prefs = PreferencesRepository.getInstance(appContext)
@@ -64,7 +64,7 @@ internal object CameraMuteTileAction {
             return
         }
 
-        onTargetState(targetMuted)
+        onStarted()
 
         try {
             val adbManager = StandaloneAdbManager.getInstance(appContext)
