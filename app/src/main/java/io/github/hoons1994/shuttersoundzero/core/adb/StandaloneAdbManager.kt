@@ -93,16 +93,20 @@ class StandaloneAdbManager(context: Context) {
     private var pairingMdns: SafeAdbMdnsDiscovery? = null
     private var pairingConnectMdns: SafeAdbMdnsDiscovery? = null
     @Synchronized
-    fun startPairingDiscovery(onPairingPortDiscovered: (Int) -> Unit, onConnectPortDiscovered: (Int) -> Unit) {
+    fun startPairingDiscovery(
+        onPairingPortDiscovered: (Int) -> Unit,
+        onConnectPortDiscovered: (Int) -> Unit,
+        onFailure: (Int) -> Unit
+    ) {
         LocalNetworkAccess.requireGranted(context)
         stopPairingDiscovery()
         val session = pairingDiscoveryPorts.begin()
         try {
             pairingMulticastLease = multicastLeaseManager.acquire()
-            pairingMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_PAIRING) { _, port ->
+            pairingMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_PAIRING, onFailure = onFailure) { _, port ->
                 pairingDiscoveryPorts.onPairingPort(session, port, onPairingPortDiscovered)
             }
-            pairingConnectMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT) { _, port ->
+            pairingConnectMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT, onFailure = onFailure) { _, port ->
                 pairingDiscoveryPorts.onConnectPort(session, port, onConnectPortDiscovered)
             }
         } catch (error: Exception) {
