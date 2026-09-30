@@ -14,6 +14,7 @@ import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationH
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -117,6 +118,24 @@ class PairingNotificationReceiverInstrumentedTest {
     }
 
     @Test
+    fun wirelessDebuggingReady_advancesGuidanceWithoutExposingCodeEntryBeforeDiscovery() {
+        val notification = PairingNotificationHelper.buildPairingNotification(
+            baseContext,
+            state = PairingNotificationState.WIRELESS_DEBUGGING_READY
+        )
+
+        assertEquals(
+            "무선 디버깅 준비 완료",
+            notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
+        )
+        assertEquals(
+            "무선 디버깅에서 [페어링 코드로 기기 페어링]을 열어 주세요.",
+            notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+        )
+        assertFalse(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
+    }
+
+    @Test
     fun pairingFailureState_asksForFreshPairingWindow() {
         val notification = PairingNotificationHelper.buildPairingNotification(
             baseContext,
@@ -130,6 +149,20 @@ class PairingNotificationReceiverInstrumentedTest {
         assertEquals("페어링 창이 닫혔거나 연결 정보가 바뀌었을 수 있습니다. 창을 다시 열고 새 6자리 코드로 시도해 주세요.", text)
         assertFalse(title.contains("포트"))
         assertFalse(text.contains("포트"))
+        assertFalse(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
+    }
+
+    @Test
+    fun discoveryFailure_opensAppForASetupRestartWithoutStaleCodeEntry() {
+        val notification = PairingNotificationHelper.buildPairingNotification(
+            baseContext,
+            state = PairingNotificationState.DISCOVERY_START_FAILED
+        )
+
+        assertNotNull(notification.contentIntent)
+        val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+        assertTrue(text.contains("알림을 눌러 앱으로 돌아간 뒤"))
+        assertTrue(text.contains("[1회 설정 시작]"))
         assertFalse(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
     }
 

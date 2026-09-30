@@ -53,6 +53,7 @@
     <string name="pairing_title_code_entry">6자리 코드 입력</string>
     <string name="pairing_title_setup_in_progress">1회 설정 진행</string>
     <string name="pairing_state_developer_options_ready">개발자 옵션 준비 완료</string>
+    <string name="pairing_state_wireless_debugging_ready">무선 디버깅 준비 완료</string>
     <string name="pairing_state_local_network_permission_required">로컬 네트워크 권한이 필요합니다</string>
     <string name="pairing_state_discovery_start_failed">페어링 연결 화면을 찾지 못했습니다</string>
     <string name="pairing_state_invalid_code">확인: 숫자 6자리 페어링 코드를 정확히 입력해 주세요.</string>
@@ -63,6 +64,7 @@
     <string name="pairing_state_error">기기 연결 중 문제가 발생했습니다</string>
     <string name="pairing_help_local_network">앱 설정에서 로컬 네트워크 권한을 허용한 뒤 1회 설정을 다시 시작해 주세요.</string>
     <string name="pairing_help_discovery">Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 다시 열어 둔 채 시도해 주세요.</string>
+    <string name="pairing_help_discovery_restart">Wi-Fi와 무선 디버깅을 확인해 주세요. 알림을 눌러 앱으로 돌아간 뒤 [1회 설정 시작]을 다시 눌러 주세요.</string>
     <string name="pairing_help_invalid_code">연결 화면의 숫자 6자리를 확인하고 새 코드가 표시되면 그 코드를 입력해 주세요.</string>
     <string name="pairing_help_connection">페어링 창이 닫혔거나 연결 정보가 바뀌었을 수 있습니다. 창을 다시 열고 새 6자리 코드로 시도해 주세요.</string>
     <string name="pairing_help_timeout">Wi-Fi와 무선 디버깅을 확인한 뒤 페어링 창을 다시 열고 새 코드로 시도해 주세요.</string>

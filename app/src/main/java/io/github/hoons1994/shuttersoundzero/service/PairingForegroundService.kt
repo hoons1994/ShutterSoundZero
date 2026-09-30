@@ -80,28 +80,26 @@ class PairingForegroundService : Service() {
 
     private val adbManager by lazy { StandaloneAdbManager.getInstance(this) }
     private val prefs by lazy { PreferencesRepository.getInstance(this) }
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // ADB operations dispatch their blocking work to IO; service/notification state stays on main.
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pairingGeneration = OperationGeneration()
+    private val discoveryNotificationGeneration = OperationGeneration()
     private var pairingJob: Job? = null
-    private var isDeveloperOptionsObserverRegistered = false
+    private var isSetupObserverRegistered = false
+    private var isPairingActive = false
+    private var isPairingCompleting = false
+    private val notificationRefresh = PairingNotificationRefreshState()
 
-    private val developerOptionsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+    private val setupObserver = object : ContentObserver(mainHandler) {
         override fun onChange(selfChange: Boolean) {
-            if (!DeveloperOptionsManager.isDeveloperOptionsEnabled(this@PairingForegroundService)) return
-
-            PairingNotificationHelper.showPairingNotification(
-                this@PairingForegroundService,
-                state = PairingNotificationState.DEVELOPER_OPTIONS_READY,
-                isDevOptionsOff = true
-            )
-            unregisterDeveloperOptionsObserver()
+            refreshPairingSetupNotification()
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> startPairing(intent.getBooleanExtra(EXTRA_DEV_OPTIONS_OFF, false))
+            ACTION_START -> startPairing()
             ACTION_SUBMIT_CODE -> submitPairingCode(intent.getStringExtra(EXTRA_PAIRING_CODE).orEmpty().trim())
             ACTION_STOP -> stopPairing(showSuccess = false, wirelessDebuggingDisabled = false)
             else -> stopSelf(startId)
@@ -109,11 +107,17 @@ class PairingForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startPairing(isDevOptionsOff: Boolean) {
+    private fun startPairing() {
         // 새 1회 설정 시작은 이전 코드 제출 작업의 완료보다 우선한다.
         pairingGeneration.invalidate()
         pairingJob?.cancel()
         pairingJob = null
+        stopPairingDiscovery()
+        adbManager.clearDiscoveredPorts()
+        isPairingActive = true
+        isPairingCompleting = false
+        val setupState = readPairingSetupState()
+        notificationRefresh.reset(setupState)
 
         prefs.lastSetupIssue = null
         DiagnosticLogger.record(
@@ -124,7 +128,8 @@ class PairingForegroundService : Service() {
 
         val notification = PairingNotificationHelper.buildPairingNotification(
             this,
-            isDevOptionsOff = isDevOptionsOff
+            state = setupState.notificationState,
+            isDevOptionsOff = !setupState.developerOptionsEnabled
         )
         startForeground(
             PairingNotificationHelper.NOTIFICATION_ID,
@@ -132,22 +137,33 @@ class PairingForegroundService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
         )
 
-        if (isDevOptionsOff) registerDeveloperOptionsObserver()
-        else unregisterDeveloperOptionsObserver()
+        registerSetupObserver()
 
-        startPairingDiscovery()
+        if (setupState.developerOptionsEnabled && setupState.wirelessDebuggingEnabled) {
+            startPairingDiscovery()
+        }
+        // Re-read after registration so a change during service startup cannot be missed.
+        refreshPairingSetupNotification()
     }
 
     private fun startPairingDiscovery(): Boolean {
+        notificationRefresh.clearDiscovery()
+        val notificationGeneration = discoveryNotificationGeneration.next()
         return try {
             adbManager.startPairingDiscovery(
-                onPairingPortDiscovered = { port ->
+                onPairingPortDiscovered = {
                     DiagnosticLogger.record(
                         this,
                         DiagnosticLogger.Stage.PAIRING_SERVICE_DISCOVERED,
                         DiagnosticLogger.Outcome.INFO
                     )
-                    PairingNotificationHelper.showPairingNotification(this, pairingPort = port)
+                    mainHandler.post {
+                        if (isPairingActive && !isPairingCompleting &&
+                            discoveryNotificationGeneration.isCurrent(notificationGeneration)) {
+                            notificationRefresh.portDiscovered()
+                            refreshPairingSetupNotification()
+                        }
+                    }
                 },
                 onConnectPortDiscovered = {
                     DiagnosticLogger.record(
@@ -155,10 +171,21 @@ class PairingForegroundService : Service() {
                         DiagnosticLogger.Stage.CONNECT_SERVICE_DISCOVERED,
                         DiagnosticLogger.Outcome.INFO
                     )
+                },
+                onFailure = { errorCode ->
+                    mainHandler.post {
+                        if (isPairingActive && !isPairingCompleting &&
+                            discoveryNotificationGeneration.isCurrent(notificationGeneration)) {
+                            notificationRefresh.discoveryFailed(errorCode)
+                            refreshPairingSetupNotification()
+                        }
+                    }
                 }
             )
             true
         } catch (e: Exception) {
+            stopPairingDiscovery()
+            adbManager.clearDiscoveredPorts()
             val localNetworkPermissionMissing = e is LocalNetworkPermissionRequiredException
             prefs.lastSetupIssue = if (localNetworkPermissionMissing) {
                 SetupIssue.LOCAL_NETWORK_PERMISSION
@@ -185,6 +212,7 @@ class PairingForegroundService : Service() {
     }
 
     private fun submitPairingCode(code: String) {
+        if (pairingJob?.isActive == true || isPairingCompleting) return
         val pairingPort = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
 
         if (!PairingCode.isValid(code)) {
@@ -207,7 +235,7 @@ class PairingForegroundService : Service() {
             return
         }
 
-        if (pairingJob?.isActive == true) return
+        isPairingCompleting = false
 
         prefs.lastSetupIssue = null
         DiagnosticLogger.record(
@@ -255,7 +283,7 @@ class PairingForegroundService : Service() {
 
                     currentCoroutineContext().ensureActive()
                     commitPairingSideEffect(generation) {
-                        adbManager.stopPairingDiscovery()
+                        stopPairingDiscovery()
                         Log.i(TAG, "Attempting pairing using app-discovered endpoint")
                         DiagnosticLogger.record(
                             this@PairingForegroundService,
@@ -292,6 +320,7 @@ class PairingForegroundService : Service() {
 
                         if (muteResult.isSuccess) {
                             commitPairingSideEffect(generation) {
+                                isPairingCompleting = true
                                 prefs.lastSetupIssue = null
                                 DiagnosticLogger.record(
                                     this@PairingForegroundService,
@@ -402,6 +431,7 @@ class PairingForegroundService : Service() {
                 throw e
             } catch (e: Exception) {
                 commitPairingSideEffect(generation) {
+                    isPairingCompleting = false
                     val localNetworkPermissionMissing = e is LocalNetworkPermissionRequiredException
                     prefs.lastSetupIssue = if (localNetworkPermissionMissing) {
                         SetupIssue.LOCAL_NETWORK_PERMISSION
@@ -429,6 +459,7 @@ class PairingForegroundService : Service() {
                 // 이전 세대의 늦은 finally가 새 pairingJob 참조를 지우지 못하게 한다.
                 if (pairingGeneration.isCurrent(generation) && pairingJob === coroutineContext[Job]) {
                     pairingJob = null
+                    refreshPairingSetupNotification()
                 }
             }
         }
@@ -452,6 +483,8 @@ class PairingForegroundService : Service() {
     }
 
     private fun restartPairingDiscovery() {
+        val state = readPairingSetupState()
+        if (!state.developerOptionsEnabled || !state.wirelessDebuggingEnabled) return
         if (startPairingDiscovery()) {
             Log.i(TAG, "Restarted pairing discovery after unsuccessful attempt")
         }
@@ -495,11 +528,12 @@ class PairingForegroundService : Service() {
     }
 
     private fun stopPairing(showSuccess: Boolean, wirelessDebuggingDisabled: Boolean) {
-        unregisterDeveloperOptionsObserver()
+        isPairingActive = false
+        unregisterSetupObserver()
         pairingGeneration.invalidate()
         pairingJob?.cancel()
         pairingJob = null
-        adbManager.stopPairingDiscovery()
+        stopPairingDiscovery()
         stopForeground(STOP_FOREGROUND_REMOVE)
         if (showSuccess) {
             PairingNotificationHelper.showSuccessNotification(
@@ -511,36 +545,104 @@ class PairingForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        unregisterDeveloperOptionsObserver()
+        isPairingActive = false
+        unregisterSetupObserver()
         pairingGeneration.invalidate()
         pairingJob?.cancel()
         pairingJob = null
         serviceScope.cancel()
-        adbManager.stopPairingDiscovery()
+        stopPairingDiscovery()
         super.onDestroy()
     }
 
-    private fun registerDeveloperOptionsObserver() {
-        if (isDeveloperOptionsObserverRegistered) return
+    private fun readPairingSetupState() = PairingSetupState(
+        developerOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(this),
+        wirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(this)
+    )
+
+    private fun refreshPairingSetupNotification() {
+        if (!isPairingActive || isPairingCompleting) return
+        val state = readPairingSetupState()
+        notificationRefresh.observeSetup(state)
+        when (val update = notificationRefresh.takeUpdate(blocked = pairingJob != null)) {
+            null -> return
+            is PairingNotificationRefreshState.Update.DiscoveryFailed -> {
+                stopPairingDiscovery()
+                adbManager.clearDiscoveredPorts()
+                prefs.lastSetupIssue = SetupIssue.PAIRING_DISCOVERY
+                DiagnosticLogger.record(
+                    this,
+                    DiagnosticLogger.Stage.PAIRING_DISCOVERY,
+                    DiagnosticLogger.Outcome.FAILURE
+                )
+                Log.w(TAG, "Asynchronous pairing discovery failed (${update.errorCode})")
+                PairingNotificationHelper.showPairingNotification(
+                    this,
+                    state = PairingNotificationState.DISCOVERY_START_FAILED
+                )
+                return
+            }
+            is PairingNotificationRefreshState.Update.Setup -> {
+                if (!state.developerOptionsEnabled || !state.wirelessDebuggingEnabled) {
+                    stopPairingDiscovery()
+                    adbManager.clearDiscoveredPorts()
+                } else {
+                    // Restart even after an off/on cycle during a pairing attempt.
+                    if (!startPairingDiscovery()) return
+                }
+            }
+            PairingNotificationRefreshState.Update.PortDiscovered -> Unit
+        }
+        if (prefs.lastSetupIssue == SetupIssue.LOCAL_NETWORK_PERMISSION) return
+
+        val port = adbManager.lastDiscoveredPairingPort?.takeIf {
+            state.developerOptionsEnabled && state.wirelessDebuggingEnabled && it in 1..65535
+        }
+        if (port != null && prefs.lastSetupIssue == SetupIssue.PAIRING_DISCOVERY) {
+            prefs.lastSetupIssue = null
+        }
+        PairingNotificationHelper.showPairingNotification(
+            this,
+            pairingPort = port,
+            state = if (port == null) state.notificationState else null,
+            isDevOptionsOff = !state.developerOptionsEnabled
+        )
+    }
+
+    private fun stopPairingDiscovery() {
+        discoveryNotificationGeneration.invalidate()
+        notificationRefresh.clearDiscovery()
+        adbManager.stopPairingDiscovery()
+    }
+
+    private fun registerSetupObserver() {
+        if (isSetupObserverRegistered) return
         try {
+            // The same observer stays registered for both prerequisites throughout setup.
+            isSetupObserverRegistered = true
             contentResolver.registerContentObserver(
                 Settings.Global.getUriFor(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED),
                 false,
-                developerOptionsObserver
+                setupObserver
             )
-            isDeveloperOptionsObserverRegistered = true
+            contentResolver.registerContentObserver(
+                DeveloperOptionsManager.wirelessDebuggingUri,
+                false,
+                setupObserver
+            )
         } catch (e: Exception) {
-            Log.w(TAG, "Unable to observe developer options (${e.javaClass.simpleName})")
+            unregisterSetupObserver()
+            Log.w(TAG, "Unable to observe pairing settings (${e.javaClass.simpleName})")
         }
     }
 
-    private fun unregisterDeveloperOptionsObserver() {
-        if (!isDeveloperOptionsObserverRegistered) return
+    private fun unregisterSetupObserver() {
+        if (!isSetupObserverRegistered) return
         try {
-            contentResolver.unregisterContentObserver(developerOptionsObserver)
+            contentResolver.unregisterContentObserver(setupObserver)
         } catch (_: Exception) {
         }
-        isDeveloperOptionsObserverRegistered = false
+        isSetupObserverRegistered = false
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

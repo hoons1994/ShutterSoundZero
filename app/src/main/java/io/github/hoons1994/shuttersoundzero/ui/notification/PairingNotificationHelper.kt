@@ -144,6 +144,16 @@ object PairingNotificationHelper {
         if (state != null) {
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(copy.bigText))
         }
+        if (state == PairingNotificationState.DISCOVERY_START_FAILED) {
+            builder.setContentIntent(
+                PendingIntent.getActivity(
+                    context,
+                    0,
+                    Intent(context, MainActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+        }
 
         if (pairingPort != null) builder.addAction(replyAction)
         builder.addAction(cancelAction)
@@ -185,6 +195,7 @@ object PairingNotificationHelper {
 
         val stateTitle = when (state) {
             PairingNotificationState.DEVELOPER_OPTIONS_READY -> context.getString(R.string.pairing_state_developer_options_ready)
+            PairingNotificationState.WIRELESS_DEBUGGING_READY -> context.getString(R.string.pairing_state_wireless_debugging_ready)
             PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED -> context.getString(R.string.pairing_state_local_network_permission_required)
             PairingNotificationState.DISCOVERY_START_FAILED -> context.getString(R.string.pairing_state_discovery_start_failed)
             PairingNotificationState.INVALID_PAIRING_CODE -> context.getString(R.string.pairing_state_invalid_code)
@@ -202,8 +213,9 @@ object PairingNotificationHelper {
 
         val guidance = when (state) {
             PairingNotificationState.DEVELOPER_OPTIONS_READY -> R.string.pairing_state_next_step
+            PairingNotificationState.WIRELESS_DEBUGGING_READY -> R.string.pairing_default_open_pairing_summary
             PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED -> R.string.pairing_help_local_network
-            PairingNotificationState.DISCOVERY_START_FAILED,
+            PairingNotificationState.DISCOVERY_START_FAILED -> R.string.pairing_help_discovery_restart
             PairingNotificationState.DISCOVERY_WAITING -> R.string.pairing_help_discovery
             PairingNotificationState.INVALID_PAIRING_CODE -> R.string.pairing_help_invalid_code
             PairingNotificationState.CAMERA_APPLY_FAILED -> R.string.pairing_help_camera_apply
