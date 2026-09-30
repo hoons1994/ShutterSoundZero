@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.database.ContentObserver
 import android.media.AudioManager
 import android.os.Build
@@ -16,7 +17,9 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,14 +40,17 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -59,10 +65,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -84,6 +93,7 @@ import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import io.github.hoons1994.shuttersoundzero.theme.BrandBlueLight
 import io.github.hoons1994.shuttersoundzero.theme.StatusAmber
 import io.github.hoons1994.shuttersoundzero.theme.StatusGreen
+import io.github.hoons1994.shuttersoundzero.theme.ShutterSoundZeroTheme
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
 import kotlin.math.roundToInt
 
@@ -476,6 +486,7 @@ internal fun HomeContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SystemVolumeCard(
     volume: SystemVolumeUiState,
@@ -484,6 +495,14 @@ private fun SystemVolumeCard(
 ) {
     val current = volume.current
     val canAdjust = current != null && !volume.isFixed && volume.max > volume.min
+    val sliderEnabled = canAdjust && !volume.isRingerMuted && volume.requested == null
+    val colorScheme = MaterialTheme.colorScheme
+    val sliderColors = SliderDefaults.colors(
+        activeTrackColor = colorScheme.primary,
+        inactiveTrackColor = colorScheme.primaryContainer,
+        disabledActiveTrackColor = colorScheme.onSurface.copy(alpha = 0.28f),
+        disabledInactiveTrackColor = colorScheme.surfaceContainerHigh
+    )
     var selectedVolume by remember(current, volume.requested, volume.error) {
         mutableFloatStateOf((volume.requested ?: current ?: volume.min).toFloat())
     }
@@ -497,30 +516,51 @@ private fun SystemVolumeCard(
     ) {
         Column(
             modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.system_volume_title),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                if (current != null) {
-                    Text(
-                        text = "${selectedVolume.roundToInt()} / ${volume.max}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val stackLevel = maxWidth / LocalDensity.current.fontScale < 220.dp
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(36.dp),
+                            shape = CircleShape,
+                            color = colorScheme.primaryContainer,
+                            contentColor = colorScheme.onPrimaryContainer
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_system_volume),
+                                contentDescription = null,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.system_volume_title),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = colorScheme.onSurface
+                        )
+                        if (current != null && !stackLevel) {
+                            SystemVolumeLevelBadge(selectedVolume.roundToInt(), volume.max)
+                        }
+                    }
+                    if (current != null && stackLevel) {
+                        SystemVolumeLevelBadge(
+                            level = selectedVolume.roundToInt(),
+                            max = volume.max,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                    }
                 }
             }
 
             if (canAdjust) {
                 Slider(
-                    enabled = !volume.isRingerMuted && volume.requested == null,
+                    enabled = sliderEnabled,
                     value = selectedVolume,
                     onValueChange = { selectedVolume = it },
                     onValueChangeFinished = {
@@ -530,7 +570,34 @@ private fun SystemVolumeCard(
                     },
                     valueRange = volume.min.toFloat()..volume.max.toFloat(),
                     steps = (volume.max - volume.min - 1).coerceAtLeast(0),
-                    modifier = Modifier.semantics { contentDescription = "시스템 음량 조절" }
+                    colors = sliderColors,
+                    thumb = {
+                        Surface(
+                            modifier = Modifier.width(10.dp).height(28.dp),
+                            shape = RoundedCornerShape(50),
+                            color = if (sliderEnabled) colorScheme.onPrimary else colorScheme.surface,
+                            border = BorderStroke(
+                                2.dp,
+                                if (sliderEnabled) colorScheme.primary
+                                else colorScheme.onSurface.copy(alpha = 0.38f)
+                            )
+                        ) {}
+                    },
+                    track = { sliderState ->
+                        SliderDefaults.Track(
+                            sliderState = sliderState,
+                            modifier = Modifier.height(28.dp),
+                            enabled = sliderEnabled,
+                            colors = sliderColors,
+                            drawStopIndicator = null,
+                            drawTick = { _, _ -> },
+                            thumbTrackGapSize = 0.dp,
+                            trackInsideCornerSize = 0.dp
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "시스템 음량 조절" }
                 )
             } else {
                 Text(
@@ -552,11 +619,53 @@ private fun SystemVolumeCard(
                         else -> volume.error ?: stringResource(R.string.system_volume_description)
                     },
                     style = MaterialTheme.typography.bodySmall,
+                    lineHeight = 18.sp,
                     color = if (volume.error != null || volume.isRingerMuted) StatusAmber else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            TextButton(onClick = onOpenSoundSettings) {
+            TextButton(
+                onClick = onOpenSoundSettings,
+                modifier = Modifier.align(Alignment.End)
+            ) {
                 Text(stringResource(R.string.system_volume_open_settings))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SystemVolumeLevelBadge(level: Int, max: Int, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+    ) {
+        Text(
+            text = "$level / $max",
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontFeatureSettings = "tnum"
+            ),
+            maxLines = 1
+        )
+    }
+}
+
+@Preview(name = "시스템 음량 · 라이트", widthDp = 360)
+@Preview(name = "시스템 음량 · 다크", widthDp = 360, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "시스템 음량 · 큰 글자", widthDp = 320, fontScale = 2f)
+@Composable
+private fun SystemVolumeCardPreview() {
+    ShutterSoundZeroTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.padding(vertical = 20.dp)) {
+                SystemVolumeCard(
+                    volume = SystemVolumeUiState(current = 7, max = 15),
+                    onVolumeChange = { it },
+                    onOpenSoundSettings = {}
+                )
             }
         }
     }
