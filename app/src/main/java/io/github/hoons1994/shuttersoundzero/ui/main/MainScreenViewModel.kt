@@ -53,6 +53,12 @@ data class SystemVolumeUiState(
     val requested: Int? = null
 )
 
+internal fun MainUiState.withWirelessDebuggingState(enabled: Boolean): MainUiState = copy(
+    isWirelessDebuggingEnabled = enabled,
+    showSwitchFailureHelp = showSwitchFailureHelp && !enabled,
+    showWirelessDebuggingCleanupHelp = showWirelessDebuggingCleanupHelp && enabled
+)
+
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = PreferencesRepository.getInstance(application)
     private val adbManager = StandaloneAdbManager.getInstance(application)
@@ -87,17 +93,17 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val app = getApplication<Application>()
         val perm = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
         val isMuted = CscMuteManager.isCscShutterSoundMuted(app)
+        val wirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app)
 
         if (perm && isMuted && prefs.lastSetupIssue != null) {
             prefs.lastSetupIssue = null
         }
 
         _uiState.update { current ->
-            current.copy(
+            current.withWirelessDebuggingState(wirelessDebuggingEnabled).copy(
                 isCscMuted = isMuted,
                 hasCscPermission = perm,
                 isDeveloperOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(app),
-                isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
                 setupIssue = prefs.lastSetupIssue,
                 adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
                 adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
@@ -190,7 +196,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         prefs.clearTransientAdbConnectionState()
         prefs.lastSetupIssue = null
         adbManager.clearDiscoveredPorts()
-        _uiState.update { it.copy(setupIssue = null, cameraMuteFailure = null) }
+        _uiState.update {
+            it.copy(
+                setupIssue = null,
+                cameraMuteFailure = null,
+                showSwitchFailureHelp = false,
+                showWirelessDebuggingCleanupHelp = false
+            )
+        }
         startPairingNow(context)
     }
 
@@ -248,6 +261,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 it.copy(
                     isWirelessDebuggingEnabled = false,
                     showSwitchFailureHelp = true,
+                    showWirelessDebuggingCleanupHelp = false,
+                    cameraMuteFailure = null,
                     errorMessage = null,
                     infoMessage = null
                 )
@@ -256,7 +271,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         // 실제 CSC 적용을 확인하기 전에는 완료 상태를 표시하지 않는다.
-        _uiState.update { it.copy(isCscChangeInProgress = true, cameraMuteFailure = null) }
+        _uiState.update {
+            it.copy(
+                isCscChangeInProgress = true,
+                cameraMuteFailure = null,
+                showSwitchFailureHelp = false,
+                showWirelessDebuggingCleanupHelp = false
+            )
+        }
 
         viewModelScope.launch {
             try {
