@@ -14,10 +14,12 @@ import androidx.lifecycle.LifecycleOwner
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 import java.security.KeyPairGenerator
+import java.security.GeneralSecurityException
 import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.Signature
+import java.security.UnrecoverableKeyException
 import java.security.spec.ECGenParameterSpec
 
 object AppLockAuthenticator {
@@ -172,33 +174,39 @@ object AppLockAuthenticator {
 
     internal fun createSigningOperation(recreateInvalidatedKey: Boolean = true): Signature {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        if (!keyStore.containsAlias(KEY_ALIAS)) {
-            KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore").apply {
-                initialize(
-                    KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_SIGN)
-                        .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-                        .setDigests(KeyProperties.DIGEST_SHA256)
-                        .setUserAuthenticationRequired(true)
-                        .setUserAuthenticationParameters(
-                            0,
-                            KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
-                        )
-                        .setInvalidatedByBiometricEnrollment(true)
-                        .build()
-                )
-                generateKeyPair()
-            }
-        }
+        if (!keyStore.containsAlias(KEY_ALIAS)) generateAuthenticationKey()
         try {
             return Signature.getInstance("SHA256withECDSA").apply {
                 initSign(keyStore.getKey(KEY_ALIAS, null) as PrivateKey)
             }
-        } catch (error: KeyPermanentlyInvalidatedException) {
-            if (!recreateInvalidatedKey) throw error
+        } catch (error: GeneralSecurityException) {
+            if (!recreateInvalidatedKey ||
+                (error !is KeyPermanentlyInvalidatedException && error !is UnrecoverableKeyException)
+            ) throw error
             // This key protects no stored data. Screen-lock changes may invalidate it;
             // replace it and still require a fresh system authentication before signing.
-            keyStore.deleteEntry(KEY_ALIAS)
+            // Android 11 maps invalidation to UnrecoverableKeyException and may reject
+            // explicit deletion of the invalid private key. Generation replaces the alias.
+            generateAuthenticationKey()
             return createSigningOperation(recreateInvalidatedKey = false)
+        }
+    }
+
+    private fun generateAuthenticationKey() {
+        KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore").apply {
+            initialize(
+                KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_SIGN)
+                    .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
+                    .setDigests(KeyProperties.DIGEST_SHA256)
+                    .setUserAuthenticationRequired(true)
+                    .setUserAuthenticationParameters(
+                        0,
+                        KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+                    )
+                    .setInvalidatedByBiometricEnrollment(true)
+                    .build()
+            )
+            generateKeyPair()
         }
     }
 

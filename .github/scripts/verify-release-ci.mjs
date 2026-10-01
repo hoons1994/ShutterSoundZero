@@ -22,7 +22,12 @@ export function selectRun(runs, sha, workflowPath) {
   const candidates = runs.filter(run =>
     run.head_sha === sha && run.head_branch === 'main' &&
     ['push', 'workflow_dispatch', 'workflow_run'].includes(run.event) &&
-    run.path === `.github/workflows/${workflowPath}`,
+    run.path === `.github/workflows/${workflowPath}` &&
+    // workflow_run uses the default branch SHA even when publishing a PR snapshot.
+    // Match its parent source and event, rather than accepting unrelated PR publication.
+    (workflowPath !== 'publish-dependency-graph.yml' ||
+      ['push', 'workflow_dispatch'].some(event =>
+        run.display_title === `Publish dependency graph for ${sha} (${event})`)),
   );
   const run = candidates.sort((a, b) => b.id - a.id)[0];
   if (!run) throw new Error(`${workflowPath}: no main workflow run for ${sha}`);

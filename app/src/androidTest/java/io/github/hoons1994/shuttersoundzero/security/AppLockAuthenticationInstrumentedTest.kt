@@ -17,6 +17,7 @@ import java.security.GeneralSecurityException
 import java.security.KeyFactory
 import java.security.KeyStore
 import java.security.PrivateKey
+import java.security.Signature
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -64,15 +65,18 @@ class AppLockAuthenticationInstrumentedTest {
     fun tearDown() {
         // @After also runs for skipped @Before: leave non-emulators and existing credentials untouched.
         if (!configuredCredential) return
-        deleteAuthenticationKey()
-        shell("locksettings clear --old $TEST_PIN")
-        awaitCondition("Emulator PIN cleanup failed") { !keyguard.isDeviceSecure }
-        originalAccessibilityFlags?.let { flags ->
-            val info = instrumentation.uiAutomation.serviceInfo
-            info.flags = flags
-            instrumentation.uiAutomation.serviceInfo = info
+        try {
+            deleteAuthenticationKey()
+        } finally {
+            shell("locksettings clear --old $TEST_PIN")
+            awaitCondition("Emulator PIN cleanup failed") { !keyguard.isDeviceSecure }
+            originalAccessibilityFlags?.let { flags ->
+                val info = instrumentation.uiAutomation.serviceInfo
+                info.flags = flags
+                instrumentation.uiAutomation.serviceInfo = info
+            }
+            context.getSharedPreferences("galaxy_camera_mute_prefs", Context.MODE_PRIVATE).edit().clear().commit()
         }
-        context.getSharedPreferences("galaxy_camera_mute_prefs", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
     @Test
@@ -82,20 +86,13 @@ class AppLockAuthenticationInstrumentedTest {
         val info = KeyFactory.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
             .getKeySpec(privateKey, KeyInfo::class.java)
         assertTrue(info.isUserAuthenticationRequired)
-        assertEquals(-1, info.userAuthenticationValidityDurationSeconds)
+        assertEquals(0, info.userAuthenticationValidityDurationSeconds)
         assertEquals(KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL, info.userAuthenticationType)
     }
 
     @Test
     fun signingWithoutSystemAuthenticationIsRejected() {
-        try {
-            val operation = AppLockAuthenticator.createSigningOperation()
-            operation.update(ByteArray(32) { it.toByte() })
-            operation.sign()
-            fail("Unauthenticated Keystore signing must not be possible")
-        } catch (_: GeneralSecurityException) {
-            // The actual Android Keystore must enforce authentication, not only an app callback.
-        }
+        assertUnauthenticatedSigningRejected(AppLockAuthenticator.createSigningOperation())
     }
 
     @Test
@@ -104,13 +101,19 @@ class AppLockAuthenticationInstrumentedTest {
         val previous = keyStore().getCertificate(AppLockAuthenticator.KEY_ALIAS).publicKey.encoded
         shell("locksettings clear --old $TEST_PIN")
         shell("locksettings set-pin $TEST_PIN")
-        AppLockAuthenticator.createSigningOperation()
+        val operation = AppLockAuthenticator.createSigningOperation()
         val replacement = keyStore().getCertificate(AppLockAuthenticator.KEY_ALIAS).publicKey.encoded
         assertFalse("Invalidated authentication key must be replaced", previous.contentEquals(replacement))
+        assertUnauthenticatedSigningRejected(operation)
+        completeActualPinAuthentication()
     }
 
     @Test
     fun devicePinCompletesActualCryptoAuthenticationOnce() {
+        completeActualPinAuthentication()
+    }
+
+    private fun completeActualPinAuthentication() {
         val completed = CountDownLatch(1)
         val successes = AtomicInteger()
         val error = AtomicReference<String?>()
@@ -128,6 +131,16 @@ class AppLockAuthenticationInstrumentedTest {
             assertTrue("PIN authentication did not finish: ${error.get()}", completed.await(20, TimeUnit.SECONDS))
             instrumentation.waitForIdleSync()
             assertEquals("PIN must unlock only after Keystore signing succeeds: ${error.get()}", 1, successes.get())
+        }
+    }
+
+    private fun assertUnauthenticatedSigningRejected(operation: Signature) {
+        try {
+            operation.update(ByteArray(32) { it.toByte() })
+            operation.sign()
+            fail("Unauthenticated Keystore signing must not be possible")
+        } catch (_: GeneralSecurityException) {
+            // The actual Android Keystore must enforce authentication, not only an app callback.
         }
     }
 

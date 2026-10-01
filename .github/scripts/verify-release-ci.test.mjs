@@ -50,6 +50,18 @@ test('dependency publication is required as well as snapshot generation', () => 
   verifyJobs(passedJobs(publication.jobs), publication.jobs, publication.path);
 });
 
+test('publication must belong to the exact main snapshot, not a PR sharing the workflow source', () => {
+  const publication = overrides => passedRun({
+    event: 'workflow_run', path: '.github/workflows/publish-dependency-graph.yml',
+    display_title: `Publish dependency graph for ${sha} (push)`, ...overrides,
+  });
+  const good = publication({});
+  const wrongSource = publication({ id: 30, display_title: `Publish dependency graph for ${'b'.repeat(40)} (push)` });
+  const prSnapshot = publication({ id: 31, display_title: `Publish dependency graph for ${sha} (pull_request)` });
+  assert.equal(selectRun([wrongSource, prSnapshot, good], sha, 'publish-dependency-graph.yml'), good);
+  assert.throws(() => selectRun([wrongSource, prSnapshot], sha, 'publish-dependency-graph.yml'));
+});
+
 test('verification aborts when main moves or the API cannot be read', async () => {
   const options = { repository: 'owner/repo', sha, token: 'test-token' };
   await assert.rejects(verifyReleaseCi({ ...options, request: async () => ({ ok: true, json: async () => ({ object: { sha: 'b'.repeat(40) } }) }) }), /main moved/);
@@ -62,7 +74,10 @@ test('a fully checked exact commit is accepted', async () => {
     if (url.endsWith('git/ref/heads/main')) result = { object: { sha } };
     else if (url.includes('/runs?')) {
       const workflow = requiredWorkflows.find(candidate => url.includes(`/${candidate.path}/`));
-      result = { workflow_runs: [passedRun({ id: requiredWorkflows.indexOf(workflow) + 1, path: `.github/workflows/${workflow.path}` })] };
+      result = { workflow_runs: [passedRun({
+        id: requiredWorkflows.indexOf(workflow) + 1, path: `.github/workflows/${workflow.path}`,
+        display_title: `Publish dependency graph for ${sha} (push)`,
+      })] };
     } else {
       const id = Number(url.match(/runs\/(\d+)\/jobs/)[1]);
       result = { jobs: passedJobs(requiredWorkflows[id - 1].jobs) };

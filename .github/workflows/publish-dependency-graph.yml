@@ -1,4 +1,5 @@
 name: Publish Dependency Graph
+run-name: Publish dependency graph for ${{ github.event.workflow_run.head_sha }} (${{ github.event.workflow_run.event }})
 
 on:
   workflow_run:
