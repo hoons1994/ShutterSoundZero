@@ -1,0 +1,31 @@
+name: Publish Dependency Graph
+run-name: Publish dependency graph for ${{ github.event.workflow_run.head_sha }} (${{ github.event.workflow_run.event }})
+
+on:
+  workflow_run:
+    workflows: [Dependency Submission]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    name: Submit dependency graph
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.repository.full_name == github.repository &&
+      (github.event.workflow_run.event == 'pull_request' ||
+       (github.event.workflow_run.head_branch == 'main' &&
+        (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      # Only the pinned action reads snapshot JSON. PR source is never checked out or executed here.
+      - name: Submit saved dependency graph
+        uses: gradle/actions/dependency-submission@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          dependency-graph: download-and-submit

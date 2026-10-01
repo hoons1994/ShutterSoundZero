@@ -147,6 +147,7 @@ jobs:
       - name: Build debug and release APKs, run unit tests and Android Lint
         run: |
           set -euo pipefail
+          node --test .github/scripts/verify-release-ci.test.mjs
           ./gradlew assembleDebug assembleRelease testDebugUnitTest lintDebug --no-daemon --stacktrace
           RELEASE_APK="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
           if [[ -z "$RELEASE_APK" || ! -s "$RELEASE_APK" ]]; then
