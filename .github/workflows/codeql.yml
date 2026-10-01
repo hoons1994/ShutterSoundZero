@@ -19,31 +19,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  changes:
-    name: Detect code changes
-    runs-on: ubuntu-latest
-    outputs:
-      code_changed: ${{ steps.classify.outputs.code_changed }}
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
-
-      - name: Classify changed files
-        id: classify
-        shell: bash
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_SHA: ${{ github.sha }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PRIOR_SHA: ${{ github.event.before }}
-        run: bash .github/scripts/detect-code-changes.sh
-
   analyze:
     name: CodeQL Java/Kotlin
-    needs: changes
-    if: always() && (needs.changes.result == 'failure' || needs.changes.outputs.code_changed == 'true')
+    # Scorecard requires SAST coverage for every commit, including documentation changes.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -103,7 +81,9 @@ jobs:
           queries: security-extended
 
       - name: Build app for CodeQL
-        run: ./gradlew clean assembleDebug --rerun-tasks --no-build-cache --no-configuration-cache --no-daemon --stacktrace
+        run: |
+          bash .github/scripts/verify-gradle-wrapper.sh
+          ./gradlew clean assembleDebug --rerun-tasks --no-build-cache --no-configuration-cache --no-daemon --stacktrace
 
       - name: Analyze with CodeQL
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2

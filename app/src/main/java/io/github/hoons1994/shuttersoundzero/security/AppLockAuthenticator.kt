@@ -4,14 +4,24 @@ import android.content.Context
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.CancellationSignal
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
+import java.security.KeyPairGenerator
+import java.security.KeyStore
+import java.security.PrivateKey
+import java.security.SecureRandom
+import java.security.Signature
+import java.security.spec.ECGenParameterSpec
 
 object AppLockAuthenticator {
+    private const val KEY_ALIAS = "app_lock_authentication_v1"
     // Accessed only from the Activity lifecycle and biometric main executor.
     private val authenticationRequests = WeakHashMap<ComponentActivity, AuthenticationRequest>()
     private const val ALLOWED_AUTHENTICATORS =
@@ -102,10 +112,29 @@ object AppLockAuthenticator {
         authenticationRequests[activity] = request
         lifecycle.addObserver(observer)
 
+        val challenge = ByteArray(32).also { SecureRandom().nextBytes(it) }
+        var signingOperation: Signature? = null
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                if (!isOwnerAlive()) request.cancel()
-                else if (gate.succeed(lifecycle.currentState == Lifecycle.State.RESUMED)) deliverSuccess()
+                if (!isOwnerAlive()) {
+                    request.cancel()
+                    return
+                }
+                // A callback alone is insufficient: require the per-use Keystore operation.
+                try {
+                    val signature = requireNotNull(result.cryptoObject?.signature)
+                    check(signature === signingOperation)
+                    signature.update(challenge)
+                    val proof = signature.sign()
+                    val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                    check(AuthenticationProof.verify(keyStore.getCertificate(KEY_ALIAS).publicKey, challenge, proof))
+                    if (gate.succeed(lifecycle.currentState == Lifecycle.State.RESUMED)) deliverSuccess()
+                } catch (error: Exception) {
+                    if (!gate.fail()) return
+                    val failureCallback = errorCallback
+                    clearCallbacks()
+                    failureCallback?.invoke(error.javaClass.simpleName)
+                }
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -118,12 +147,14 @@ object AppLockAuthenticator {
             }
         }
         try {
+            signingOperation = createSigningOperation()
             BiometricPrompt.Builder(activity)
                 .setTitle(title)
                 .setSubtitle(subtitle)
                 .setAllowedAuthenticators(ALLOWED_AUTHENTICATORS)
                 .build()
                 .authenticate(
+                    BiometricPrompt.CryptoObject(signingOperation),
                     cancellationSignal,
                     activity.mainExecutor,
                     callback
@@ -137,6 +168,38 @@ object AppLockAuthenticator {
             }
         }
         return request
+    }
+
+    private fun createSigningOperation(recreateInvalidatedKey: Boolean = true): Signature {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (!keyStore.containsAlias(KEY_ALIAS)) {
+            KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore").apply {
+                initialize(
+                    KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_SIGN)
+                        .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
+                        .setDigests(KeyProperties.DIGEST_SHA256)
+                        .setUserAuthenticationRequired(true)
+                        .setUserAuthenticationParameters(
+                            0,
+                            KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+                        )
+                        .setInvalidatedByBiometricEnrollment(true)
+                        .build()
+                )
+                generateKeyPair()
+            }
+        }
+        try {
+            return Signature.getInstance("SHA256withECDSA").apply {
+                initSign(keyStore.getKey(KEY_ALIAS, null) as PrivateKey)
+            }
+        } catch (error: KeyPermanentlyInvalidatedException) {
+            if (!recreateInvalidatedKey) throw error
+            // This key protects no stored data. Screen-lock changes may invalidate it;
+            // replace it and still require a fresh system authentication before signing.
+            keyStore.deleteEntry(KEY_ALIAS)
+            return createSigningOperation(recreateInvalidatedKey = false)
+        }
     }
 
     private fun isUserCancellation(errorCode: Int): Boolean {
