@@ -128,6 +128,10 @@ class AppLockAuthenticationInstrumentedTest {
             }
             val pinField = awaitCredentialPrompt()
             assertEquals(0, successes.get())
+            if (!pinField.isFocused) {
+                assertTrue("System PIN field could not receive focus",
+                    pinField.performAction(AccessibilityNodeInfo.ACTION_FOCUS))
+            }
             val input = Bundle().apply {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, TEST_PIN)
             }
@@ -178,11 +182,32 @@ class AppLockAuthenticationInstrumentedTest {
 
     private fun awaitCredentialPrompt(): AccessibilityNodeInfo {
         var field: AccessibilityNodeInfo? = null
-        awaitCondition("System credential prompt did not appear") {
-            field = credentialField()
-            field?.isFocused == true
+        try {
+            awaitCondition("System credential prompt did not appear") {
+                field = credentialField()
+                // Newer credential screens can show the PIN field before assigning input focus.
+                // Cancellation only needs the prompt; PIN entry requests focus explicitly.
+                field != null
+            }
+        } catch (failure: AssertionError) {
+            throw AssertionError("${failure.message}. ${credentialUiDescription()}", failure)
         }
         return requireNotNull(field)
+    }
+
+    private fun credentialUiDescription(): String {
+        val nodes = mutableListOf<String>()
+        fun append(node: AccessibilityNodeInfo?) {
+            if (node == null || nodes.size >= 80) return
+            // Record only structure, never the credential's text.
+            nodes += "${node.packageName}/${node.className} id=${node.viewIdResourceName}" +
+                " visible=${node.isVisibleToUser} focused=${node.isFocused} password=${node.isPassword}"
+            for (index in 0 until node.childCount) append(node.getChild(index))
+        }
+        val automation = instrumentation.uiAutomation
+        append(automation.rootInActiveWindow)
+        automation.windows.forEach { append(it.root) }
+        return "Credential UI: ${nodes.joinToString("; ")}"
     }
 
     private fun credentialField(): AccessibilityNodeInfo? {
