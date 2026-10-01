@@ -126,22 +126,61 @@ class AppLockAuthenticationInstrumentedTest {
                     onError = { error.set(it); completed.countDown() },
                     onCancelled = { error.set("cancelled"); completed.countDown() })
             }
-            val pinField = awaitCredentialPrompt()
+            val inputControl = awaitCredentialPrompt()
             assertEquals(0, successes.get())
-            if (!pinField.isFocused) {
+            enterSystemPin(inputControl)
+            assertTrue("PIN authentication did not finish: ${error.get()}", completed.await(20, TimeUnit.SECONDS))
+            instrumentation.waitForIdleSync()
+            assertEquals("PIN must unlock only after Keystore signing succeeds: ${error.get()}", 1, successes.get())
+        }
+    }
+
+    private fun enterSystemPin(inputControl: AccessibilityNodeInfo) {
+        if (isPinPad(inputControl)) {
+            // Android 17 replaces the password EditText with a Compose system PIN pad.
+            TEST_PIN.forEach { digit ->
+                var button: AccessibilityNodeInfo? = null
+                awaitCondition("System PIN digit button $digit did not appear") {
+                    button = findNode(credentialInput()) { node ->
+                        node.isClickable && node.isEnabled && node.isVisibleToUser &&
+                            (node.text?.toString() == digit.toString() ||
+                                node.contentDescription?.toString()?.let {
+                                    Regex("(?:^|\\D)$digit(?:\\D|$)").containsMatchIn(it)
+                                } == true)
+                    }
+                    button != null
+                }
+                assertTrue("System PIN digit $digit could not be entered",
+                    requireNotNull(button).performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            }
+            val enter = findNode(credentialInput()) {
+                it.viewIdResourceName?.endsWith("/key_enter") == true
+            }?.let(::clickableControl)
+            assertTrue("System PIN confirm button could not be pressed",
+                enter?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true)
+        } else {
+            if (!inputControl.isFocused) {
                 assertTrue("System PIN field could not receive focus",
-                    pinField.performAction(AccessibilityNodeInfo.ACTION_FOCUS))
+                    inputControl.performAction(AccessibilityNodeInfo.ACTION_FOCUS))
             }
             val input = Bundle().apply {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, TEST_PIN)
             }
             assertTrue("System PIN field did not accept input",
-                pinField.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, input))
+                inputControl.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, input))
             shell("input keyevent KEYCODE_ENTER")
-            assertTrue("PIN authentication did not finish: ${error.get()}", completed.await(20, TimeUnit.SECONDS))
-            instrumentation.waitForIdleSync()
-            assertEquals("PIN must unlock only after Keystore signing succeeds: ${error.get()}", 1, successes.get())
         }
+    }
+
+    private fun clickableControl(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        // Compose can expose the digit label and button as separate accessibility nodes.
+        findNode(node) { it.isClickable && it.isEnabled && it.isVisibleToUser }?.let { return it }
+        var parent = node.parent
+        while (parent != null && !isPinPad(parent)) {
+            if (parent.isClickable && parent.isEnabled && parent.isVisibleToUser) return parent
+            parent = parent.parent
+        }
+        return null
     }
 
     private fun assertUnauthenticatedSigningRejected(operation: Signature) {
@@ -171,7 +210,7 @@ class AppLockAuthenticationInstrumentedTest {
             // Older Android versions consume the first Back to dismiss the PIN keyboard.
             // Send a second Back only while the credential prompt is still present.
             if (!completed.await(3, TimeUnit.SECONDS) &&
-                credentialField() != null
+                credentialInput() != null
             ) shell("input keyevent KEYCODE_BACK")
             assertTrue("Cancellation was not delivered", completed.await(20, TimeUnit.SECONDS))
             instrumentation.waitForIdleSync()
@@ -182,15 +221,10 @@ class AppLockAuthenticationInstrumentedTest {
 
     private fun awaitCredentialPrompt(): AccessibilityNodeInfo {
         var field: AccessibilityNodeInfo? = null
-        try {
-            awaitCondition("System credential prompt did not appear") {
-                field = credentialField()
-                // Newer credential screens can show the PIN field before assigning input focus.
-                // Cancellation only needs the prompt; PIN entry requests focus explicitly.
-                field != null
-            }
-        } catch (failure: AssertionError) {
-            throw AssertionError("${failure.message}. ${credentialUiDescription()}", failure)
+        awaitCondition("System credential prompt did not appear") {
+            field = credentialInput()
+            // Cancellation needs either a password field or the newer system PIN pad.
+            field != null
         }
         return requireNotNull(field)
     }
@@ -200,7 +234,9 @@ class AppLockAuthenticationInstrumentedTest {
         fun append(node: AccessibilityNodeInfo?) {
             if (node == null || nodes.size >= 80) return
             // Record only structure, never the credential's text.
-            nodes += "${node.packageName}/${node.className} id=${node.viewIdResourceName}" +
+            val buttonLabel = if (node.className == "android.widget.Button")
+                " button=${node.text}/${node.contentDescription}" else ""
+            nodes += "${node.packageName}/${node.className} id=${node.viewIdResourceName}" + buttonLabel +
                 " visible=${node.isVisibleToUser} focused=${node.isFocused} password=${node.isPassword}"
             for (index in 0 until node.childCount) append(node.getChild(index))
         }
@@ -210,21 +246,30 @@ class AppLockAuthenticationInstrumentedTest {
         return "Credential UI: ${nodes.joinToString("; ")}"
     }
 
-    private fun credentialField(): AccessibilityNodeInfo? {
+    private fun credentialInput(): AccessibilityNodeInfo? {
         val automation = instrumentation.uiAutomation
         // The IME can be the active window, so inspect the other interactive windows too.
         val roots = listOfNotNull(automation.rootInActiveWindow) + automation.windows.mapNotNull { it.root }
-        return roots.firstNotNullOfOrNull { findCredentialField(it) }
+        return roots.firstNotNullOfOrNull { root ->
+            findNode(root) { node ->
+                val isSystemCredential = node.packageName?.toString() in
+                    setOf("com.android.systemui", "com.android.settings")
+                isSystemCredential && node.isEnabled && node.isVisibleToUser &&
+                    (node.isPassword || node.viewIdResourceName?.endsWith("/lockPassword") == true ||
+                        isPinPad(node))
+            }
+        }
     }
 
-    private fun findCredentialField(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+    private fun isPinPad(node: AccessibilityNodeInfo): Boolean =
+        node.viewIdResourceName == "cred_pin_pad" ||
+            node.viewIdResourceName?.endsWith("/cred_pin_pad") == true
+
+    private fun findNode(node: AccessibilityNodeInfo?, matches: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
         if (node == null) return null
-        val isSystemCredential = node.packageName?.toString() in setOf("com.android.systemui", "com.android.settings")
-        if (isSystemCredential && node.isEnabled && node.isVisibleToUser &&
-            (node.isPassword || node.viewIdResourceName?.endsWith("/lockPassword") == true)
-        ) return node
+        if (matches(node)) return node
         for (index in 0 until node.childCount) {
-            findCredentialField(node.getChild(index))?.let { return it }
+            findNode(node.getChild(index), matches)?.let { return it }
         }
         return null
     }
@@ -235,7 +280,7 @@ class AppLockAuthenticationInstrumentedTest {
             if (condition()) return
             Thread.sleep(100)
         }
-        assertTrue(message, condition())
+        if (!condition()) fail("$message. ${credentialUiDescription()}")
     }
 
     private fun shell(command: String): String =
