@@ -33,8 +33,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run android-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f release_tag="$GITHUB_REF_NAME"
 
+  verify-ci:
+    name: Verify release source CI
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout exact workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require successful CI and dependency submission for the exact main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/verify-release-ci.mjs
+
   preflight:
     name: Validate Signed Release Preflight
+    needs: verify-ci
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag == ''
     runs-on: ubuntu-latest
     environment: release-signing
@@ -48,7 +68,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Set up JDK 17
@@ -87,6 +107,9 @@ jobs:
 
       - name: Ensure Gradle wrapper is executable
         run: chmod +x gradlew
+
+      - name: Verify official Gradle wrapper checksum
+        run: bash .github/scripts/verify-gradle-wrapper.sh
 
       - name: Verify complete launcher icon resources
         shell: bash
@@ -219,6 +242,7 @@ jobs:
 
   release:
     name: Build Signed Release APK
+    needs: verify-ci
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag != ''
     runs-on: ubuntu-latest
     environment: release-signing
@@ -232,7 +256,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Resolve release tag
@@ -378,7 +402,9 @@ jobs:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: |
+          bash .github/scripts/verify-gradle-wrapper.sh
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Remove restored release keystore
         if: always()

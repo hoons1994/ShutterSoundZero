@@ -21,7 +21,7 @@ import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 
 object AppLockAuthenticator {
-    private const val KEY_ALIAS = "app_lock_authentication_v1"
+    internal const val KEY_ALIAS = "app_lock_authentication_v1"
     // Accessed only from the Activity lifecycle and biometric main executor.
     private val authenticationRequests = WeakHashMap<ComponentActivity, AuthenticationRequest>()
     private const val ALLOWED_AUTHENTICATORS =
@@ -170,7 +170,7 @@ object AppLockAuthenticator {
         return request
     }
 
-    private fun createSigningOperation(recreateInvalidatedKey: Boolean = true): Signature {
+    internal fun createSigningOperation(recreateInvalidatedKey: Boolean = true): Signature {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         if (!keyStore.containsAlias(KEY_ALIAS)) {
             KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore").apply {

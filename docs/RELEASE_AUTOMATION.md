@@ -5,9 +5,9 @@ Shutter Sound Zero는 `vX.Y.Z` 형식의 Git 태그가 `main` 브랜치의 커�
 ## 동작 흐름
 
 1. `app/build.gradle.kts`의 `versionName`과 `versionCode`를 새 버전에 맞게 변경합니다.
-2. 변경 사항을 PR로 병합하고 Android CI가 통과했는지 확인합니다.
+2. 변경 사항을 PR로 병합하고 해당 커밋의 Android CI, CodeQL, 의존성 생성·제출 검사가 통과했는지 확인합니다.
 3. 병합된 `main` 커밋에 `vX.Y.Z` 형식의 태그를 생성합니다.
-4. `Android Release` workflow가 `release-signing` Environment 보호 규칙을 통과한 뒤 실행됩니다.
+4. `Android Release` workflow가 배포 대상 커밋의 검사를 확인하고, `release-signing` Environment 보호 규칙을 통과한 뒤 실행됩니다.
 5. 태그와 `versionName`의 일치 여부를 확인합니다.
 6. Release keystore를 GitHub Actions Secret에서 제한된 파일 권한으로 복원합니다.
 7. `assembleRelease`로 서명된 APK를 빌드한 뒤 임시 keystore 파일을 삭제합니다.
@@ -19,6 +19,17 @@ Shutter Sound Zero는 `vX.Y.Z` 형식의 Git 태그가 `main` 브랜치의 커�
 태그가 `main`에 포함되지 않은 커밋을 가리키거나, 태그 버전과 앱의 `versionName`이 다르거나, 새 APK의 서명 인증서가 `.github/release-signing-certificate.sha256`과 다르면 릴리즈는 중단됩니다.
 
 수동 Signed Release Preflight도 `main`에서만 실행되며 같은 `release-signing` Environment와 고정 인증서 지문 검사를 사용합니다. 따라서 잘못된 keystore가 등록되었거나 서명 키가 의도치 않게 바뀐 경우 실제 GitHub Release를 만들기 전에 탐지할 수 있습니다.
+
+## 배포 대상 커밋의 자동 검사
+
+서명 Secret에 접근하기 전에 `Verify release source CI`가 실행됩니다. 다음 결과가 **동일한 main 커밋**에서 모두 성공해야 합니다.
+
+- Android CI: JVM·Debug/Release 빌드·Lint와 Android 11~17 / API 30~37의 모든 계측 검사
+- CodeQL Java/Kotlin 분석
+- Dependency Submission의 의존성 그래프 생성
+- Publish Dependency Graph의 실제 GitHub 의존성 제출
+
+검사가 아직 진행 중이거나 실패·취소되었거나 필수 작업이 건너뛰어졌으면 서명·배포를 중단합니다. 문서만 변경한 커밋처럼 Android 검사가 생략된 경우에는 main의 해당 커밋에서 Android CI를 수동 실행하여 전체 검사를 완료하세요. main이 실행 도중 다른 커밋으로 이동하면 대상 커밋을 다시 확인한 뒤 workflow를 재실행해야 합니다.
 
 ---
 
@@ -91,6 +102,7 @@ Environment Secret은 `release-signing` Environment를 사용하는 job에서만
 Preflight는 실제 GitHub Release를 만들지 않고 다음을 검증합니다.
 
 - `release-signing` Environment 보호 규칙
+- 동일한 main 커밋의 전체 자동 검사와 의존성 제출
 - 서명 Secret 4개 복원
 - signed release APK 빌드
 - `apksigner` 서명 검증

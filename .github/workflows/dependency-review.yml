@@ -39,7 +39,7 @@ jobs:
     needs: changes
     if: always() && (needs.changes.result == 'failure' || needs.changes.outputs.code_changed == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
 
     steps:
       - name: Checkout source
@@ -49,3 +49,5 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
         with:
           fail-on-severity: high
+          retry-on-snapshot-warnings: true
+          retry-on-snapshot-warnings-timeout: 1200
