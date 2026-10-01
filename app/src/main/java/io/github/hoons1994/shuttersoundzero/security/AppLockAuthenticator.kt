@@ -183,7 +183,7 @@ object AppLockAuthenticator {
                             0,
                             KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
                         )
-                        .setInvalidatedByBiometricEnrollment(false)
+                        .setInvalidatedByBiometricEnrollment(true)
                         .build()
                 )
                 generateKeyPair()
