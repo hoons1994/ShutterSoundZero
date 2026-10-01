@@ -60,4 +60,3 @@ jobs:
           additional-arguments: --no-configuration-cache --no-daemon
           cache-provider: basic
           artifact-retention-days: 7
-
