@@ -138,26 +138,12 @@ class AppLockAuthenticationInstrumentedTest {
     private fun enterSystemPin(inputControl: AccessibilityNodeInfo) {
         if (isPinPad(inputControl)) {
             // Android 17 replaces the password EditText with a Compose system PIN pad.
-            TEST_PIN.forEach { digit ->
-                var button: AccessibilityNodeInfo? = null
-                awaitCondition("System PIN digit button $digit did not appear") {
-                    button = findNode(credentialInput()) { node ->
-                        node.isClickable && node.isEnabled && node.isVisibleToUser &&
-                            (node.text?.toString() == digit.toString() ||
-                                node.contentDescription?.toString()?.let {
-                                    Regex("(?:^|\\D)$digit(?:\\D|$)").containsMatchIn(it)
-                                } == true)
-                    }
-                    button != null
-                }
-                assertTrue("System PIN digit $digit could not be entered",
-                    requireNotNull(button).performAction(AccessibilityNodeInfo.ACTION_CLICK))
-            }
-            val enter = findNode(credentialInput()) {
-                it.viewIdResourceName?.endsWith("/key_enter") == true
-            }?.let(::clickableControl)
-            assertTrue("System PIN confirm button could not be pressed",
-                enter?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true)
+            // Its buttons don't expose digit labels. Use normal keyboard input,
+            // delivered to the focused system control, without changing the PIN check.
+            assertTrue("System PIN pad has no keyboard focus",
+                findNode(inputControl) { it.isFocused } != null)
+            val keys = TEST_PIN.map { "KEYCODE_$it" }.joinToString(" ")
+            shell("input keyevent --delay 100 $keys KEYCODE_ENTER")
         } else {
             if (!inputControl.isFocused) {
                 assertTrue("System PIN field could not receive focus",
@@ -170,17 +156,6 @@ class AppLockAuthenticationInstrumentedTest {
                 inputControl.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, input))
             shell("input keyevent KEYCODE_ENTER")
         }
-    }
-
-    private fun clickableControl(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        // Compose can expose the digit label and button as separate accessibility nodes.
-        findNode(node) { it.isClickable && it.isEnabled && it.isVisibleToUser }?.let { return it }
-        var parent = node.parent
-        while (parent != null && !isPinPad(parent)) {
-            if (parent.isClickable && parent.isEnabled && parent.isVisibleToUser) return parent
-            parent = parent.parent
-        }
-        return null
     }
 
     private fun assertUnauthenticatedSigningRejected(operation: Signature) {
@@ -234,9 +209,7 @@ class AppLockAuthenticationInstrumentedTest {
         fun append(node: AccessibilityNodeInfo?) {
             if (node == null || nodes.size >= 80) return
             // Record only structure, never the credential's text.
-            val buttonLabel = if (node.className == "android.widget.Button")
-                " button=${node.text}/${node.contentDescription}" else ""
-            nodes += "${node.packageName}/${node.className} id=${node.viewIdResourceName}" + buttonLabel +
+            nodes += "${node.packageName}/${node.className} id=${node.viewIdResourceName}" +
                 " visible=${node.isVisibleToUser} focused=${node.isFocused} password=${node.isPassword}"
             for (index in 0 until node.childCount) append(node.getChild(index))
         }
