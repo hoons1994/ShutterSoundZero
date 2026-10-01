@@ -91,6 +91,9 @@ jobs:
         shell: bash
         run: test -s gradle/verification-metadata.xml
 
+      - name: Verify official Gradle wrapper checksum
+        run: bash .github/scripts/verify-gradle-wrapper.sh
+
       - name: Verify launcher icon resources
         shell: bash
         run: bash .github/scripts/verify-launcher-icon.sh
