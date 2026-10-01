@@ -3,6 +3,7 @@ package io.github.hoons1994.shuttersoundzero.security
 import android.app.KeyguardManager
 import android.content.Context
 import android.os.Build
+import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
@@ -53,7 +54,8 @@ class AppLockAuthenticationInstrumentedTest {
         val automation = instrumentation.uiAutomation
         val info = automation.serviceInfo
         originalAccessibilityFlags = info.flags
-        info.flags = info.flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+        info.flags = info.flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+            AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         automation.serviceInfo = info
         PreferencesRepository.getInstance(context).apply {
             hasSeenInitialNotice = false
@@ -124,9 +126,13 @@ class AppLockAuthenticationInstrumentedTest {
                     onError = { error.set(it); completed.countDown() },
                     onCancelled = { error.set("cancelled"); completed.countDown() })
             }
-            awaitCredentialPrompt()
+            val pinField = awaitCredentialPrompt()
             assertEquals(0, successes.get())
-            shell("input text $TEST_PIN")
+            val input = Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, TEST_PIN)
+            }
+            assertTrue("System PIN field did not accept input",
+                pinField.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, input))
             shell("input keyevent KEYCODE_ENTER")
             assertTrue("PIN authentication did not finish: ${error.get()}", completed.await(20, TimeUnit.SECONDS))
             instrumentation.waitForIdleSync()
@@ -148,32 +154,54 @@ class AppLockAuthenticationInstrumentedTest {
     fun cancellingActualCredentialPromptDoesNotUnlock() {
         val completed = CountDownLatch(1)
         val successes = AtomicInteger()
+        val terminalResult = AtomicReference<String?>()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 AppLockAuthenticator.authenticate(activity, "Authentication cancellation test", "Cancel the emulator PIN",
                     onSuccess = { successes.incrementAndGet(); completed.countDown() },
-                    onCancelled = { completed.countDown() },
-                    onError = { completed.countDown() })
+                    onCancelled = { terminalResult.set("cancelled"); completed.countDown() },
+                    onError = { terminalResult.set(it); completed.countDown() })
             }
             awaitCredentialPrompt()
             shell("input keyevent KEYCODE_BACK")
+            // Older Android versions consume the first Back to dismiss the PIN keyboard.
+            // Send a second Back only while the credential prompt is still present.
+            if (!completed.await(3, TimeUnit.SECONDS) &&
+                credentialField() != null
+            ) shell("input keyevent KEYCODE_BACK")
             assertTrue("Cancellation was not delivered", completed.await(20, TimeUnit.SECONDS))
             instrumentation.waitForIdleSync()
             assertEquals(0, successes.get())
+            assertEquals("cancelled", terminalResult.get())
         }
     }
 
-    private fun awaitCredentialPrompt() = awaitCondition("System credential prompt did not appear") {
-        containsCredentialField(instrumentation.uiAutomation.rootInActiveWindow)
+    private fun awaitCredentialPrompt(): AccessibilityNodeInfo {
+        var field: AccessibilityNodeInfo? = null
+        awaitCondition("System credential prompt did not appear") {
+            field = credentialField()
+            field?.isFocused == true
+        }
+        return requireNotNull(field)
     }
 
-    private fun containsCredentialField(node: AccessibilityNodeInfo?): Boolean {
-        if (node == null) return false
-        if (node.isPassword) return true
+    private fun credentialField(): AccessibilityNodeInfo? {
+        val automation = instrumentation.uiAutomation
+        // The IME can be the active window, so inspect the other interactive windows too.
+        val roots = listOfNotNull(automation.rootInActiveWindow) + automation.windows.mapNotNull { it.root }
+        return roots.firstNotNullOfOrNull { findCredentialField(it) }
+    }
+
+    private fun findCredentialField(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        val isSystemCredential = node.packageName?.toString() in setOf("com.android.systemui", "com.android.settings")
+        if (isSystemCredential && node.isEnabled && node.isVisibleToUser &&
+            (node.isPassword || node.viewIdResourceName?.endsWith("/lockPassword") == true)
+        ) return node
         for (index in 0 until node.childCount) {
-            if (containsCredentialField(node.getChild(index))) return true
+            findCredentialField(node.getChild(index))?.let { return it }
         }
-        return false
+        return null
     }
 
     private fun awaitCondition(message: String, condition: () -> Boolean) {
