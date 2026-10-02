@@ -24,13 +24,48 @@ internal object AdbIdentityLoader {
             throw IOException("Incomplete ADB identity; existing files have been preserved")
         }
 
-        val privateKeyBytes = decodePrivateKey(privateKeyFile.readBytes())
+        return loadEncoded(privateKeyFile.readBytes(), certificateFile.readBytes(), decodePrivateKey, nowMillis)
+    }
+
+    /** Only a missing target certificate permits recovery of an interrupted old migration. */
+    fun loadEncryptedForMigration(
+        privateKeyFile: File,
+        certificateFile: File,
+        legacyIdentities: List<Pair<File, File>>,
+        decodePrivateKey: (ByteArray) -> ByteArray,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Pair<PrivateKey, Certificate>? {
+        if (Files.notExists(privateKeyFile.toPath()) || !Files.notExists(certificateFile.toPath())) {
+            // A complete old pair is authoritative, including clock/Keystore/validation failures.
+            return load(privateKeyFile, certificateFile, decodePrivateKey, nowMillis)
+        }
+
+        for ((legacyKey, legacyCertificate) in legacyIdentities) {
+            if (Files.notExists(legacyKey.toPath()) || Files.notExists(legacyCertificate.toPath())) continue
+            try {
+                // Require an intact original and prove that the encrypted copy has the SAME key.
+                load(legacyKey, legacyCertificate, { it }, nowMillis) ?: continue
+                return load(privateKeyFile, legacyCertificate, decodePrivateKey, nowMillis)
+            } catch (_: Exception) {
+                // Neither an unrelated original nor unavailable crypto authorizes replacement.
+            }
+        }
+        throw IOException("Incomplete ADB identity; no matching legacy identity could restore its certificate")
+    }
+
+    fun loadEncoded(
+        encodedPrivateKey: ByteArray,
+        encodedCertificate: ByteArray,
+        decodePrivateKey: (ByteArray) -> ByteArray,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Pair<PrivateKey, Certificate> {
+        val privateKeyBytes = decodePrivateKey(encodedPrivateKey)
         val privateKey = try {
             KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(privateKeyBytes))
         } finally {
             privateKeyBytes.fill(0)
         }
-        val certificate = certificateFile.inputStream().use {
+        val certificate = encodedCertificate.inputStream().use {
             CertificateFactory.getInstance("X.509").generateCertificate(it)
         }
         if (!AdbIdentityValidator.isValid(privateKey, certificate, nowMillis)) {

@@ -85,9 +85,82 @@ class AdbIdentityLoaderTest {
         assertTrue(decoded.all { it == 0.toByte() })
     }
 
+    @Test fun interruptedOldMigrationRestoresOnlyTheMatchingOriginalCertificate() {
+        val (encryptedKey, certificate) = createIdentity()
+        val legacyKey = temporaryFolder.newFile("legacy-key").apply { writeBytes(encryptedKey.readBytes()) }
+        val legacyCertificate = temporaryFolder.newFile("legacy-certificate").apply { writeBytes(certificate.readBytes()) }
+        val originalKey = encryptedKey.readBytes()
+        val originalCertificate = legacyCertificate.readBytes()
+        assertTrue(certificate.delete())
+
+        val recovered = AdbIdentityLoader.loadEncryptedForMigration(
+            encryptedKey, certificate, listOf(legacyKey to legacyCertificate), { it }, now
+        )!!
+        assertArrayEquals(originalCertificate, recovered.second.encoded)
+        assertArrayEquals(originalKey, encryptedKey.readBytes())
+        assertArrayEquals(originalKey, legacyKey.readBytes())
+        assertArrayEquals(originalCertificate, legacyCertificate.readBytes())
+        assertFalse(certificate.exists()) // Persistence happens only when the complete bundle commits.
+    }
+
+    @Test fun incompleteEncryptedCopyCannotBorrowAnUnrelatedLegacyCertificate() {
+        val (encryptedKey, certificate) = createIdentity("encrypted-")
+        val (legacyKey, legacyCertificate) = createIdentity("legacy-")
+        assertTrue(certificate.delete())
+        val original = encryptedKey.readBytes()
+        assertThrows(IOException::class.java) {
+            AdbIdentityLoader.loadEncryptedForMigration(
+                encryptedKey, certificate, listOf(legacyKey to legacyCertificate), { it }, now
+            )
+        }
+        assertArrayEquals(original, encryptedKey.readBytes())
+        assertTrue(legacyKey.exists())
+        assertTrue(legacyCertificate.exists())
+    }
+
+    @Test fun completeEncryptedPairValidationFailureDoesNotFallBackToLegacy() {
+        val (encryptedKey, certificate) = createIdentity()
+        val legacyKey = temporaryFolder.newFile("legacy-key").apply { writeBytes(encryptedKey.readBytes()) }
+        val legacyCertificate = temporaryFolder.newFile("legacy-certificate").apply { writeBytes(certificate.readBytes()) }
+        certificate.writeText("damaged current certificate")
+        assertThrows(Exception::class.java) {
+            AdbIdentityLoader.loadEncryptedForMigration(
+                encryptedKey, certificate, listOf(legacyKey to legacyCertificate), { it }, now
+            )
+        }
+        assertEquals("damaged current certificate", certificate.readText())
+        assertTrue(legacyKey.exists())
+        assertTrue(legacyCertificate.exists())
+    }
+
+    @Test fun completeEncryptedPairClockOrKeystoreFailureDoesNotFallBackToLegacy() {
+        val (encryptedKey, certificate) = createIdentity()
+        val legacyKey = temporaryFolder.newFile("legacy-key").apply { writeBytes(encryptedKey.readBytes()) }
+        val legacyCertificate = temporaryFolder.newFile("legacy-certificate").apply { writeBytes(certificate.readBytes()) }
+        val originalKey = encryptedKey.readBytes()
+        val originalCertificate = certificate.readBytes()
+        var decodes = 0
+        assertThrows(IOException::class.java) {
+            AdbIdentityLoader.loadEncryptedForMigration(
+                encryptedKey, certificate, listOf(legacyKey to legacyCertificate), {
+                    decodes++
+                    throw IOException("Keystore unavailable")
+                }, now
+            )
+        }
+        assertEquals(1, decodes)
+        assertThrows(IOException::class.java) {
+            AdbIdentityLoader.loadEncryptedForMigration(
+                encryptedKey, certificate, listOf(legacyKey to legacyCertificate), { it }, now + 120_000
+            )
+        }
+        assertArrayEquals(originalKey, encryptedKey.readBytes())
+        assertArrayEquals(originalCertificate, certificate.readBytes())
+    }
+
     private fun file(name: String) = File(temporaryFolder.root, name)
 
-    private fun createIdentity(): Pair<File, File> {
+    private fun createIdentity(prefix: String = ""): Pair<File, File> {
         val keyPair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
         val subject = X500Name("CN=ShutterSoundZero-Test")
         val builder = X509v3CertificateBuilder(
@@ -96,7 +169,7 @@ class AdbIdentityLoaderTest {
         )
         val signer = JcaContentSignerBuilder("SHA256withRSA").build(keyPair.private)
         val certificate = JcaX509CertificateConverter().getCertificate(builder.build(signer))
-        return file("key").apply { writeBytes(keyPair.private.encoded) } to
-            file("certificate").apply { writeBytes(certificate.encoded) }
+        return file("${prefix}key").apply { writeBytes(keyPair.private.encoded) } to
+            file("${prefix}certificate").apply { writeBytes(certificate.encoded) }
     }
 }
