@@ -816,7 +816,7 @@ private fun StatusHeroCard(
                     )
                 }
             }
-            if (status != HomeStatus.SETUP_REQUIRED) {
+            if (status != HomeStatus.SETUP_REQUIRED && status != HomeStatus.READY) {
                 TextButton(
                     onClick = onOpenWirelessDebugging,
                     enabled = !isInProgress
