@@ -8,16 +8,37 @@ import android.util.Log
 object WifiConnectionStatus {
     private const val TAG = "WifiConnectionStatus"
 
-    /** 네트워크 상태를 읽지 못하면 무선 ADB 전제조건을 확인할 수 없으므로 false를 반환한다. */
+    /** 기본 데이터망과 별개로 연결된 Wi-Fi를 확인한다. 확인할 수 없는 상태는 연결로 간주하지 않는다. */
+    @Suppress("DEPRECATION") // One-shot prerequisite check; do not request or retain a network.
     fun isWifiConnected(context: Context): Boolean {
         return try {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
-            val network = cm.activeNetwork ?: return false
-            val capabilities = cm.getNetworkCapabilities(network) ?: return false
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+            isWifiConnected(
+                readNetworks = { cm.allNetworks.asIterable() },
+                readWifiTransport = { network ->
+                    cm.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                },
+                onReadFailure = ::logReadFailure
+            )
         } catch (e: Exception) {
-            Log.w(TAG, "Unable to determine Wi-Fi connectivity (${e.javaClass.simpleName})")
+            logReadFailure(e)
             false
         }
+    }
+
+    /** Shared enumeration/lookup boundary so tests exercise the same path used by Android. */
+    internal fun <T> isWifiConnected(
+        readNetworks: () -> Iterable<T>,
+        readWifiTransport: (T) -> Boolean?,
+        onReadFailure: (Exception) -> Unit = {}
+    ): Boolean = try {
+        readNetworks().any { network -> readWifiTransport(network) == true }
+    } catch (e: Exception) {
+        onReadFailure(e)
+        false
+    }
+
+    private fun logReadFailure(error: Exception) {
+        Log.w(TAG, "Unable to determine Wi-Fi connectivity (${error.javaClass.simpleName})")
     }
 }
