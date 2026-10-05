@@ -97,6 +97,13 @@ fun SettingsScreen(
     onPairingRecoveryRequested: () -> Unit = onBackClick
 ) {
     val context = LocalContext.current
+    val settingsLaunchFailureMessage = stringResource(R.string.settings_launch_failed)
+    fun handleSettingsLaunch(result: Result<Unit>): Boolean {
+        if (result.isFailure) {
+            Toast.makeText(context, settingsLaunchFailureMessage, Toast.LENGTH_LONG).show()
+        }
+        return result.isSuccess
+    }
     val prefs = remember { PreferencesRepository.getInstance(context) }
     val versionName = remember(context) { currentVersionName(context) }
     val activityViewModelStoreOwner = remember(context) {
@@ -441,8 +448,9 @@ fun SettingsScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            showReapplyWirelessDebuggingHelp = false
-                            SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
+                            if (handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))) {
+                                showReapplyWirelessDebuggingHelp = false
+                            }
                         }
                     ) {
                         Text("설정 열기")
@@ -471,8 +479,9 @@ fun SettingsScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            showRestoreWirelessDebuggingHelp = false
-                            SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
+                            if (handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))) {
+                                showRestoreWirelessDebuggingHelp = false
+                            }
                         }
                     ) {
                         Text("설정 열기")
@@ -538,7 +547,7 @@ fun SettingsScreen(
                             Uri.fromParts("package", context.packageName, null)
                         ))
                     } else {
-                        SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
+                        handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))
                     }
                 }
             )
@@ -623,8 +632,9 @@ fun SettingsScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            showDeveloperOptionsFallback = false
-                            DeveloperOptionsManager.openDeveloperOptions(context)
+                            if (handleSettingsLaunch(DeveloperOptionsManager.openDeveloperOptions(context))) {
+                                showDeveloperOptionsFallback = false
+                            }
                         }
                     ) {
                         Text("개발자 옵션 열기")

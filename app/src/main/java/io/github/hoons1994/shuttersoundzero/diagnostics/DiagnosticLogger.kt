@@ -2,6 +2,8 @@ package io.github.hoons1994.shuttersoundzero.diagnostics
 
 import android.content.Context
 import java.io.File
+import java.io.IOException
+import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -88,9 +90,16 @@ object DiagnosticLogger {
         }.getOrDefault(emptyList())
     }
 
-    fun clear(context: Context) {
-        synchronized(lock) {
-            runCatching { logFile(context).delete() }
+    /** true: deleted; false: already absent. An uncertain or failed deletion is a failure. */
+    fun clear(context: Context): Result<Boolean> = synchronized(lock) {
+        runCatching { clear(logFile(context)).getOrThrow() }
+    }
+
+    internal fun clear(file: File): Result<Boolean> = runCatching {
+        when {
+            file.delete() -> true
+            Files.notExists(file.toPath()) -> false
+            else -> throw IOException("Unable to delete diagnostic log")
         }
     }
 

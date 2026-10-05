@@ -1,10 +1,51 @@
 package io.github.hoons1994.shuttersoundzero.diagnostics
 
+import java.io.File
+import java.io.IOException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class DiagnosticLoggerTest {
+    @get:Rule val temporaryFolder = TemporaryFolder()
+
+    @Test
+    fun clearDeletesExistingLogAndIsIdempotent() {
+        val file = temporaryFolder.newFile("events.log")
+        assertTrue(DiagnosticLogger.clear(file).getOrThrow())
+        assertFalse(file.exists())
+        assertFalse(DiagnosticLogger.clear(file).getOrThrow())
+    }
+
+    @Test
+    fun clearAlreadyMissingLogSucceedsWithoutCreatingAFile() {
+        val file = File(temporaryFolder.root, "missing.log")
+        assertFalse(DiagnosticLogger.clear(file).getOrThrow())
+        assertFalse(file.exists())
+    }
+
+    @Test
+    fun failedDeletionDoesNotClaimSuccessOrRemoveRemainingData() {
+        val directory = temporaryFolder.newFolder("events.log")
+        val child = File(directory, "test-event").apply { createNewFile() }
+        val result = DiagnosticLogger.clear(directory)
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is IOException)
+        assertTrue(child.exists())
+    }
+
+    @Test
+    fun deletionExceptionIsReturnedAsFailure() {
+        val failure = SecurityException("injected deletion denial")
+        val file = object : File(temporaryFolder.root, "blocked.log") {
+            override fun delete(): Boolean = throw failure
+        }
+        assertSame(failure, DiagnosticLogger.clear(file).exceptionOrNull())
+    }
 
     @Test
     fun trimForStorage_keepsLatestTwoHundredEvents() {

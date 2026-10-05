@@ -123,10 +123,9 @@ object DeveloperOptionsManager {
         }
     }
 
-    fun openDeveloperOptions(context: Context) {
-        val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
+    fun openDeveloperOptions(context: Context): Result<Unit> = SetupSettingsNavigator.launchSettings(primary = {
+        context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching { context.startActivity(intent) }
-    }
+        })
+    })
 }

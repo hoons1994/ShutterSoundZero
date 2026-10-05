@@ -321,8 +321,12 @@ fun MainScreen(
             onReapply = reapplyAction,
             onRefreshCscState = viewModel::refreshState,
             onOpenCamera = openCamera,
-            onOpenWirelessDebugging = { SetupSettingsNavigator.openPairingSetupScreen(context) },
-            onOpenSoftwareInfo = { SetupSettingsNavigator.openSoftwareInfoSettings(context) },
+            onOpenWirelessDebugging = {
+                viewModel.handleSettingsLaunch(SetupSettingsNavigator.openPairingSetupScreen(context))
+            },
+            onOpenSoftwareInfo = {
+                viewModel.handleSettingsLaunch(SetupSettingsNavigator.openSoftwareInfoSettings(context))
+            },
             onOpenAppSettings = {
                 context.startActivity(
                     Intent(
@@ -351,7 +355,7 @@ fun MainScreen(
             primaryLabel = "Wi-Fi 설정 열기",
             onPrimary = {
                 showWifiRequiredDialog = false
-                SetupSettingsNavigator.openWifiSettings(context)
+                viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWifiSettings(context))
             },
             secondaryLabel = "닫기",
             onSecondary = { showWifiRequiredDialog = false },
@@ -371,7 +375,7 @@ fun MainScreen(
                         android.net.Uri.fromParts("package", context.packageName, null)
                     ))
                 } else {
-                    SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
+                    viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))
                 }
             }
         )
@@ -392,7 +396,7 @@ fun MainScreen(
                 Button(
                     onClick = {
                         viewModel.dismissSwitchFailureHelp()
-                        SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
+                        viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -422,7 +426,7 @@ fun MainScreen(
                 Button(
                     onClick = {
                         viewModel.dismissWirelessDebuggingCleanupHelp()
-                        SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context)
+                        viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) {

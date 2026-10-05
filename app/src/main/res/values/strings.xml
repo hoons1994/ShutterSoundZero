@@ -109,4 +109,5 @@
     <string name="csc_state_unknown_title">카메라 설정 상태 확인 불가</string>
     <string name="csc_state_unknown_guidance">카메라 설정값을 읽지 못했습니다. 앱에서 카메라 설정 상태를 다시 확인해 주세요.</string>
     <string name="csc_state_retry">상태 다시 확인</string>
+    <string name="settings_launch_failed">설정 화면을 열 수 없습니다. 휴대전화 설정 앱에서 해당 항목을 직접 열어 주세요.</string>
 </resources>
