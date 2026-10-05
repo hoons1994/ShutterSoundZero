@@ -102,6 +102,9 @@ class MainScreenTest {
             composeTestRule.onAllNodesWithText("1회 설정 시작").fetchSemanticsNodes().isEmpty()
         )
         assertTrue(
+            composeTestRule.onAllNodesWithText("무선 디버깅 다시 켜기").fetchSemanticsNodes().isEmpty()
+        )
+        assertTrue(
             composeTestRule.onAllNodesWithText("알림 팝업 설정 열기").fetchSemanticsNodes().isEmpty()
         )
     }
@@ -152,19 +155,18 @@ class MainScreenTest {
     }
 
     @Test
-    fun readyHomeOpensWirelessDebuggingWithoutStartingPairingAgain() {
-        var opened = false
-        var pairingStarted = false
-        composeTestRule.setContent {
-            HomeContent(
-                uiState = MainUiState(isCscMuted = true, hasCscPermission = true),
-                onSetup = { pairingStarted = true },
-                onOpenWirelessDebugging = { opened = true }
+    fun readyHomeHidesWirelessDebuggingSettingsActionWhenEnabled() {
+        showHome(
+            MainUiState(
+                isCscMuted = true,
+                hasCscPermission = true,
+                isWirelessDebuggingEnabled = true
             )
-        }
-        composeTestRule.onNodeWithText("무선 디버깅 다시 켜기").performScrollTo().performClick()
-        assertTrue(opened)
-        assertTrue(!pairingStarted)
+        )
+
+        assertTrue(
+            composeTestRule.onAllNodesWithText("무선 디버깅 설정 열기").fetchSemanticsNodes().isEmpty()
+        )
     }
 
     @Test
