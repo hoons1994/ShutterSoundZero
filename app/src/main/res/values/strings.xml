@@ -106,4 +106,7 @@
     <string name="system_volume_not_applied">기기에서 음량 변경을 적용하지 않았습니다. 휴대전화 음량 설정에서 직접 조절해 주세요.</string>
     <string name="system_volume_open_settings">휴대전화 음량 설정</string>
     <string name="system_volume_settings_unavailable">휴대전화 음량 설정을 열 수 없습니다.</string>
+    <string name="csc_state_unknown_title">카메라 설정 상태 확인 불가</string>
+    <string name="csc_state_unknown_guidance">카메라 설정값을 읽지 못했습니다. 앱에서 카메라 설정 상태를 다시 확인해 주세요.</string>
+    <string name="csc_state_retry">상태 다시 확인</string>
 </resources>

@@ -31,21 +31,36 @@ object CscMuteManager {
 
     /**
      * 현재 CSC 셔터음 강제 설정값 조회
-     * @return 0이면 무음 모드 연동(무음/진동 시 셔터음 제거됨), 1이면 강제 소리 발생
+     * @return 값 0은 true, 값 1은 false. 조회 실패·값 부재·유효하지 않은 값은 null.
      */
-    fun isCscShutterSoundMuted(context: Context): Boolean {
-        return try {
-            val value = Settings.System.getInt(context.contentResolver, CSC_KEY, 1)
-            value == 0
+    fun readCscMutedState(context: Context): Boolean? = readCscMutedState(
+        readInt = { Settings.System.getInt(context.contentResolver, CSC_KEY) },
+        readString = { Settings.System.getString(context.contentResolver, CSC_KEY) },
+        onReadFailure = { error ->
+            Log.w(TAG, "Unable to read CSC setting (${error.javaClass.simpleName})")
+        }
+    )
+
+    internal fun readCscMutedState(
+        readInt: () -> Int,
+        readString: () -> String?,
+        onReadFailure: (Exception) -> Unit = {}
+    ): Boolean? {
+        val value = try {
+            readInt()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to read CSC key as int, fallback to string query: ${e.message}")
+            onReadFailure(e)
             try {
-                val strValue = Settings.System.getString(context.contentResolver, CSC_KEY)
-                strValue == "0"
+                readString()?.toIntOrNull()
             } catch (ex: Exception) {
-                Log.e(TAG, "Unable to read CSC setting: ${ex.message}")
-                false
+                onReadFailure(ex)
+                null
             }
+        }
+        return when (value) {
+            0 -> true
+            1 -> false
+            else -> null
         }
     }
 

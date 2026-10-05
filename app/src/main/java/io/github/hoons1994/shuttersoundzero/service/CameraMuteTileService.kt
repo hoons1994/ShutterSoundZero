@@ -7,6 +7,7 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import android.widget.Toast
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
@@ -47,7 +48,7 @@ class CameraMuteTileService : TileService() {
             TileActionSecurityDecision.REQUEST_DEVICE_UNLOCK -> unlockAndRun {
                 handleUnlockedClick()
             }
-            TileActionSecurityDecision.REQUEST_APP_AUTHENTICATION -> launchAuthenticationActivity(targetMuted())
+            TileActionSecurityDecision.REQUEST_APP_AUTHENTICATION -> authenticateKnownTarget()
             TileActionSecurityDecision.EXECUTE -> executeAuthorizedAction()
         }
     }
@@ -56,7 +57,7 @@ class CameraMuteTileService : TileService() {
         val prefs = PreferencesRepository.getInstance(applicationContext)
         when (TileActionSecurityPolicy.decide(isLocked, prefs.isAppLockEnabled)) {
             TileActionSecurityDecision.REQUEST_DEVICE_UNLOCK -> return
-            TileActionSecurityDecision.REQUEST_APP_AUTHENTICATION -> launchAuthenticationActivity(targetMuted())
+            TileActionSecurityDecision.REQUEST_APP_AUTHENTICATION -> authenticateKnownTarget()
             TileActionSecurityDecision.EXECUTE -> executeAuthorizedAction()
         }
     }
@@ -94,8 +95,15 @@ class CameraMuteTileService : TileService() {
         }
     }
 
-    private fun targetMuted(): Boolean =
-        !CscMuteManager.isCscShutterSoundMuted(applicationContext)
+    private fun authenticateKnownTarget() {
+        val currentMuted = CscMuteManager.readCscMutedState(applicationContext)
+        if (currentMuted == null) {
+            Toast.makeText(this, getString(R.string.csc_state_unknown_guidance), Toast.LENGTH_LONG).show()
+            updateTileState()
+            return
+        }
+        launchAuthenticationActivity(!currentMuted)
+    }
 
     private fun showProcessingTileState() {
         qsTile?.let { tile ->
@@ -117,14 +125,19 @@ class CameraMuteTileService : TileService() {
         val hasUsablePermission = !prefs.isPermissionRevokedByUser &&
             CscMuteManager.hasWritePermission(context) &&
             LocalNetworkAccess.isGranted(context)
-        val isMuted = hasUsablePermission && CscMuteManager.isCscShutterSoundMuted(context)
+        val isMuted = if (hasUsablePermission) CscMuteManager.readCscMutedState(context) else null
 
         // Refresh the icon explicitly so existing tiles do not remain stuck on a cached launcher icon.
         tile.icon = Icon.createWithResource(this, R.drawable.ic_qs_camera_mute)
-        tile.state = if (isMuted) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        tile.state = when {
+            hasUsablePermission && isMuted == null -> Tile.STATE_UNAVAILABLE
+            isMuted == true -> Tile.STATE_ACTIVE
+            else -> Tile.STATE_INACTIVE
+        }
         tile.label = getString(R.string.tile_name)
         tile.subtitle = when {
             !hasUsablePermission -> getString(R.string.tile_permission_required)
+            isMuted == null -> getString(R.string.csc_state_unknown_title)
             isMuted -> getString(R.string.tile_muted)
             else -> getString(R.string.tile_unmuted)
         }

@@ -51,7 +51,7 @@ internal class CameraSettingsOperationViewModel(application: Application) : Andr
                 val context = getApplication<Application>()
                 val result = StandaloneAdbManager.getInstance(context).setCameraMute(mute)
                 val stateApplied = result.isSuccess && CscStateVerifier.waitFor(mute) {
-                    CscMuteManager.isCscShutterSoundMuted(context)
+                    CscMuteManager.readCscMutedState(context)
                 }
 
                 if (stateApplied) {

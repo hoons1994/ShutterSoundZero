@@ -7,6 +7,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MainScreenStateTest {
+    @Test fun unreadableCscStateCannotBePresentedAsReadyOrConfirmedReset() {
+        assertEquals(HomeStatus.STATE_UNKNOWN, resolveHomeStatus(MainUiState(
+            hasCscPermission = true,
+            isCscMuted = null
+        )))
+    }
+
+    @Test fun recoveringCscReadReturnsToTheConfirmedState() {
+        val unknown = MainUiState(hasCscPermission = true, isCscMuted = null)
+        assertEquals(HomeStatus.READY, resolveHomeStatus(unknown.copy(isCscMuted = true)))
+        assertEquals(HomeStatus.REAPPLY_REQUIRED, resolveHomeStatus(unknown.copy(isCscMuted = false)))
+    }
     @Test fun enablingWirelessDebuggingDismissesEnableHelpWithoutReopeningItLater() {
         val disabled = MainUiState(showSwitchFailureHelp = true)
         assertTrue(disabled.withWirelessDebuggingState(false).showSwitchFailureHelp)
@@ -37,7 +49,7 @@ class MainScreenStateTest {
         val refreshed = failure.withWirelessDebuggingState(true).withWirelessDebuggingState(false)
         assertEquals(CameraMuteFailure.CONNECTION, refreshed.cameraMuteFailure)
         assertTrue(refreshed.hasCscPermission)
-        assertFalse(refreshed.isCscMuted)
+        assertEquals(false, refreshed.isCscMuted)
     }
 
     @Test fun pendingMuteCannotBePresentedAsReady() {

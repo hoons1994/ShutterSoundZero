@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class MainUiState(
-    val isCscMuted: Boolean = false,
+    val isCscMuted: Boolean? = null,
     val hasCscPermission: Boolean = false,
     val isDeveloperOptionsEnabled: Boolean = false,
     val isWirelessDebuggingEnabled: Boolean = false,
@@ -75,7 +75,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private fun createInitialState(): MainUiState {
         val app = getApplication<Application>()
         val hasPermission = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
-        val isMuted = CscMuteManager.isCscShutterSoundMuted(app)
+        val isMuted = CscMuteManager.readCscMutedState(app)
         return MainUiState(
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
@@ -92,10 +92,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun refreshState() {
         val app = getApplication<Application>()
         val perm = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
-        val isMuted = CscMuteManager.isCscShutterSoundMuted(app)
+        val isMuted = CscMuteManager.readCscMutedState(app)
         val wirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app)
 
-        if (perm && isMuted && prefs.lastSetupIssue != null) {
+        if (perm && isMuted == true && prefs.lastSetupIssue != null) {
             prefs.lastSetupIssue = null
         }
 
@@ -284,7 +284,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             try {
                 val adbResult = adbManager.setCameraMute(enableMute)
                 val actualStateMatchesRequest = adbResult.isSuccess && CscStateVerifier.waitFor(enableMute) {
-                    CscMuteManager.isCscShutterSoundMuted(app)
+                    CscMuteManager.readCscMutedState(app)
                 }
                 if (actualStateMatchesRequest) {
                     if (enableMute) {

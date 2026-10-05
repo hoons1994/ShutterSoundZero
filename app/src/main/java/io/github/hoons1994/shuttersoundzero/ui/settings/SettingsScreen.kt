@@ -58,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,6 +68,7 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.ViewModelProvider
+import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
@@ -130,19 +132,19 @@ fun SettingsScreen(
     var showRestoreWirelessDebuggingHelp by remember { mutableStateOf(false) }
     var restoreResultMessage by remember { mutableStateOf<String?>(null) }
     var cameraMuteFailure by remember { mutableStateOf<CameraMuteFailure?>(null) }
-    var isCscMuted by remember { mutableStateOf(CscMuteManager.isCscShutterSoundMuted(context)) }
+    var isCscMuted by remember { mutableStateOf(CscMuteManager.readCscMutedState(context)) }
     var pendingLocalNetworkAction by remember { mutableStateOf<CameraAction?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, context) {
         val cscObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                isCscMuted = CscMuteManager.isCscShutterSoundMuted(context)
+                isCscMuted = CscMuteManager.readCscMutedState(context)
             }
         }
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                isCscMuted = CscMuteManager.isCscShutterSoundMuted(context)
+                isCscMuted = CscMuteManager.readCscMutedState(context)
             }
         }
         context.contentResolver.registerContentObserver(
@@ -160,7 +162,9 @@ fun SettingsScreen(
     LaunchedEffect(operationState.completionId) {
         if (operationState.completionId > 0 && operationState.resultMessage != null) {
             showRestoreConfirm = false
-            operationState.appliedMutedState?.let { isCscMuted = it }
+            if (operationState.appliedMutedState != null || operationState.failure != null) {
+                isCscMuted = CscMuteManager.readCscMutedState(context)
+            }
             cameraMuteFailure = operationState.failure
             restoreResultMessage = if (cameraMuteFailure == null) operationState.resultMessage else null
             cameraSettingsViewModel.consumeCompletion()
@@ -238,7 +242,13 @@ fun SettingsScreen(
 
             GroupLabel("카메라 설정")
             SettingsCard {
-                if (isCscMuted) {
+                if (isCscMuted == null) {
+                    ClickableRow(
+                        title = stringResource(R.string.csc_state_retry),
+                        subtitle = stringResource(R.string.csc_state_unknown_guidance),
+                        onClick = { isCscMuted = CscMuteManager.readCscMutedState(context) }
+                    )
+                } else if (isCscMuted == true) {
                     ClickableRow(
                         title = "카메라 셔터음 원래대로 복원",
                         subtitle = "현재 무음 설정 적용됨",

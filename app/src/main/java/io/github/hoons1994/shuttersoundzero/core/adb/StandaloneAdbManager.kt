@@ -286,7 +286,7 @@ class StandaloneAdbManager(context: Context) {
             executeShellCommand(AdbShellCommands.setCameraMute(mute, userId))
         }
         diagnosed(DiagnosticLogger.Stage.CSC_VERIFY) {
-            if (!CscStateVerifier.waitFor(mute) { CscMuteManager.isCscShutterSoundMuted(context) }) {
+            if (!CscStateVerifier.waitFor(mute) { CscMuteManager.readCscMutedState(context) }) {
                 throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
             }
         }
