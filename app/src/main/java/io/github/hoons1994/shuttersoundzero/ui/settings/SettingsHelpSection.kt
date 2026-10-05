@@ -208,9 +208,17 @@ fun SettingsHelpSection() {
 
                     TextButton(
                         onClick = {
-                            DiagnosticLogger.clear(context)
-                            diagnosticReport = DiagnosticReportBuilder.build(context)
-                            Toast.makeText(context, "진단 로그를 삭제했습니다.", Toast.LENGTH_SHORT).show()
+                            val cleared = DiagnosticLogger.clear(context)
+                            if (cleared.isSuccess) {
+                                diagnosticReport = DiagnosticReportBuilder.build(context)
+                            }
+                            val message = cleared.fold(
+                                onSuccess = { deleted ->
+                                    if (deleted) "진단 로그를 삭제했습니다." else "지울 진단 로그가 없습니다."
+                                },
+                                onFailure = { "진단 로그를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요." }
+                            )
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
                     ) {
                         Text("진단 로그 지우기")

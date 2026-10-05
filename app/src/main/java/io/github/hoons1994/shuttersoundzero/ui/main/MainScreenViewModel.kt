@@ -30,9 +30,6 @@ data class MainUiState(
     val isDeveloperOptionsEnabled: Boolean = false,
     val isWirelessDebuggingEnabled: Boolean = false,
     val setupIssue: SetupIssue? = null,
-    val adbGrantCommand: String = "",
-    val adbDirectSetCommand: String = "",
-    val adbCheckCommand: String = "",
     val infoMessage: String? = null,
     val errorMessage: String? = null,
     val showSwitchFailureHelp: Boolean = false,
@@ -82,9 +79,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             isDeveloperOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(app),
             isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
             setupIssue = prefs.lastSetupIssue,
-            adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
-            adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
-            adbCheckCommand = CscMuteManager.getAdbCheckCommand(),
             systemVolume = readSystemVolume()
         )
     }
@@ -105,9 +99,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 hasCscPermission = perm,
                 isDeveloperOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(app),
                 setupIssue = prefs.lastSetupIssue,
-                adbGrantCommand = CscMuteManager.getAdbGrantPermissionCommand(app),
-                adbDirectSetCommand = CscMuteManager.getAdbDirectCommand(true),
-                adbCheckCommand = CscMuteManager.getAdbCheckCommand(),
                 systemVolume = readSystemVolume().copy(requested = current.systemVolume.requested)
             )
         }
@@ -193,6 +184,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun startNotificationPairing(context: Context) {
+        val devOptionsOff = !DeveloperOptionsManager.isDeveloperOptionsEnabled(context)
+        if (!handleSettingsLaunch(SetupSettingsNavigator.openPairingSetupScreen(context))) return
         prefs.clearTransientAdbConnectionState()
         prefs.lastSetupIssue = null
         adbManager.clearDiscoveredPorts()
@@ -204,7 +197,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 showWirelessDebuggingCleanupHelp = false
             )
         }
-        startPairingNow(context)
+        PairingForegroundService.start(context, devOptionsOff)
+        _uiState.update {
+            it.copy(
+                infoMessage = context.getString(R.string.main_pairing_code_entry_guidance),
+                errorMessage = null
+            )
+        }
     }
 
     fun reportLocalNetworkPermissionDenied() {
@@ -212,19 +211,16 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.update { it.copy(setupIssue = SetupIssue.LOCAL_NETWORK_PERMISSION) }
     }
 
-    private fun startPairingNow(context: Context) {
-        val devOptionsOff = !DeveloperOptionsManager.isDeveloperOptionsEnabled(context)
-        PairingForegroundService.start(context, devOptionsOff)
-        SetupSettingsNavigator.openPairingSetupScreen(context)
-        _uiState.update {
-            it.copy(
-                infoMessage = context.getString(R.string.main_pairing_code_entry_guidance)
-            )
+    fun handleSettingsLaunch(result: Result<Unit>): Boolean {
+        if (result.isFailure) {
+            _uiState.update {
+                it.copy(
+                    infoMessage = null,
+                    errorMessage = getApplication<Application>().getString(R.string.settings_launch_failed)
+                )
+            }
         }
-    }
-
-    fun cancelNotificationPairing(context: Context) {
-        PairingForegroundService.stop(context)
+        return result.isSuccess
     }
 
     fun toggleCscMute(enableMute: Boolean) {
