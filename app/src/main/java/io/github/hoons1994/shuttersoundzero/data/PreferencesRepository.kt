@@ -3,12 +3,32 @@ package io.github.hoons1994.shuttersoundzero.data
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import io.github.hoons1994.shuttersoundzero.theme.AppThemeMode
 
 /**
  * 앱 환경설정 저장소.
  */
 class PreferencesRepository(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+
+    var appThemeMode: AppThemeMode
+        get() = AppThemeMode.fromStoredValue(prefs.getString(KEY_APP_THEME_MODE, null))
+        set(value) = prefs.edit { putString(KEY_APP_THEME_MODE, value.name) }
+
+    fun registerThemeChangeListener(
+        onChanged: (AppThemeMode) -> Unit
+    ): SharedPreferences.OnSharedPreferenceChangeListener {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            // A cleared preferences file also restores the system default.
+            if (key == KEY_APP_THEME_MODE || key == null) onChanged(appThemeMode)
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        return listener
+    }
+
+    fun unregisterThemeChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+    }
 
     /**
      * 최초 설치 사용자에게만 첫 실행 중요 안내를 보여주기 위한 상태.
@@ -150,6 +170,7 @@ class PreferencesRepository(context: Context) {
         private const val KEY_PERMISSION_REVOKED_BY_USER = "permission_revoked_by_user"
         private const val KEY_LAST_SETUP_ISSUE = "last_setup_issue"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
+        private const val KEY_APP_THEME_MODE = "app_theme_mode"
         @Volatile
         private var INSTANCE: PreferencesRepository? = null
 

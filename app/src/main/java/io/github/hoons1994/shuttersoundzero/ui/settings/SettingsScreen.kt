@@ -301,6 +301,11 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            GroupLabel(stringResource(R.string.app_appearance_title))
+            SettingsCard { ThemeSettingsSection(prefs) }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             GroupLabel("보안")
             SettingsCard {
                 SwitchRow(

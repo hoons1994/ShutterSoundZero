@@ -1,4 +1,10 @@
 <resources>
+    <string name="app_appearance_title">앱 화면</string>
+    <string name="app_theme_title">화면 모드</string>
+    <string name="app_theme_description">시스템 기본값을 선택하면 기기의 화면 모드를 따릅니다.</string>
+    <string name="app_theme_system">시스템 기본값</string>
+    <string name="app_theme_light">라이트 모드</string>
+    <string name="app_theme_dark">다크 모드</string>
     <string name="app_name">셔터사운드 제로</string>
     <string name="tile_name">셔터사운드 제로</string>
     <string name="tile_muted">셔터사운드 제로 켜짐</string>

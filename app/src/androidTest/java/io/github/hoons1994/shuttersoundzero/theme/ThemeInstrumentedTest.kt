@@ -18,6 +18,35 @@ class ThemeInstrumentedTest {
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
+    fun lightTheme_screenAndSelectionTextMeetAaContrast() = assertThemeTextContrast(false)
+
+    @Test
+    fun darkTheme_screenAndSelectionTextMeetAaContrast() = assertThemeTextContrast(true)
+
+    private fun assertThemeTextContrast(darkTheme: Boolean) {
+        val ratios = mutableListOf<Float>()
+        composeTestRule.setContent {
+            ShutterSoundZeroTheme(darkTheme = darkTheme) {
+                val colors = MaterialTheme.colorScheme
+                ratios.clear()
+                listOf(
+                    colors.onBackground to colors.background,
+                    colors.onSurface to colors.surface,
+                    colors.onSurfaceVariant to colors.surface,
+                    colors.onPrimaryContainer to colors.primaryContainer,
+                    colors.primary to colors.surface
+                ).forEach { (foreground, background) ->
+                    ratios += contrastRatio(foreground, background)
+                }
+            }
+        }
+        composeTestRule.runOnIdle {
+            assertEquals(5, ratios.size)
+            ratios.forEach { assertTrue("Text contrast $it is below AA", it >= MinimumAaTextContrast) }
+        }
+    }
+
+    @Test
     fun darkTheme_usesDarkPalette() {
         var background = Color.Unspecified
         var surface = Color.Unspecified

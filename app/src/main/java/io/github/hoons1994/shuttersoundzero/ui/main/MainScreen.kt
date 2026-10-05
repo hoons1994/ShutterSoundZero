@@ -756,11 +756,11 @@ private fun StatusHeroCard(
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "확인 필요" else "설정 필요"
     }
     val badgeColor = when (status) {
-        HomeStatus.APPLYING -> BrandBlueLight
+        HomeStatus.APPLYING -> MaterialTheme.colorScheme.primary
         HomeStatus.READY -> StatusGreen
         HomeStatus.REAPPLY_REQUIRED -> StatusAmber
         HomeStatus.STATE_UNKNOWN -> StatusAmber
-        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) StatusAmber else BrandBlueLight
+        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) StatusAmber else MaterialTheme.colorScheme.primary
     }
     val primaryLabel = when (status) {
         HomeStatus.APPLYING -> stringResource(R.string.camera_settings_applying)

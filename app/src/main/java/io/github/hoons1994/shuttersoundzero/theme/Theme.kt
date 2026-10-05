@@ -7,9 +7,27 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
+import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
+
+@Composable
+internal fun rememberAppThemeMode(prefs: PreferencesRepository): State<AppThemeMode> {
+    val state = remember(prefs) { mutableStateOf(prefs.appThemeMode) }
+    DisposableEffect(prefs) {
+        val listener = prefs.registerThemeChangeListener { state.value = it }
+        state.value = prefs.appThemeMode
+        onDispose { prefs.unregisterThemeChangeListener(listener) }
+    }
+    return state
+}
 
 private val ShutterZeroLightColorScheme = lightColorScheme(
     primary = BrandBlueLight,
@@ -49,10 +67,14 @@ private val ShutterZeroDarkColorScheme = darkColorScheme(
 
 @Composable
 fun ShutterSoundZeroTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (darkTheme) {
+    val context = LocalContext.current
+    val prefs = remember(context) { PreferencesRepository.getInstance(context) }
+    val mode by rememberAppThemeMode(prefs)
+    val useDarkTheme = darkTheme ?: mode.isDark(isSystemInDarkTheme())
+    val colorScheme = if (useDarkTheme) {
         ShutterZeroDarkColorScheme
     } else {
         ShutterZeroLightColorScheme
@@ -64,8 +86,8 @@ fun ShutterSoundZeroTheme(
             val window = (view.context as? Activity)?.window
             if (window != null) {
                 val insetsController = WindowCompat.getInsetsController(window, view)
-                insetsController.isAppearanceLightStatusBars = !darkTheme
-                insetsController.isAppearanceLightNavigationBars = !darkTheme
+                insetsController.isAppearanceLightStatusBars = !useDarkTheme
+                insetsController.isAppearanceLightNavigationBars = !useDarkTheme
             }
         }
     }
