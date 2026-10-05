@@ -50,7 +50,7 @@ object DiagnosticReportBuilder {
             appendLine()
             appendLine("[현재 상태]")
             appendLine("WRITE_SECURE_SETTINGS: ${yesNo(CscMuteManager.hasWritePermission(context))}")
-            appendLine("CSC 카메라 무음: ${yesNo(CscMuteManager.isCscShutterSoundMuted(context))}")
+            appendLine("CSC 카메라 무음: ${yesNo(CscMuteManager.readCscMutedState(context))}")
             appendLine("개발자 옵션: ${yesNo(DeveloperOptionsManager.isDeveloperOptionsEnabled(context))}")
             appendLine("무선 디버깅: ${yesNo(DeveloperOptionsManager.isWirelessDebuggingEnabled(context))}")
             appendLine("로컬 네트워크 접근: ${yesNo(LocalNetworkAccess.isGranted(context))}")
@@ -73,7 +73,11 @@ object DiagnosticReportBuilder {
         )
     }
 
-    private fun yesNo(value: Boolean): String = if (value) "예" else "아니요"
+    private fun yesNo(value: Boolean?): String = when (value) {
+        true -> "예"
+        false -> "아니요"
+        null -> "알 수 없음"
+    }
 
     /**
      * 삼성의 SEM_PLATFORM_INT는 One UI 세대별 플랫폼 번호가 10000씩 증가한다.

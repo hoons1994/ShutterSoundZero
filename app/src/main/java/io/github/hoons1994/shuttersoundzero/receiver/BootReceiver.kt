@@ -167,7 +167,12 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
-        if (CscMuteManager.isCscShutterSoundMuted(context)) {
+        val mutedState = CscMuteManager.readCscMutedState(context)
+        if (mutedState == null) {
+            showNotification(context, context.getString(R.string.csc_state_unknown_guidance))
+            return
+        }
+        if (mutedState) {
             Log.i(TAG, "CSC camera mute remained active after software update; no action needed")
             return
         }
@@ -224,7 +229,12 @@ class BootReceiver : BroadcastReceiver() {
         prefs: PreferencesRepository
     ) {
         if (!prefs.shouldMuteOnBoot || prefs.isPermissionRevokedByUser) return
-        if (CscMuteManager.isCscShutterSoundMuted(context)) return
+        val mutedState = CscMuteManager.readCscMutedState(context)
+        if (mutedState == null) {
+            showNotification(context, context.getString(R.string.csc_state_unknown_guidance))
+            return
+        }
+        if (mutedState) return
 
         val hasPermission = CscMuteManager.hasWritePermission(context)
         Log.w(TAG, "CSC camera mute needs reapply after reboot; permission=$hasPermission")

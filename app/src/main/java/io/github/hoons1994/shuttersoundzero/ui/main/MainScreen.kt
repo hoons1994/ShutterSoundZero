@@ -105,6 +105,7 @@ internal enum class HomeStatus {
     APPLYING,
     READY,
     REAPPLY_REQUIRED,
+    STATE_UNKNOWN,
     SETUP_REQUIRED
 }
 
@@ -117,7 +118,8 @@ internal enum class StepVisualState {
 
 internal fun resolveHomeStatus(uiState: MainUiState): HomeStatus = when {
     uiState.isCscChangeInProgress -> HomeStatus.APPLYING
-    uiState.isCscMuted && uiState.hasCscPermission -> HomeStatus.READY
+    uiState.isCscMuted == true && uiState.hasCscPermission -> HomeStatus.READY
+    uiState.isCscMuted == null && uiState.hasCscPermission -> HomeStatus.STATE_UNKNOWN
     uiState.hasCscPermission -> HomeStatus.REAPPLY_REQUIRED
     else -> HomeStatus.SETUP_REQUIRED
 }
@@ -317,6 +319,7 @@ fun MainScreen(
             onSettingsClick = { onItemClick(Settings) },
             onSetup = setupAction,
             onReapply = reapplyAction,
+            onRefreshCscState = viewModel::refreshState,
             onOpenCamera = openCamera,
             onOpenWirelessDebugging = { SetupSettingsNavigator.openPairingSetupScreen(context) },
             onOpenSoftwareInfo = { SetupSettingsNavigator.openSoftwareInfoSettings(context) },
@@ -447,7 +450,8 @@ internal fun HomeContent(
     onSystemVolumeChange: (Int) -> Int? = { null },
     modifier: Modifier = Modifier,
     onOpenSoundSettings: () -> Unit = {},
-    onOpenWirelessDebugging: () -> Unit = {}
+    onOpenWirelessDebugging: () -> Unit = {},
+    onRefreshCscState: () -> Unit = {}
 ) {
     val homeStatus = resolveHomeStatus(uiState)
 
@@ -469,6 +473,7 @@ internal fun HomeContent(
                 HomeStatus.APPLYING -> null
                 HomeStatus.READY -> null
                 HomeStatus.REAPPLY_REQUIRED -> onReapply
+                HomeStatus.STATE_UNKNOWN -> onRefreshCscState
                 HomeStatus.SETUP_REQUIRED -> onSetup
             },
             onCameraAction = onOpenCamera
@@ -721,6 +726,7 @@ private fun StatusHeroCard(
         HomeStatus.APPLYING -> stringResource(R.string.camera_settings_applying)
         HomeStatus.READY -> "카메라 무음 설정 완료"
         HomeStatus.REAPPLY_REQUIRED -> "카메라 무음 다시 적용 필요"
+        HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_unknown_title)
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
             "1회 설정을 다시 진행해 주세요"
         } else {
@@ -731,6 +737,7 @@ private fun StatusHeroCard(
         HomeStatus.APPLYING -> "실제 적용 상태를 확인하고 있습니다. 완료될 때까지 기다려 주세요."
         HomeStatus.READY -> "진동·무음 모드에서 촬영음이 나지 않도록 설정되어 있습니다."
         HomeStatus.REAPPLY_REQUIRED -> "앱 권한은 유지되어 있습니다. 무선 디버깅을 켠 뒤 [다시 적용하기]를 눌러 주세요."
+        HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_unknown_guidance)
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
             "문제가 생긴 단계를 아래에 표시했습니다. 해당 단계부터 다시 진행하면 됩니다."
         } else {
@@ -741,18 +748,21 @@ private fun StatusHeroCard(
         HomeStatus.APPLYING -> "처리 중"
         HomeStatus.READY -> "정상"
         HomeStatus.REAPPLY_REQUIRED -> "조치 필요"
+        HomeStatus.STATE_UNKNOWN -> "확인 필요"
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "확인 필요" else "설정 필요"
     }
     val badgeColor = when (status) {
         HomeStatus.APPLYING -> BrandBlueLight
         HomeStatus.READY -> StatusGreen
         HomeStatus.REAPPLY_REQUIRED -> StatusAmber
+        HomeStatus.STATE_UNKNOWN -> StatusAmber
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) StatusAmber else BrandBlueLight
     }
     val primaryLabel = when (status) {
         HomeStatus.APPLYING -> stringResource(R.string.camera_settings_applying)
         HomeStatus.READY -> null
         HomeStatus.REAPPLY_REQUIRED -> "다시 적용하기"
+        HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_retry)
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "1회 설정 다시 시작" else "1회 설정 시작"
     }
 
@@ -816,7 +826,7 @@ private fun StatusHeroCard(
                     )
                 }
             }
-            if (status != HomeStatus.SETUP_REQUIRED && status != HomeStatus.READY) {
+            if (status == HomeStatus.REAPPLY_REQUIRED || status == HomeStatus.APPLYING) {
                 TextButton(
                     onClick = onOpenWirelessDebugging,
                     enabled = !isInProgress
@@ -845,7 +855,7 @@ private fun SetupProgressCard(
     val wirelessComplete = developerOptionsComplete &&
         (uiState.isWirelessDebuggingEnabled || (issue != null && issue != SetupIssue.LOCAL_NETWORK_PERMISSION))
     val pairingComplete = uiState.hasCscPermission || issue == SetupIssue.CAMERA_APPLY
-    val applyComplete = uiState.isCscMuted
+    val applyComplete = uiState.isCscMuted == true
 
     val step1State = if (developerOptionsComplete) StepVisualState.COMPLETE else StepVisualState.CURRENT
     val step2State = when {

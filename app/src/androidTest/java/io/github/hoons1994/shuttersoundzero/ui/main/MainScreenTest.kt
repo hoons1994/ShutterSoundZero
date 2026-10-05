@@ -170,6 +170,24 @@ class MainScreenTest {
     }
 
     @Test
+    fun unreadableCscStateShowsRetryWithoutClaimingSuccessOrReset() {
+        var retried = false
+        composeTestRule.setContent {
+            HomeContent(
+                uiState = MainUiState(hasCscPermission = true, isCscMuted = null),
+                onRefreshCscState = { retried = true }
+            )
+        }
+
+        composeTestRule.onNodeWithText("카메라 설정 상태 확인 불가").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("상태 다시 확인").performClick()
+        assertTrue(retried)
+        for (claim in listOf("정상", "카메라 무음 설정 완료", "카메라 무음 다시 적용 필요", "다시 적용하기")) {
+            assertTrue(composeTestRule.onAllNodesWithText(claim).fetchSemanticsNodes().isEmpty())
+        }
+    }
+
+    @Test
     fun reapplyInProgressDoesNotShowPrematureSuccessOrAllowRepeatedRequests() {
         showHome(MainUiState(hasCscPermission = true, isCscChangeInProgress = true))
         composeTestRule.onNode(hasText("카메라 설정 변경 중") and hasClickAction()).assertIsNotEnabled()
