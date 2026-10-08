@@ -1,5 +1,5 @@
 name: 버그 신고
-description: 셔터음 제로 사용 중 발생한 문제를 알려주세요.
+description: 셔터사운드 제로 사용 중 발생한 문제를 알려주세요.
 title: "[Bug] "
 body:
   - type: markdown
