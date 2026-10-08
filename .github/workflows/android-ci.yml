@@ -386,6 +386,7 @@ jobs:
         with:
           name: ShutterSoundZero-androidTest-api${{ matrix.api }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            build/reports/dependency-verification/**
             app/build/reports/androidTests/connected/**
             app/build/outputs/androidTest-results/connected/**
             ${{ runner.temp }}/emulator-api-${{ matrix.api }}.log
