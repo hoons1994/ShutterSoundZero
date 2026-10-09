@@ -13,6 +13,9 @@
     <string name="camera_settings_applying">카메라 설정 변경 중</string>
     <string name="main_reenable_wireless_debugging">무선 디버깅 다시 켜기</string>
     <string name="main_open_wireless_debugging_settings">무선 디버깅 설정 열기</string>
+    <string name="wireless_debugging_state_unknown_title">무선 디버깅 상태 확인 필요</string>
+    <string name="wireless_debugging_state_unknown_guidance">무선 디버깅 상태를 확인하지 못했습니다. 기기 설정에서 현재 상태를 확인한 뒤 앱으로 돌아와 다시 시도해 주세요.</string>
+    <string name="pairing_help_wireless_debugging_state_unknown">무선 디버깅 상태를 확인하지 못했습니다. 기기 설정에서 현재 상태를 확인하고, 알림을 눌러 앱으로 돌아와 [1회 설정 시작]을 다시 눌러 주세요.</string>
 
     <string name="main_local_network_reapply_prompt">Android 17에서 무선 ADB 재적용을 사용하려면 로컬 네트워크 권한이 필요합니다. [앱 설정]에서 허용해 주세요.</string>
     <string name="main_non_samsung_device_warning">안내: 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.</string>

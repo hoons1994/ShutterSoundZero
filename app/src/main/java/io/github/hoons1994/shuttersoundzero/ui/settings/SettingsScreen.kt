@@ -137,6 +137,9 @@ fun SettingsScreen(
     var showRestoreConfirm by remember { mutableStateOf(false) }
     var showReapplyWirelessDebuggingHelp by remember { mutableStateOf(false) }
     var showRestoreWirelessDebuggingHelp by remember { mutableStateOf(false) }
+    var wirelessDebuggingEnabled by remember {
+        mutableStateOf(DeveloperOptionsManager.readWirelessDebuggingEnabled(context))
+    }
     var restoreResultMessage by remember { mutableStateOf<String?>(null) }
     var cameraMuteFailure by remember { mutableStateOf<CameraMuteFailure?>(null) }
     var isCscMuted by remember { mutableStateOf(CscMuteManager.readCscMutedState(context)) }
@@ -144,24 +147,44 @@ fun SettingsScreen(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, context) {
-        val cscObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        fun refreshSettingsState() {
+            isCscMuted = CscMuteManager.readCscMutedState(context)
+            wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(context)
+            if (wirelessDebuggingEnabled == true) {
+                showReapplyWirelessDebuggingHelp = false
+                showRestoreWirelessDebuggingHelp = false
+            }
+        }
+        val settingsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                isCscMuted = CscMuteManager.readCscMutedState(context)
+                refreshSettingsState()
             }
         }
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                isCscMuted = CscMuteManager.readCscMutedState(context)
+                refreshSettingsState()
             }
         }
         context.contentResolver.registerContentObserver(
             Settings.System.getUriFor(CscMuteManager.CSC_KEY),
             false,
-            cscObserver
+            settingsObserver
         )
+        // A provider may reject observation even when a later state read succeeds.
+        // Keep ON_RESUME refresh available instead of failing the settings screen.
+        runCatching {
+            context.contentResolver.registerContentObserver(
+                DeveloperOptionsManager.wirelessDebuggingUri,
+                false,
+                settingsObserver
+            )
+        }.onFailure {
+            android.util.Log.w("SettingsScreen", "Unable to observe wireless debugging (${it.javaClass.simpleName})")
+        }
         lifecycleOwner.lifecycle.addObserver(observer)
+        refreshSettingsState()
         onDispose {
-            context.contentResolver.unregisterContentObserver(cscObserver)
+            context.contentResolver.unregisterContentObserver(settingsObserver)
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
@@ -260,10 +283,11 @@ fun SettingsScreen(
                         title = "카메라 셔터음 원래대로 복원",
                         subtitle = "현재 무음 설정 적용됨",
                         onClick = {
+                            wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(context)
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
                                     "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-                            } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
+                            } else if (wirelessDebuggingEnabled != true) {
                                 showRestoreWirelessDebuggingHelp = true
                             } else if (!LocalNetworkAccess.isGranted(context)) {
                                 requestLocalNetworkPermission(CameraAction.RESTORE)
@@ -277,10 +301,11 @@ fun SettingsScreen(
                         title = if (operationState.isReapplyInProgress) "카메라 무음 다시 적용 중…" else "카메라 무음 다시 적용",
                         subtitle = "카메라 설정이 기본 상태로 돌아온 경우 사용",
                         onClick = {
+                            wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(context)
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
                                     "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-                            } else if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(context)) {
+                            } else if (wirelessDebuggingEnabled != true) {
                                 showReapplyWirelessDebuggingHelp = true
                             } else if (!operationState.isReapplyInProgress) {
                                 if (!LocalNetworkAccess.isGranted(context)) {
@@ -443,10 +468,14 @@ fun SettingsScreen(
         if (showReapplyWirelessDebuggingHelp) {
             AlertDialog(
                 onDismissRequest = { showReapplyWirelessDebuggingHelp = false },
-                title = { Text("무선 디버깅을 켜 주세요") },
+                title = { Text(if (wirelessDebuggingEnabled == null) {
+                    stringResource(R.string.wireless_debugging_state_unknown_title)
+                } else "무선 디버깅을 켜 주세요") },
                 text = {
                     Text(
-                        "카메라 무음 설정을 다시 적용하는 동안에만 필요합니다.\n\n" +
+                        if (wirelessDebuggingEnabled == null) {
+                            stringResource(R.string.wireless_debugging_state_unknown_guidance)
+                        } else "카메라 무음 설정을 다시 적용하는 동안에만 필요합니다.\n\n" +
                             "무선 디버깅을 켠 뒤 앱으로 돌아와 [카메라 무음 다시 적용]을 다시 눌러 주세요."
                     )
                 },
@@ -474,10 +503,14 @@ fun SettingsScreen(
         if (showRestoreWirelessDebuggingHelp) {
             AlertDialog(
                 onDismissRequest = { showRestoreWirelessDebuggingHelp = false },
-                title = { Text("무선 디버깅을 켜 주세요") },
+                title = { Text(if (wirelessDebuggingEnabled == null) {
+                    stringResource(R.string.wireless_debugging_state_unknown_title)
+                } else "무선 디버깅을 켜 주세요") },
                 text = {
                     Text(
-                        "카메라 셔터음을 원래대로 복원하는 동안에만 필요합니다.\n\n" +
+                        if (wirelessDebuggingEnabled == null) {
+                            stringResource(R.string.wireless_debugging_state_unknown_guidance)
+                        } else "카메라 셔터음을 원래대로 복원하는 동안에만 필요합니다.\n\n" +
                             "무선 디버깅을 켠 뒤 앱으로 돌아와 [카메라 셔터음 원래대로 복원]을 다시 눌러 주세요."
                     )
                 },

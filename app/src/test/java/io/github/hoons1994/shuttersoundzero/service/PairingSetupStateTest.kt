@@ -7,6 +7,15 @@ import org.junit.Test
 
 class PairingSetupStateTest {
     @Test
+    fun unreadableWirelessSettingRequestsVerificationInsteadOfEnablingOrPairing() {
+        assertEquals(
+            PairingNotificationState.WIRELESS_DEBUGGING_STATE_UNKNOWN,
+            PairingSetupState(true, null).notificationState
+        )
+        assertNull(PairingSetupState(false, null).notificationState)
+    }
+
+    @Test
     fun enablingDeveloperOptionsThenWirelessDebuggingAdvancesBothSteps() {
         assertNull(PairingSetupState(false, false).notificationState)
         assertEquals(

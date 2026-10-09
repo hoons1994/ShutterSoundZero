@@ -139,7 +139,7 @@ class PairingForegroundService : Service() {
 
         registerSetupObserver()
 
-        if (setupState.developerOptionsEnabled && setupState.wirelessDebuggingEnabled) {
+        if (setupState.developerOptionsEnabled && setupState.wirelessDebuggingEnabled == true) {
             startPairingDiscovery()
         }
         // Re-read after registration so a change during service startup cannot be missed.
@@ -484,7 +484,7 @@ class PairingForegroundService : Service() {
 
     private fun restartPairingDiscovery() {
         val state = readPairingSetupState()
-        if (!state.developerOptionsEnabled || !state.wirelessDebuggingEnabled) return
+        if (!state.developerOptionsEnabled || state.wirelessDebuggingEnabled != true) return
         if (startPairingDiscovery()) {
             Log.i(TAG, "Restarted pairing discovery after unsuccessful attempt")
         }
@@ -557,7 +557,7 @@ class PairingForegroundService : Service() {
 
     private fun readPairingSetupState() = PairingSetupState(
         developerOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(this),
-        wirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(this)
+        wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(this)
     )
 
     private fun refreshPairingSetupNotification() {
@@ -583,7 +583,7 @@ class PairingForegroundService : Service() {
                 return
             }
             is PairingNotificationRefreshState.Update.Setup -> {
-                if (!state.developerOptionsEnabled || !state.wirelessDebuggingEnabled) {
+                if (!state.developerOptionsEnabled || state.wirelessDebuggingEnabled != true) {
                     stopPairingDiscovery()
                     adbManager.clearDiscoveredPorts()
                 } else {
@@ -596,7 +596,7 @@ class PairingForegroundService : Service() {
         if (prefs.lastSetupIssue == SetupIssue.LOCAL_NETWORK_PERMISSION) return
 
         val port = adbManager.lastDiscoveredPairingPort?.takeIf {
-            state.developerOptionsEnabled && state.wirelessDebuggingEnabled && it in 1..65535
+            state.developerOptionsEnabled && state.wirelessDebuggingEnabled == true && it in 1..65535
         }
         if (port != null && prefs.lastSetupIssue == SetupIssue.PAIRING_DISCOVERY) {
             prefs.lastSetupIssue = null

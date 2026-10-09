@@ -23,6 +23,23 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class PairingNotificationReceiverInstrumentedTest {
 
+    @Test
+    fun unreadableWirelessStateDoesNotOfferCodeEntryOrAskToTurnItOn() {
+        val notification = PairingNotificationHelper.buildPairingNotification(
+            baseContext,
+            state = PairingNotificationState.WIRELESS_DEBUGGING_STATE_UNKNOWN
+        )
+        assertEquals(
+            "무선 디버깅 상태 확인 필요",
+            notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
+        )
+        val guidance = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+        assertTrue(guidance.contains("상태를 확인하지 못했습니다"))
+        assertFalse(guidance.contains("켜 주세요"))
+        assertNotNull(notification.contentIntent)
+        assertFalse(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
+    }
+
     private val baseContext: Context = ApplicationProvider.getApplicationContext()
 
     @Test

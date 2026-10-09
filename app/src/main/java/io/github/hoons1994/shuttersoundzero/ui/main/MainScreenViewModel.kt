@@ -28,7 +28,7 @@ data class MainUiState(
     val isCscMuted: Boolean? = null,
     val hasCscPermission: Boolean = false,
     val isDeveloperOptionsEnabled: Boolean = false,
-    val isWirelessDebuggingEnabled: Boolean = false,
+    val isWirelessDebuggingEnabled: Boolean? = null,
     val setupIssue: SetupIssue? = null,
     val infoMessage: String? = null,
     val errorMessage: String? = null,
@@ -50,10 +50,10 @@ data class SystemVolumeUiState(
     val requested: Int? = null
 )
 
-internal fun MainUiState.withWirelessDebuggingState(enabled: Boolean): MainUiState = copy(
+internal fun MainUiState.withWirelessDebuggingState(enabled: Boolean?): MainUiState = copy(
     isWirelessDebuggingEnabled = enabled,
-    showSwitchFailureHelp = showSwitchFailureHelp && !enabled,
-    showWirelessDebuggingCleanupHelp = showWirelessDebuggingCleanupHelp && enabled
+    showSwitchFailureHelp = showSwitchFailureHelp && enabled == false,
+    showWirelessDebuggingCleanupHelp = showWirelessDebuggingCleanupHelp && enabled != false
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -77,7 +77,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
             isDeveloperOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(app),
-            isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
+            isWirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app),
             setupIssue = prefs.lastSetupIssue,
             systemVolume = readSystemVolume()
         )
@@ -87,7 +87,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val app = getApplication<Application>()
         val perm = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
         val isMuted = CscMuteManager.readCscMutedState(app)
-        val wirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app)
+        val wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app)
 
         if (perm && isMuted == true && prefs.lastSetupIssue != null) {
             prefs.lastSetupIssue = null
@@ -252,14 +252,17 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
-        if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(app)) {
+        val wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app)
+        if (wirelessDebuggingEnabled != true) {
             _uiState.update {
                 it.copy(
-                    isWirelessDebuggingEnabled = false,
-                    showSwitchFailureHelp = true,
+                    isWirelessDebuggingEnabled = wirelessDebuggingEnabled,
+                    showSwitchFailureHelp = wirelessDebuggingEnabled == false,
                     showWirelessDebuggingCleanupHelp = false,
                     cameraMuteFailure = null,
-                    errorMessage = null,
+                    errorMessage = if (wirelessDebuggingEnabled == null) {
+                        app.getString(R.string.wireless_debugging_state_unknown_guidance)
+                    } else null,
                     infoMessage = null
                 )
             }
@@ -289,7 +292,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(app)
                     _uiState.update {
                         it.copy(
-                            isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
+                            isWirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app),
                             setupIssue = prefs.lastSetupIssue,
                             infoMessage = when {
                                 enableMute && wirelessCleanup.isSuccess ->

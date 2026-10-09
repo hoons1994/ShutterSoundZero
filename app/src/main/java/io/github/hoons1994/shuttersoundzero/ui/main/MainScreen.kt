@@ -720,7 +720,7 @@ private fun StatusHeroCard(
     status: HomeStatus,
     setupIssue: SetupIssue?,
     isInProgress: Boolean,
-    isWirelessDebuggingEnabled: Boolean,
+    isWirelessDebuggingEnabled: Boolean?,
     onOpenWirelessDebugging: () -> Unit,
     onPrimaryAction: (() -> Unit)?,
     onCameraAction: () -> Unit
@@ -740,7 +740,11 @@ private fun StatusHeroCard(
     val subtitle = when (status) {
         HomeStatus.APPLYING -> "실제 적용 상태를 확인하고 있습니다. 완료될 때까지 기다려 주세요."
         HomeStatus.READY -> "진동·무음 모드에서 촬영음이 나지 않도록 설정되어 있습니다."
-        HomeStatus.REAPPLY_REQUIRED -> "앱 권한은 유지되어 있습니다. 무선 디버깅을 켠 뒤 [다시 적용하기]를 눌러 주세요."
+        HomeStatus.REAPPLY_REQUIRED -> when (isWirelessDebuggingEnabled) {
+            true -> "앱 권한은 유지되어 있습니다. [다시 적용하기]를 눌러 주세요."
+            false -> "앱 권한은 유지되어 있습니다. 무선 디버깅을 켠 뒤 [다시 적용하기]를 눌러 주세요."
+            null -> stringResource(R.string.wireless_debugging_state_unknown_guidance)
+        }
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_unknown_guidance)
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
             "문제가 생긴 단계를 아래에 표시했습니다. 해당 단계부터 다시 진행하면 됩니다."
@@ -837,8 +841,8 @@ private fun StatusHeroCard(
                 ) {
                     Text(
                         stringResource(
-                            if (isWirelessDebuggingEnabled) R.string.main_open_wireless_debugging_settings
-                            else R.string.main_reenable_wireless_debugging
+                            if (isWirelessDebuggingEnabled == false) R.string.main_reenable_wireless_debugging
+                            else R.string.main_open_wireless_debugging_settings
                         )
                     )
                 }
@@ -856,13 +860,14 @@ private fun SetupProgressCard(
     val context = LocalContext.current
     val issue = uiState.setupIssue
     val developerOptionsComplete = uiState.isDeveloperOptionsEnabled
-    val wirelessComplete = developerOptionsComplete &&
-        (uiState.isWirelessDebuggingEnabled || (issue != null && issue != SetupIssue.LOCAL_NETWORK_PERMISSION))
+    val wirelessComplete = developerOptionsComplete && uiState.isWirelessDebuggingEnabled != null &&
+        (uiState.isWirelessDebuggingEnabled == true || (issue != null && issue != SetupIssue.LOCAL_NETWORK_PERMISSION))
     val pairingComplete = uiState.hasCscPermission || issue == SetupIssue.CAMERA_APPLY
     val applyComplete = uiState.isCscMuted == true
 
     val step1State = if (developerOptionsComplete) StepVisualState.COMPLETE else StepVisualState.CURRENT
     val step2State = when {
+        developerOptionsComplete && uiState.isWirelessDebuggingEnabled == null -> StepVisualState.ERROR
         wirelessComplete -> StepVisualState.COMPLETE
         developerOptionsComplete -> StepVisualState.CURRENT
         else -> StepVisualState.PENDING
@@ -945,8 +950,12 @@ private fun SetupProgressCard(
             )
             SetupStepRow(
                 number = 2,
-                title = "무선 디버깅 켜기",
-                subtitle = "[1회 설정 시작]을 누르면 개발자 옵션의 무선 디버깅 화면을 엽니다.",
+                title = if (uiState.isWirelessDebuggingEnabled == null) {
+                    stringResource(R.string.wireless_debugging_state_unknown_title)
+                } else "무선 디버깅 켜기",
+                subtitle = if (uiState.isWirelessDebuggingEnabled == null) {
+                    stringResource(R.string.wireless_debugging_state_unknown_guidance)
+                } else "[1회 설정 시작]을 누르면 개발자 옵션의 무선 디버깅 화면을 엽니다.",
                 state = step2State
             )
             SetupStepRow(

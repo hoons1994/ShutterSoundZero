@@ -144,7 +144,8 @@ object PairingNotificationHelper {
         if (state != null) {
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(copy.bigText))
         }
-        if (state == PairingNotificationState.DISCOVERY_START_FAILED) {
+        if (state == PairingNotificationState.DISCOVERY_START_FAILED ||
+            state == PairingNotificationState.WIRELESS_DEBUGGING_STATE_UNKNOWN) {
             builder.setContentIntent(
                 PendingIntent.getActivity(
                     context,
@@ -196,6 +197,7 @@ object PairingNotificationHelper {
         val stateTitle = when (state) {
             PairingNotificationState.DEVELOPER_OPTIONS_READY -> context.getString(R.string.pairing_state_developer_options_ready)
             PairingNotificationState.WIRELESS_DEBUGGING_READY -> context.getString(R.string.pairing_state_wireless_debugging_ready)
+            PairingNotificationState.WIRELESS_DEBUGGING_STATE_UNKNOWN -> context.getString(R.string.wireless_debugging_state_unknown_title)
             PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED -> context.getString(R.string.pairing_state_local_network_permission_required)
             PairingNotificationState.DISCOVERY_START_FAILED -> context.getString(R.string.pairing_state_discovery_start_failed)
             PairingNotificationState.INVALID_PAIRING_CODE -> context.getString(R.string.pairing_state_invalid_code)
@@ -214,6 +216,7 @@ object PairingNotificationHelper {
         val guidance = when (state) {
             PairingNotificationState.DEVELOPER_OPTIONS_READY -> R.string.pairing_state_next_step
             PairingNotificationState.WIRELESS_DEBUGGING_READY -> R.string.pairing_default_open_pairing_summary
+            PairingNotificationState.WIRELESS_DEBUGGING_STATE_UNKNOWN -> R.string.pairing_help_wireless_debugging_state_unknown
             PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED -> R.string.pairing_help_local_network
             PairingNotificationState.DISCOVERY_START_FAILED -> R.string.pairing_help_discovery_restart
             PairingNotificationState.DISCOVERY_WAITING -> R.string.pairing_help_discovery

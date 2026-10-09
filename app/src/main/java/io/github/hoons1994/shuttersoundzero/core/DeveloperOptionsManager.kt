@@ -42,12 +42,10 @@ object DeveloperOptionsManager {
             PackageManager.PERMISSION_GRANTED
     }
 
-    fun isWirelessDebuggingEnabled(context: Context): Boolean {
-        return runCatching { readWirelessDebuggingEnabled(context) }.getOrDefault(false)
+    /** null means the setting is unavailable, not that wireless debugging is off. */
+    fun readWirelessDebuggingEnabled(context: Context): Boolean? = readWirelessDebuggingState {
+        Settings.Global.getInt(context.contentResolver, ADB_WIFI_ENABLED)
     }
-
-    private fun readWirelessDebuggingEnabled(context: Context): Boolean =
-        Settings.Global.getInt(context.contentResolver, ADB_WIFI_ENABLED, 0) != 0
 
     /**
      * 설정 작업이 끝난 뒤 무선 디버깅만 끈다.
@@ -75,8 +73,8 @@ object DeveloperOptionsManager {
                 )
                 check(changed) { "무선 디버깅 설정을 변경하지 못했습니다." }
                 // A failed read must not be reported as successful cleanup.
-                check(!readWirelessDebuggingEnabled(context)) {
-                    "무선 디버깅이 아직 활성화되어 있습니다."
+                check(readWirelessDebuggingEnabled(context) == false) {
+                    "무선 디버깅이 꺼졌는지 확인하지 못했습니다."
                 }
             }
             check(cleaned) { "카메라 설정 변경 작업이 진행 중입니다." }
