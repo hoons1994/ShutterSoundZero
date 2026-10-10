@@ -7,9 +7,13 @@ import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
+import io.github.hoons1994.shuttersoundzero.update.AppUpdateRepository
+import io.github.hoons1994.shuttersoundzero.update.GitHubReleaseClient
 
-/** Composition root for camera operations. Factories retain only the application context. */
+/** Composition root for app operations. Context-based factories use the application context. */
 internal object AppDependencies {
+    fun appUpdates(): AppUpdateRepository = AppUpdateRepository(GitHubReleaseClient()::fetchLatest)
+
     fun cameraSettings(context: Context): CameraSettingsRepository =
         CameraSettingsRepository(context, StandaloneAdbManager.getInstance(context)::runCommands)
 

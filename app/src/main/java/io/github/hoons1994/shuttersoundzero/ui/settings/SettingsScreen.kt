@@ -63,7 +63,6 @@ import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
 import io.github.hoons1994.shuttersoundzero.security.AppLockSession
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
 
-private const val RELEASES_URL = "https://github.com/hoons1994/ShutterSoundZero/releases/latest"
 private const val LOCAL_NETWORK_PERMISSION_MESSAGE =
     "카메라 설정을 바꾸려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용한 뒤 다시 시도해 주세요."
 
@@ -337,23 +336,7 @@ fun SettingsScreen(
                     }
                 )
                 RowDivider()
-                ClickableRow(
-                    title = "GitHub 릴리즈 열기",
-                    subtitle = "최신 버전은 GitHub에서 직접 확인하고 설치",
-                    onClick = {
-                        try {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL))
-                            )
-                        } catch (_: Exception) {
-                            Toast.makeText(
-                                context,
-                                "GitHub 릴리즈 페이지를 열 수 없습니다.",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
-                )
+                AppUpdateSection(currentVersion = versionName)
             }
 
             Spacer(modifier = Modifier.height(24.dp))

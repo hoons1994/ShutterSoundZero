@@ -119,4 +119,21 @@
     <string name="csc_state_unknown_guidance">카메라 설정값을 읽지 못했습니다. 앱에서 카메라 설정 상태를 다시 확인해 주세요.</string>
     <string name="csc_state_retry">상태 다시 확인</string>
     <string name="settings_launch_failed">설정 화면을 열 수 없습니다. 휴대전화 설정 앱에서 해당 항목을 직접 열어 주세요.</string>
+    <string name="app_update_title">앱 업데이트</string>
+    <string name="app_update_current_version">현재 버전 %1$s</string>
+    <string name="app_update_idle">최신 정식 버전이 있는지 확인할 수 있습니다.</string>
+    <string name="app_update_check">업데이트 확인</string>
+    <string name="app_update_checking">확인 중…</string>
+    <string name="app_update_available">새 버전 %1$s이 있습니다.</string>
+    <string name="app_update_latest">최신 버전입니다. (정식 %1$s)</string>
+    <string name="app_update_installed_newer">현재 버전이 최신 정식 버전 %1$s보다 새롭습니다.</string>
+    <string name="app_update_network_failed">업데이트를 확인하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.</string>
+    <string name="app_update_rate_limited">GitHub 요청 제한으로 확인하지 못했습니다. 잠시 후 다시 시도하거나 릴리즈 페이지를 열어 주세요.</string>
+    <string name="app_update_no_release">공개된 정식 릴리즈를 찾지 못했습니다. GitHub에서 직접 확인해 주세요.</string>
+    <string name="app_update_server_failed">GitHub에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.</string>
+    <string name="app_update_invalid_response">최신 버전 정보를 확인할 수 없습니다. GitHub에서 직접 확인해 주세요.</string>
+    <string name="app_update_installed_unknown">현재 앱 버전을 확인할 수 없습니다. GitHub에서 직접 확인해 주세요.</string>
+    <string name="app_update_view_release">GitHub에서 새 버전 보기</string>
+    <string name="app_update_open_releases">GitHub 릴리즈 열기</string>
+    <string name="app_update_open_failed">GitHub 릴리즈 페이지를 열 수 없습니다.</string>
 </resources>
