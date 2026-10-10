@@ -5,13 +5,12 @@ import android.content.Context
 import android.service.quicksettings.TileService
 import android.util.Log
 import android.widget.Toast
+import io.github.hoons1994.shuttersoundzero.AppDependencies
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
-import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
-import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 
 internal object CameraMuteTileAction {
@@ -64,8 +63,12 @@ internal object CameraMuteTileAction {
             return
         }
 
-        if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(appContext)) {
-            showMessage(appContext, appContext.getString(R.string.tile_action_enable_wireless_debugging))
+        val wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(appContext)
+        if (wirelessDebuggingEnabled != true) {
+            showMessage(appContext, appContext.getString(
+                if (wirelessDebuggingEnabled == null) R.string.wireless_debugging_state_unknown_guidance
+                else R.string.tile_action_enable_wireless_debugging
+            ))
             requestTileRefresh(appContext)
             return
         }
@@ -73,14 +76,10 @@ internal object CameraMuteTileAction {
         onStarted()
 
         try {
-            val adbManager = StandaloneAdbManager.getInstance(appContext)
-            val result = adbManager.setCameraMute(targetMuted)
-            val stateApplied = result.isSuccess && CscStateVerifier.waitFor(targetMuted) {
-                CscMuteManager.readCscMutedState(appContext)
-            }
+            val result = AppDependencies.changeCameraMute(appContext)(targetMuted)
 
-            if (stateApplied) {
-                val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(appContext)
+            if (result.isSuccess) {
+                val wirelessCleanup = result.getOrThrow().wirelessCleanup
                 val message = when {
                     targetMuted && wirelessCleanup.isSuccess ->
                         appContext.getString(R.string.tile_action_mute_applied_wireless_disabled)
@@ -93,14 +92,7 @@ internal object CameraMuteTileAction {
                 }
                 showMessage(appContext, message)
             } else {
-                Log.w(
-                    TAG,
-                    if (result.isSuccess) {
-                        "Tile toggle command completed but CSC state did not match request"
-                    } else {
-                        "Tile toggle failed via ADB"
-                    }
-                )
+                Log.w(TAG, "Tile camera setting change failed")
                 showMessage(
                     appContext,
                     CameraMuteFailure.from(result.exceptionOrNull()).message + " 앱 홈에서 복구를 진행해 주세요."

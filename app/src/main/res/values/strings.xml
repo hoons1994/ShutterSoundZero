@@ -13,6 +13,9 @@
     <string name="camera_settings_applying">카메라 설정 변경 중</string>
     <string name="main_reenable_wireless_debugging">무선 디버깅 다시 켜기</string>
     <string name="main_open_wireless_debugging_settings">무선 디버깅 설정 열기</string>
+    <string name="wireless_debugging_state_unknown_title">무선 디버깅 상태 확인 필요</string>
+    <string name="wireless_debugging_state_unknown_guidance">무선 디버깅 상태를 확인하지 못했습니다. 기기 설정에서 현재 상태를 확인한 뒤 앱으로 돌아와 다시 시도해 주세요.</string>
+    <string name="pairing_help_wireless_debugging_state_unknown">무선 디버깅 상태를 확인하지 못했습니다. 기기 설정에서 현재 상태를 확인하고, 알림을 눌러 앱으로 돌아와 [1회 설정 시작]을 다시 눌러 주세요.</string>
 
     <string name="main_local_network_reapply_prompt">Android 17에서 무선 ADB 재적용을 사용하려면 로컬 네트워크 권한이 필요합니다. [앱 설정]에서 허용해 주세요.</string>
     <string name="main_non_samsung_device_warning">안내: 이 앱은 삼성 갤럭시 전용 앱입니다. 다른 제조사 기기에서는 사용할 수 없습니다.</string>
@@ -116,4 +119,21 @@
     <string name="csc_state_unknown_guidance">카메라 설정값을 읽지 못했습니다. 앱에서 카메라 설정 상태를 다시 확인해 주세요.</string>
     <string name="csc_state_retry">상태 다시 확인</string>
     <string name="settings_launch_failed">설정 화면을 열 수 없습니다. 휴대전화 설정 앱에서 해당 항목을 직접 열어 주세요.</string>
+    <string name="app_update_title">앱 업데이트</string>
+    <string name="app_update_current_version">현재 버전 %1$s</string>
+    <string name="app_update_idle">최신 정식 버전이 있는지 확인할 수 있습니다.</string>
+    <string name="app_update_check">업데이트 확인</string>
+    <string name="app_update_checking">확인 중…</string>
+    <string name="app_update_available">새 버전 %1$s이 있습니다.</string>
+    <string name="app_update_latest">최신 버전입니다. (정식 %1$s)</string>
+    <string name="app_update_installed_newer">현재 버전이 최신 정식 버전 %1$s보다 새롭습니다.</string>
+    <string name="app_update_network_failed">업데이트를 확인하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.</string>
+    <string name="app_update_rate_limited">GitHub 요청 제한으로 확인하지 못했습니다. 잠시 후 다시 시도하거나 릴리즈 페이지를 열어 주세요.</string>
+    <string name="app_update_no_release">공개된 정식 릴리즈를 찾지 못했습니다. GitHub에서 직접 확인해 주세요.</string>
+    <string name="app_update_server_failed">GitHub에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.</string>
+    <string name="app_update_invalid_response">최신 버전 정보를 확인할 수 없습니다. GitHub에서 직접 확인해 주세요.</string>
+    <string name="app_update_installed_unknown">현재 앱 버전을 확인할 수 없습니다. GitHub에서 직접 확인해 주세요.</string>
+    <string name="app_update_view_release">GitHub에서 새 버전 보기</string>
+    <string name="app_update_open_releases">GitHub 릴리즈 열기</string>
+    <string name="app_update_open_failed">GitHub 릴리즈 페이지를 열 수 없습니다.</string>
 </resources>

@@ -44,7 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticLogger
+import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticReportBuilder
 
 private data class HelpQuestion(val id: String, val question: String, val answer: String)

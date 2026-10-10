@@ -4,7 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** One exception/resource boundary for all four public ADB operations, including lease acquisition. */
+/** One exception/resource boundary for pairing and command sessions, including lease acquisition. */
 internal class AdbOperationRunner(
     private val enter: () -> Unit,
     private val exit: () -> Unit,

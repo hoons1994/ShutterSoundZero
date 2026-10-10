@@ -3,7 +3,7 @@ package io.github.hoons1994.shuttersoundzero.data
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
-import io.github.hoons1994.shuttersoundzero.theme.AppThemeMode
+import io.github.hoons1994.shuttersoundzero.data.model.AppThemeMode
 
 /**
  * 앱 환경설정 저장소.

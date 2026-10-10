@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.diagnostics
 
+import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
+
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -52,7 +54,7 @@ object DiagnosticReportBuilder {
             appendLine("WRITE_SECURE_SETTINGS: ${yesNo(CscMuteManager.hasWritePermission(context))}")
             appendLine("CSC 카메라 무음: ${yesNo(CscMuteManager.readCscMutedState(context))}")
             appendLine("개발자 옵션: ${yesNo(DeveloperOptionsManager.isDeveloperOptionsEnabled(context))}")
-            appendLine("무선 디버깅: ${yesNo(DeveloperOptionsManager.isWirelessDebuggingEnabled(context))}")
+            appendLine("무선 디버깅: ${yesNo(DeveloperOptionsManager.readWirelessDebuggingEnabled(context))}")
             appendLine("로컬 네트워크 접근: ${yesNo(LocalNetworkAccess.isGranted(context))}")
             appendLine("저장된 ADB 연결 정보: ${if (prefs.lastConnectPort in 1..65535) "있음" else "없음"}")
             appendLine()

@@ -5,6 +5,17 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PairingNotificationRefreshStateTest {
+    @Test
+    fun readFailureInvalidatesStaleDiscoveryAndRecoveryRestartsTheSetupState() {
+        val unknown = PairingSetupState(true, null)
+        refresh.portDiscovered()
+        refresh.observeSetup(unknown)
+        assertEquals(PairingNotificationRefreshState.Update.Setup(unknown), refresh.takeUpdate(false))
+        assertNull(refresh.takeUpdate(false))
+        refresh.observeSetup(enabled)
+        assertEquals(PairingNotificationRefreshState.Update.Setup(enabled), refresh.takeUpdate(false))
+    }
+
     private val enabled = PairingSetupState(true, true)
     private val wirelessOff = PairingSetupState(true, false)
     private val refresh = PairingNotificationRefreshState().apply { reset(enabled) }

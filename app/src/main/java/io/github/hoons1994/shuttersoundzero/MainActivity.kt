@@ -25,7 +25,7 @@ import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
 import io.github.hoons1994.shuttersoundzero.security.AppLockSession
-import io.github.hoons1994.shuttersoundzero.theme.ShutterSoundZeroTheme
+import io.github.hoons1994.shuttersoundzero.ui.AppTheme
 import io.github.hoons1994.shuttersoundzero.ui.lock.AppLockScreen
 import io.github.hoons1994.shuttersoundzero.ui.onboarding.FirstRunNoticeDialog
 
@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            ShutterSoundZeroTheme {
+            AppTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

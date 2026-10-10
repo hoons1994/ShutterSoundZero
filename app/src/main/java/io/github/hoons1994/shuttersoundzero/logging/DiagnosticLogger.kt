@@ -1,4 +1,4 @@
-package io.github.hoons1994.shuttersoundzero.diagnostics
+package io.github.hoons1994.shuttersoundzero.logging
 
 import android.content.Context
 import java.io.File

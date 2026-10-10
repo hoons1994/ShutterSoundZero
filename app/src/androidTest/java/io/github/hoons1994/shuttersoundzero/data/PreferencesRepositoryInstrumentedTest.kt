@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import io.github.hoons1994.shuttersoundzero.theme.AppThemeMode
+import io.github.hoons1994.shuttersoundzero.data.model.AppThemeMode
 
 @RunWith(AndroidJUnit4::class)
 class PreferencesRepositoryInstrumentedTest {
