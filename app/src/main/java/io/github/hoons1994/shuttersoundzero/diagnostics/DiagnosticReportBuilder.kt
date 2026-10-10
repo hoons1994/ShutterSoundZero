@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.diagnostics
 
+import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
+
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build

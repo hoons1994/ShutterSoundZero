@@ -5,7 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
-import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteOperationGate
+import io.github.hoons1994.shuttersoundzero.core.coordination.CameraMuteOperationGate
 
 /**
  * 앱 설정이 끝난 뒤 개발자 옵션과 ADB 디버깅을 안전하게 종료한다.

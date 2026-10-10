@@ -3,12 +3,9 @@ package io.github.hoons1994.shuttersoundzero.ui.settings
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
-import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
-import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
+import io.github.hoons1994.shuttersoundzero.AppDependencies
+import io.github.hoons1994.shuttersoundzero.camera.ChangeCameraMute
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
-import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
-import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +22,11 @@ internal data class CameraSettingsOperationUiState(
 )
 
 /** Keeps user-started CSC changes alive while the settings destination leaves composition. */
-internal class CameraSettingsOperationViewModel(application: Application) : AndroidViewModel(application) {
+internal class CameraSettingsOperationViewModel(
+    application: Application,
+    private val changeCameraMute: ChangeCameraMute
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, AppDependencies.changeCameraMute(application))
     private val _uiState = MutableStateFlow(CameraSettingsOperationUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -48,16 +49,11 @@ internal class CameraSettingsOperationViewModel(application: Application) : Andr
             var appliedMutedState: Boolean? = null
             var failure: CameraMuteFailure? = null
             try {
-                val context = getApplication<Application>()
-                val result = StandaloneAdbManager.getInstance(context).setCameraMute(mute)
-                val stateApplied = result.isSuccess && CscStateVerifier.waitFor(mute) {
-                    CscMuteManager.readCscMutedState(context)
-                }
+                val result = changeCameraMute(mute)
 
-                if (stateApplied) {
-                    PreferencesRepository.getInstance(context).shouldMuteOnBoot = mute
+                if (result.isSuccess) {
                     appliedMutedState = mute
-                    val cleanup = DeveloperOptionsManager.disableWirelessDebugging(context)
+                    val cleanup = result.getOrThrow().wirelessCleanup
                     resultMessage = when {
                         mute && cleanup.isSuccess -> "카메라 무음 설정을 다시 적용했습니다."
                         !mute && cleanup.isSuccess -> "카메라 셔터음을 기본 상태로 복원했습니다."

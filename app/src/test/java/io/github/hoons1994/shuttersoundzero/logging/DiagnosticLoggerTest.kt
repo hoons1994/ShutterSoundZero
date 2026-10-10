@@ -1,4 +1,6 @@
-package io.github.hoons1994.shuttersoundzero.diagnostics
+package io.github.hoons1994.shuttersoundzero.logging
+
+import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 
 import java.io.File
 import java.io.IOException

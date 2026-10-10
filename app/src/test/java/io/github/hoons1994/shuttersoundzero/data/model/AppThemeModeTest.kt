@@ -1,4 +1,6 @@
-package io.github.hoons1994.shuttersoundzero.theme
+package io.github.hoons1994.shuttersoundzero.data.model
+
+import io.github.hoons1994.shuttersoundzero.data.model.AppThemeMode
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

@@ -24,10 +24,10 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
-import io.github.hoons1994.shuttersoundzero.theme.AppThemeMode
+import io.github.hoons1994.shuttersoundzero.data.model.AppThemeMode
 import io.github.hoons1994.shuttersoundzero.theme.ScreenBgDark
 import io.github.hoons1994.shuttersoundzero.theme.ScreenBgLight
-import io.github.hoons1994.shuttersoundzero.theme.ShutterSoundZeroTheme
+import io.github.hoons1994.shuttersoundzero.ui.AppTheme
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -56,7 +56,7 @@ class ThemeSettingsInstrumentedTest {
     fun settingsSelection_updatesOuterAppThemeImmediatelyAndRestoresSavedChoice() {
         var background = Color.Unspecified
         rule.setContent {
-            ShutterSoundZeroTheme {
+            AppTheme {
                 background = MaterialTheme.colorScheme.background
                 SettingsScreen(onBackClick = {})
             }
@@ -83,7 +83,7 @@ class ThemeSettingsInstrumentedTest {
         rule.setContent {
             CompositionLocalProvider(LocalConfiguration provides lightConfiguration) {
                 key(generation.value) {
-                    ShutterSoundZeroTheme {
+                    AppTheme {
                         background = MaterialTheme.colorScheme.background
                         ThemeSettingsSection(PreferencesRepository(rule.activity))
                     }
@@ -107,7 +107,7 @@ class ThemeSettingsInstrumentedTest {
         var background = Color.Unspecified
         rule.setContent {
             CompositionLocalProvider(LocalConfiguration provides configuration.value) {
-                ShutterSoundZeroTheme {
+                AppTheme {
                     background = MaterialTheme.colorScheme.background
                     ThemeSettingsSection(prefs)
                 }
@@ -138,7 +138,7 @@ class ThemeSettingsInstrumentedTest {
         rule.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 2f)) {
-                ShutterSoundZeroTheme {
+                AppTheme {
                     Box(Modifier.width(320.dp).height(640.dp)) {
                         SettingsScreen(onBackClick = {})
                     }

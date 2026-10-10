@@ -25,7 +25,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
-import io.github.hoons1994.shuttersoundzero.theme.ShutterSoundZeroTheme
+import io.github.hoons1994.shuttersoundzero.ui.AppTheme
 import kotlinx.coroutines.launch
 
 /** 앱 잠금 사용자의 빠른 설정 타일 동작을 1회 인증하는 전용 화면. */
@@ -44,7 +44,7 @@ class TileAuthenticationActivity : ComponentActivity() {
         viewModel = ViewModelProvider(this)[TileAuthenticationViewModel::class.java]
         observeFlowState()
         setContent {
-            ShutterSoundZeroTheme {
+            AppTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

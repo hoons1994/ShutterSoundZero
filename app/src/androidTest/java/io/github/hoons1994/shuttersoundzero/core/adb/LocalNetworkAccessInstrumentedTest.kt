@@ -26,7 +26,7 @@ class LocalNetworkAccessInstrumentedTest {
         assertFalse(LocalNetworkAccess.isGranted(context))
 
         // 권한이 없으면 ADB 네트워크 접근을 시작하기 전에 명확한 typed failure로 중단한다.
-        val deniedResult = StandaloneAdbManager(context).setCameraMute(true)
+        val deniedResult = io.github.hoons1994.shuttersoundzero.AppDependencies.cameraSettings(context).setCameraMute(true)
         assertTrue(deniedResult.isFailure)
         assertTrue(deniedResult.exceptionOrNull() is LocalNetworkPermissionRequiredException)
 
