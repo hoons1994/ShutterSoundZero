@@ -17,7 +17,8 @@ internal class SafeAdbMdnsDiscovery(
     context: Context,
     private val serviceType: String,
     private val onFailure: (Int) -> Unit = {},
-    private val onDiscovered: (InetAddress, Int) -> Unit
+    private val onLost: (String) -> Unit = {},
+    private val onDiscovered: (InetAddress, Int, String) -> Unit
 ) {
     companion object {
         private const val TAG = "SafeAdbMdnsDiscovery"
@@ -27,6 +28,7 @@ internal class SafeAdbMdnsDiscovery(
         .getSystemService(Context.NSD_SERVICE) as? NsdManager
         ?: error("NsdManager is unavailable")
     private val registration = MdnsDiscoveryRegistration()
+    private val services = MdnsServicePresence()
     private val resolver: AdbNsdResolver = if (Build.VERSION.SDK_INT <= 33) {
         LegacyNsdResolver.get(context.applicationContext)
     } else {
@@ -43,6 +45,7 @@ internal class SafeAdbMdnsDiscovery(
 
         override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
             registration.requestStop()
+            services.clear()
             registration.onStartFailed()
             resolver.cancel(resolutionOwner)
             onFailure(errorCode)
@@ -51,6 +54,7 @@ internal class SafeAdbMdnsDiscovery(
 
         override fun onDiscoveryStopped(serviceType: String) {
             registration.requestStop()
+            services.clear()
             registration.onDiscoveryStopped()
             resolver.cancel(resolutionOwner)
         }
@@ -68,6 +72,10 @@ internal class SafeAdbMdnsDiscovery(
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
             resolver.cancel(resolutionOwner, serviceInfo)
+            val key = serviceKey(serviceInfo)
+            services.lost(key) {
+                if (registration.shouldDeliverCallbacks()) onLost(key)
+            }
         }
     }
 
@@ -87,6 +95,7 @@ internal class SafeAdbMdnsDiscovery(
 
     fun stop() {
         val stopDiscovery = registration.requestStop()
+        services.clear()
         resolver.cancel(resolutionOwner)
         if (stopDiscovery) {
             stopRegisteredDiscovery()
@@ -107,22 +116,30 @@ internal class SafeAdbMdnsDiscovery(
     }
 
     private fun resolve(serviceInfo: NsdServiceInfo) {
+        val key = serviceKey(serviceInfo)
+        val token = services.found(key)
         resolver.resolve(
             resolutionOwner,
             serviceInfo,
             isActive = registration::shouldDeliverCallbacks,
             onResolved = { resolved ->
-                if (registration.shouldDeliverCallbacks()) {
-                    val address = resolved.host
-                    if (address != null) onDiscovered(address, resolved.port)
+                services.deliverIfCurrent(key, token) {
+                    if (registration.shouldDeliverCallbacks()) {
+                        val address = resolved.host
+                        if (address != null) onDiscovered(address, resolved.port, key)
+                    }
                 }
             },
             onFailure = { errorCode ->
-                if (registration.shouldDeliverCallbacks()) {
-                    Log.w(TAG, "mDNS resolution failed ($errorCode)")
-                    onFailure(errorCode)
+                services.deliverIfCurrent(key, token) {
+                    if (registration.shouldDeliverCallbacks()) {
+                        Log.w(TAG, "mDNS resolution failed ($errorCode)")
+                        onFailure(errorCode)
+                    }
                 }
             }
         )
     }
+
+    private fun serviceKey(info: NsdServiceInfo) = "${info.serviceName}|${info.serviceType}"
 }

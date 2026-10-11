@@ -5,6 +5,14 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PairingNotificationRefreshStateTest {
+    @Test fun lostPortRefreshIsDeferredDuringPairingAndCannotHideDiscoveryFailure() {
+        refresh.portLost()
+        assertNull(refresh.takeUpdate(blocked = true))
+        assertEquals(PairingNotificationRefreshState.Update.PortDiscovered, refresh.takeUpdate(blocked = false))
+        refresh.discoveryFailed(3)
+        refresh.portLost()
+        assertEquals(PairingNotificationRefreshState.Update.DiscoveryFailed(3), refresh.takeUpdate(blocked = false))
+    }
     @Test
     fun readFailureInvalidatesStaleDiscoveryAndRecoveryRestartsTheSetupState() {
         val unknown = PairingSetupState(true, null)

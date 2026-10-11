@@ -37,6 +37,11 @@ internal class PairingNotificationRefreshState {
         discoveryUpdate = Update.DiscoveryFailed(errorCode)
     }
 
+    fun portLost() {
+        // Render from the manager's latest port, just as for a discovery callback.
+        portDiscovered()
+    }
+
     fun clearDiscovery() {
         discoveryUpdate = null
     }

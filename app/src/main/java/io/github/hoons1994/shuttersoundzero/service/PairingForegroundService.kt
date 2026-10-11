@@ -25,6 +25,8 @@ import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
+import io.github.hoons1994.shuttersoundzero.logging.DiscoveryLogState
+import io.github.hoons1994.shuttersoundzero.pairing.PairingFailureFeedback
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationState
 import kotlinx.coroutines.CancellationException
@@ -37,6 +39,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class PairingForegroundService : Service() {
+    private val discoveryLog = DiscoveryLogState()
     companion object {
         private const val TAG = "PairingForegroundService"
         private const val ACTION_START = "io.github.hoons1994.shuttersoundzero.action.START_PAIRING"
@@ -147,14 +150,15 @@ class PairingForegroundService : Service() {
 
     private fun startPairingDiscovery(): Boolean {
         notificationRefresh.clearDiscovery()
+        discoveryLog.reset()
         val notificationGeneration = discoveryNotificationGeneration.next()
         return try {
             adbManager.startPairingDiscovery(
                 onPairingPortDiscovered = {
-                    DiagnosticLogger.record(
+                    DiagnosticLogger.recordDiscovery(
                         this,
                         DiagnosticLogger.Stage.PAIRING_SERVICE_DISCOVERED,
-                        DiagnosticLogger.Outcome.INFO
+                        discoveryLog.found(DiagnosticLogger.Stage.PAIRING_SERVICE_DISCOVERED, it)
                     )
                     mainHandler.post {
                         if (isPairingActive && !isPairingCompleting &&
@@ -165,11 +169,26 @@ class PairingForegroundService : Service() {
                     }
                 },
                 onConnectPortDiscovered = {
-                    DiagnosticLogger.record(
+                    DiagnosticLogger.recordDiscovery(
                         this,
                         DiagnosticLogger.Stage.CONNECT_SERVICE_DISCOVERED,
-                        DiagnosticLogger.Outcome.INFO
+                        discoveryLog.found(DiagnosticLogger.Stage.CONNECT_SERVICE_DISCOVERED, it)
                     )
+                },
+                onPairingPortLost = {
+                    discoveryLog.lost(DiagnosticLogger.Stage.PAIRING_SERVICE_DISCOVERED)
+                    DiagnosticLogger.record(this, DiagnosticLogger.Stage.PAIRING_SERVICE_LOST, DiagnosticLogger.Outcome.INFO)
+                    mainHandler.post {
+                        if (isPairingActive && !isPairingCompleting &&
+                            discoveryNotificationGeneration.isCurrent(notificationGeneration)) {
+                            notificationRefresh.portLost()
+                            refreshPairingSetupNotification()
+                        }
+                    }
+                },
+                onConnectPortLost = {
+                    discoveryLog.lost(DiagnosticLogger.Stage.CONNECT_SERVICE_DISCOVERED)
+                    DiagnosticLogger.record(this, DiagnosticLogger.Stage.CONNECT_SERVICE_LOST, DiagnosticLogger.Outcome.INFO)
                 },
                 onFailure = { errorCode ->
                     mainHandler.post {
@@ -416,7 +435,12 @@ class PairingForegroundService : Service() {
         PairingNotificationHelper.showPairingNotification(
             this,
             pairingPort = port,
-            state = if (port == null) state.notificationState else null,
+            state = if (!state.developerOptionsEnabled || state.wirelessDebuggingEnabled != true) {
+                state.notificationState
+            } else {
+                PairingFailureFeedback.notificationStateFor(prefs.lastSetupIssue)
+                    ?: if (port == null) state.notificationState else null
+            },
             isDevOptionsOff = !state.developerOptionsEnabled
         )
     }

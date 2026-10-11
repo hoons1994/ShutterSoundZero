@@ -69,6 +69,12 @@
     <string name="pairing_state_discovery_waiting">페어링 연결 화면을 찾지 못했습니다</string>
     <string name="pairing_state_camera_apply_failed">주의: 기기 연결은 완료됐지만 카메라 무음 설정을 적용하지 못했습니다.</string>
     <string name="pairing_state_failed">기기에 연결하지 못했습니다</string>
+    <string name="pairing_state_identity_failed">연결 인증 정보를 준비하지 못했습니다</string>
+    <string name="pairing_state_tls_failed">보안 연결을 완료하지 못했습니다</string>
+    <string name="pairing_state_authentication_failed">페어링 코드 인증을 완료하지 못했습니다</string>
+    <string name="pairing_help_identity">휴대전화의 날짜·시간 설정을 확인하고 재부팅한 뒤 1회 설정을 다시 시작해 주세요. 계속 실패하면 앱 설정에서 진단 정보를 보내 주세요.</string>
+    <string name="pairing_help_tls">휴대전화의 날짜·시간 설정을 확인하고 무선 디버깅을 껐다 켠 뒤 다시 시도해 주세요. 계속 실패하면 앱 설정에서 진단 정보를 보내 주세요.</string>
+    <string name="pairing_help_authentication">페어링 창을 다시 열고 새 6자리 코드를 입력해 주세요. 창은 코드를 제출할 때까지 열어 두세요.</string>
     <string name="pairing_state_timeout">기기 응답 시간이 초과되었습니다</string>
     <string name="pairing_state_error">기기 연결 중 문제가 발생했습니다</string>
     <string name="pairing_help_local_network">앱 설정에서 로컬 네트워크 권한을 허용한 뒤 1회 설정을 다시 시작해 주세요.</string>

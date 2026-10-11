@@ -22,6 +22,25 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PairingNotificationReceiverInstrumentedTest {
+    @Test fun identityFailureDoesNotOfferCodeEntryEvenWhenAPortIsRediscovered() {
+        val notification = PairingNotificationHelper.buildPairingNotification(baseContext, pairingPort = 37123,
+            state = PairingNotificationState.PAIRING_IDENTITY_FAILED)
+        assertEquals("연결 인증 정보를 준비하지 못했습니다",
+            notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        assertTrue(notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("진단 정보"))
+        assertFalse(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
+        assertNotNull(notification.contentIntent)
+    }
+
+    @Test fun tlsAndCodeAuthenticationFailuresShowDifferentRecoveryInstructions() {
+        val tls = PairingNotificationHelper.buildPairingNotification(baseContext,
+            state = PairingNotificationState.PAIRING_TLS_FAILED)
+        val authentication = PairingNotificationHelper.buildPairingNotification(baseContext,
+            state = PairingNotificationState.PAIRING_AUTHENTICATION_FAILED)
+        assertTrue(tls.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("날짜·시간"))
+        assertFalse(tls.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("6자리"))
+        assertTrue(authentication.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("새 6자리"))
+    }
 
     @Test
     fun unreadableWirelessStateDoesNotOfferCodeEntryOrAskToTurnItOn() {

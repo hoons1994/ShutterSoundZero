@@ -13,6 +13,57 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 class DiagnosticLoggerTest {
+    @Test fun pairingDetailsAreFixedCategoriesWithoutSensitiveExceptionMessages() {
+        val error = io.github.muntashirakon.adb.PairingFailureException(
+            io.github.muntashirakon.adb.PairingFailureException.Phase.IDENTITY,
+            IOException("123456 192.168.1.5 private-key SSID"))
+        val line = DiagnosticLogger.formatEvent(DiagnosticLogger.Stage.PAIRING_IDENTITY,
+            DiagnosticLogger.Outcome.FAILURE, error, "time", 4)
+        assertTrue(line.contains("reason=IDENTITY_UNAVAILABLE"))
+        assertTrue(line.contains("duration_ms=4"))
+        for (secret in listOf("123456", "192.168.1.5", "private-key", "SSID")) assertFalse(line.contains(secret))
+    }
+
+    @Test fun hundredsOfRepeatedSightingsDoNotEvictAnEarlierFailure() {
+        val stage = DiagnosticLogger.Stage.CONNECT_SERVICE_DISCOVERED
+        val failed = "time | PAIRING | FAILURE | error=IOException"
+        var lines = listOf(failed)
+        for (repeat in 0..500) {
+            lines = DiagnosticLogger.trimForStorage(DiagnosticLogger.appendDiscovery(
+                lines, stage, "time-$repeat | CONNECT_SERVICE_DISCOVERED | INFO", repeat))
+        }
+        assertEquals(2, lines.size)
+        assertEquals(failed, lines.first())
+        assertTrue(lines.last().startsWith("time-0 | "))
+        assertTrue(lines.last().contains("repeats=500 | last_seen=time-500"))
+    }
+
+    @Test fun alternatingDiscoveryKindsAreSummarizedIndependentlyAndNewSightingsAreRetained() {
+        var lines = emptyList<String>()
+        for (repeat in 0..10) {
+            for (stage in listOf(DiagnosticLogger.Stage.PAIRING_SERVICE_DISCOVERED,
+                DiagnosticLogger.Stage.CONNECT_SERVICE_DISCOVERED)) {
+                lines = DiagnosticLogger.appendDiscovery(lines, stage, "time | ${stage.name} | INFO", repeat)
+            }
+        }
+        assertEquals(2, lines.size)
+        lines = DiagnosticLogger.appendDiscovery(lines, DiagnosticLogger.Stage.PAIRING_SERVICE_DISCOVERED,
+            "later | PAIRING_SERVICE_DISCOVERED | INFO", 0)
+        assertEquals(3, lines.size)
+    }
+
+    @Test fun lostOrChangedEndpointStartsANewDiscoveryRecord() {
+        val state = DiscoveryLogState()
+        val stage = DiagnosticLogger.Stage.PAIRING_SERVICE_DISCOVERED
+        assertEquals(0, state.found(stage, 37123))
+        assertEquals(1, state.found(stage, 37123))
+        assertEquals(0, state.found(stage, 48123))
+        state.lost(stage)
+        assertEquals(0, state.found(stage, 48123))
+        state.reset()
+        assertEquals(0, state.found(stage, 48123))
+    }
+
     @get:Rule val temporaryFolder = TemporaryFolder()
 
     @Test

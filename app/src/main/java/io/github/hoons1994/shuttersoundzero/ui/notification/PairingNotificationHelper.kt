@@ -145,6 +145,7 @@ object PairingNotificationHelper {
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(copy.bigText))
         }
         if (state == PairingNotificationState.DISCOVERY_START_FAILED ||
+            state == PairingNotificationState.PAIRING_IDENTITY_FAILED ||
             state == PairingNotificationState.WIRELESS_DEBUGGING_STATE_UNKNOWN) {
             builder.setContentIntent(
                 PendingIntent.getActivity(
@@ -156,7 +157,7 @@ object PairingNotificationHelper {
             )
         }
 
-        if (pairingPort != null) builder.addAction(replyAction)
+        if (pairingPort != null && state != PairingNotificationState.PAIRING_IDENTITY_FAILED) builder.addAction(replyAction)
         builder.addAction(cancelAction)
 
         val notification = builder.build()
@@ -204,6 +205,9 @@ object PairingNotificationHelper {
             PairingNotificationState.DISCOVERY_WAITING -> context.getString(R.string.pairing_state_discovery_waiting)
             PairingNotificationState.CAMERA_APPLY_FAILED -> context.getString(R.string.pairing_state_camera_apply_failed)
             PairingNotificationState.PAIRING_FAILED -> context.getString(R.string.pairing_state_failed)
+            PairingNotificationState.PAIRING_IDENTITY_FAILED -> context.getString(R.string.pairing_state_identity_failed)
+            PairingNotificationState.PAIRING_TLS_FAILED -> context.getString(R.string.pairing_state_tls_failed)
+            PairingNotificationState.PAIRING_AUTHENTICATION_FAILED -> context.getString(R.string.pairing_state_authentication_failed)
             PairingNotificationState.PAIRING_TIMEOUT -> context.getString(R.string.pairing_state_timeout)
             PairingNotificationState.PAIRING_ERROR -> context.getString(R.string.pairing_state_error)
         }
@@ -225,6 +229,9 @@ object PairingNotificationHelper {
             PairingNotificationState.PAIRING_FAILED,
             PairingNotificationState.PAIRING_ERROR -> R.string.pairing_help_connection
             PairingNotificationState.PAIRING_TIMEOUT -> R.string.pairing_help_timeout
+            PairingNotificationState.PAIRING_IDENTITY_FAILED -> R.string.pairing_help_identity
+            PairingNotificationState.PAIRING_TLS_FAILED -> R.string.pairing_help_tls
+            PairingNotificationState.PAIRING_AUTHENTICATION_FAILED -> R.string.pairing_help_authentication
         }
         val detail = context.getString(guidance)
         return PairingNotificationCopy(stateTitle, detail, detail)

@@ -13,6 +13,7 @@ import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 import io.github.muntashirakon.adb.AdbShellIdentity
 import io.github.muntashirakon.adb.CancellableAdbConnection
 import io.github.muntashirakon.adb.CancellablePairingConnection
+import io.github.muntashirakon.adb.PairingFailureException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -96,18 +97,22 @@ class StandaloneAdbManager(context: Context) {
     fun startPairingDiscovery(
         onPairingPortDiscovered: (Int) -> Unit,
         onConnectPortDiscovered: (Int) -> Unit,
-        onFailure: (Int) -> Unit
+        onFailure: (Int) -> Unit,
+        onPairingPortLost: () -> Unit = {},
+        onConnectPortLost: () -> Unit = {}
     ) {
         LocalNetworkAccess.requireGranted(context)
         stopPairingDiscovery()
         val session = pairingDiscoveryPorts.begin()
         try {
             pairingMulticastLease = multicastLeaseManager.acquire()
-            pairingMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_PAIRING, onFailure = onFailure) { _, port ->
-                pairingDiscoveryPorts.onPairingPort(session, port, onPairingPortDiscovered)
+            pairingMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_PAIRING, onFailure = onFailure,
+                onLost = { pairingDiscoveryPorts.onPairingLost(session, it, onPairingPortLost) }) { _, port, service ->
+                pairingDiscoveryPorts.onPairingPort(session, port, service, onPairingPortDiscovered)
             }
-            pairingConnectMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT, onFailure = onFailure) { _, port ->
-                pairingDiscoveryPorts.onConnectPort(session, port, onConnectPortDiscovered)
+            pairingConnectMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT, onFailure = onFailure,
+                onLost = { pairingDiscoveryPorts.onConnectLost(session, it, onConnectPortLost) }) { _, port, service ->
+                pairingDiscoveryPorts.onConnectPort(session, port, service, onConnectPortDiscovered)
             }
         } catch (error: Exception) {
             stopPairingDiscovery()
@@ -132,13 +137,14 @@ class StandaloneAdbManager(context: Context) {
     private fun startMdnsDiscovery(
         serviceType: String,
         onFailure: (Int) -> Unit = {},
-        onDiscovered: (InetAddress, Int) -> Unit
+        onLost: (String) -> Unit = {},
+        onDiscovered: (InetAddress, Int, String) -> Unit
     ): SafeAdbMdnsDiscovery {
         LocalNetworkAccess.requireGranted(context)
-        return SafeAdbMdnsDiscovery(context, serviceType, onFailure) { address, port ->
+        return SafeAdbMdnsDiscovery(context, serviceType, onFailure, onLost) { address, port, service ->
             if (LocalAdbEndpointPolicy.isLocalDeviceAddress(address) && port in 1..65535) {
                 logSensitive { "Local mDNS endpoint: $address:$port for $serviceType" }
-                onDiscovered(address, port)
+                onDiscovered(address, port, service)
             } else {
                 Log.w(TAG, "Ignoring invalid or non-local mDNS service")
             }
@@ -176,7 +182,8 @@ class StandaloneAdbManager(context: Context) {
             val result = operationRunner.run(block)
             val error = result.exceptionOrNull()
             if (error == null || error is LocalNetworkPermissionRequiredException ||
-                error is AdbServiceNotFoundException || error is AdbConnectionFailedException) result
+                error is AdbServiceNotFoundException || error is AdbConnectionFailedException ||
+                error is PairingFailureException) result
             else {
                 logFailure(message, error)
                 val userMessage = when (error) {
@@ -211,17 +218,44 @@ class StandaloneAdbManager(context: Context) {
         require(port in 1..65535) { "Invalid pairing port" }
         require(PairingCode.isValid(pairingCode)) { "Invalid pairing code" }
         val host = LOCAL_ADB_HOST
+        val identityStarted = System.nanoTime()
+        val keys = try {
+            keyPairAndCert.also {
+                recordPairingPhase(PairingFailureException.Phase.IDENTITY,
+                    (System.nanoTime() - identityStarted) / 1_000_000L, null)
+            }
+        } catch (error: Exception) {
+            val failure = PairingFailureException(PairingFailureException.Phase.IDENTITY, error)
+            recordPairingPhase(failure.phase, (System.nanoTime() - identityStarted) / 1_000_000L, failure)
+            throw failure
+        }
         val password = pairingCode.toByteArray(Charsets.UTF_8)
         val client = try {
-            CancellablePairingConnection(host, port, password, keyPairAndCert.first, keyPairAndCert.second, DEVICE_NAME)
+            CancellablePairingConnection(host, port, password, keys.first, keys.second, DEVICE_NAME)
         } finally { password.fill(0) }
         client.use {
             runInterruptible(Dispatchers.IO) {
                 BoundedBlockingOperation.run(PAIRING_OPERATION_TIMEOUT_MS, "SSZ-AdbPairing", client::close) {
-                    client.start(PAIRING_OPERATION_TIMEOUT_MS)
+                    client.start(PAIRING_OPERATION_TIMEOUT_MS, ::recordPairingPhase)
                 }
             }
         }
+    }
+
+    private fun recordPairingPhase(
+        phase: PairingFailureException.Phase, durationMillis: Long, failure: PairingFailureException?
+    ) {
+        val stage = when (phase) {
+            PairingFailureException.Phase.IDENTITY -> DiagnosticLogger.Stage.PAIRING_IDENTITY
+            PairingFailureException.Phase.TCP_CONNECT -> DiagnosticLogger.Stage.PAIRING_TCP_CONNECT
+            PairingFailureException.Phase.TLS_HANDSHAKE -> DiagnosticLogger.Stage.PAIRING_TLS_HANDSHAKE
+            PairingFailureException.Phase.TLS_EXPORT -> DiagnosticLogger.Stage.PAIRING_TLS_EXPORT
+            PairingFailureException.Phase.CODE_AUTHENTICATION -> DiagnosticLogger.Stage.PAIRING_CODE_AUTHENTICATION
+            PairingFailureException.Phase.PEER_INFO -> DiagnosticLogger.Stage.PAIRING_PEER_INFO
+        }
+        DiagnosticLogger.record(context, stage,
+            if (failure == null) DiagnosticLogger.Outcome.SUCCESS else DiagnosticLogger.Outcome.FAILURE,
+            failure, durationMillis = durationMillis)
     }
 
     /** The command session is valid only inside this serialized operation. */
@@ -308,7 +342,7 @@ class StandaloneAdbManager(context: Context) {
         val discovered = CountDownLatch(1)
         val mdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT, onFailure = {
             failure.set(IOException("로컬 ADB 서비스 주소를 확인하지 못했습니다. ($it)"))
-        }) { address, port ->
+        }) { address, port, _ ->
             if (endpoint.compareAndSet(null, address to port)) discovered.countDown()
         }
         return try {

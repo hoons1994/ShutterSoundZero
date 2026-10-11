@@ -120,11 +120,8 @@ internal class PairingWorkflowFeedback(
             is PairingEvent.PairingFailed -> {
                 val localNetworkPermissionMissing =
                     event.error is LocalNetworkPermissionRequiredException
-                prefs.lastSetupIssue = if (localNetworkPermissionMissing) {
-                    SetupIssue.LOCAL_NETWORK_PERMISSION
-                } else {
-                    SetupIssue.PAIRING_CONNECTION
-                }
+                val feedback = PairingFailureFeedback.from(event.error)
+                prefs.lastSetupIssue = feedback.issue
                 DiagnosticLogger.record(
                     context,
                     DiagnosticLogger.Stage.PAIRING,
@@ -136,11 +133,7 @@ internal class PairingWorkflowFeedback(
                 } ?: Log.w(TAG, "Pairing failed")
                 PairingNotificationHelper.showPairingNotification(
                     context,
-                    state = if (localNetworkPermissionMissing) {
-                        PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED
-                    } else {
-                        PairingNotificationState.PAIRING_FAILED
-                    }
+                    state = feedback.notification
                 )
                 if (!localNetworkPermissionMissing) restartPairingDiscovery()
             }
@@ -161,11 +154,8 @@ internal class PairingWorkflowFeedback(
             is PairingEvent.Failed -> {
                 onFailed()
                 val localNetworkPermissionMissing = event.error is LocalNetworkPermissionRequiredException
-                prefs.lastSetupIssue = if (localNetworkPermissionMissing) {
-                    SetupIssue.LOCAL_NETWORK_PERMISSION
-                } else {
-                    SetupIssue.PAIRING_CONNECTION
-                }
+                val feedback = PairingFailureFeedback.from(event.error)
+                prefs.lastSetupIssue = feedback.issue
                 DiagnosticLogger.record(
                     context,
                     DiagnosticLogger.Stage.PAIRING_WORKFLOW,
@@ -175,11 +165,7 @@ internal class PairingWorkflowFeedback(
                 logFailure("Pairing error", event.error)
                 PairingNotificationHelper.showPairingNotification(
                     context,
-                    state = if (localNetworkPermissionMissing) {
-                        PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED
-                    } else {
-                        PairingNotificationState.PAIRING_ERROR
-                    }
+                    state = feedback.notification
                 )
                 if (!localNetworkPermissionMissing) restartPairingDiscovery()
             }

@@ -84,6 +84,12 @@ internal fun SetupProgressCard(
             "숫자 6자리를 정확히 입력해 주세요. 연결 화면의 코드가 바뀌었다면 새 코드를 사용해 주세요."
         SetupIssue.PAIRING_CONNECTION ->
             "기기에 연결하지 못했습니다. 페어링 창이 닫혔거나 연결 정보가 바뀌었을 수 있습니다. 창을 다시 열고 새 6자리 코드로 시도해 주세요."
+        SetupIssue.PAIRING_IDENTITY ->
+            stringResource(R.string.pairing_help_identity)
+        SetupIssue.PAIRING_TLS ->
+            stringResource(R.string.pairing_help_tls)
+        SetupIssue.PAIRING_AUTHENTICATION ->
+            stringResource(R.string.pairing_help_authentication)
         SetupIssue.PAIRING_TIMEOUT ->
             "기기 응답 시간이 초과되었습니다. Wi-Fi와 무선 디버깅을 확인한 뒤 페어링 창을 다시 열고 새 코드로 시도해 주세요."
         else -> null

@@ -7,6 +7,38 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PairingDiscoveryPortStateTest {
+    @Test fun onlyTheCurrentServiceLossInvalidatesItsPort() {
+        val ports = PairingDiscoveryPortState()
+        val session = ports.begin()
+        ports.onPairingPort(session, 37123, "old") {}
+        ports.onPairingPort(session, 48123, "current") {}
+        ports.onConnectPort(session, 48124, "connect") {}
+        var losses = 0
+        assertFalse(ports.onPairingLost(session, "old") { losses++ })
+        assertEquals(48123, ports.pairingPort)
+        assertTrue(ports.onPairingLost(session, "current") { losses++ })
+        assertNull(ports.pairingPort)
+        assertEquals(48124, ports.connectPort)
+        assertFalse(ports.onPairingLost(session, "current") { losses++ })
+        assertEquals(1, losses)
+        assertTrue(ports.onConnectLost(session, "connect") { losses++ })
+        assertNull(ports.connectPort)
+        ports.onPairingPort(session, 58123, "current") {}
+        assertEquals(58123, ports.pairingPort)
+    }
+
+    @Test fun lateLossFromAnOlderOrStoppedSessionCannotInvalidateTheNewEndpoint() {
+        val ports = PairingDiscoveryPortState()
+        val old = ports.begin()
+        ports.onPairingPort(old, 37123, "service") {}
+        val current = ports.begin()
+        ports.onPairingPort(current, 48123, "service") {}
+        assertFalse(ports.onPairingLost(old, "service") { error("stale loss") })
+        assertEquals(48123, ports.pairingPort)
+        ports.stop()
+        assertFalse(ports.onPairingLost(current, "service") { error("stopped loss") })
+        assertEquals(48123, ports.pairingPort)
+    }
     @Test
     fun lateCallbacksFromPreviousSessionCannotOverwriteNewPortsOrNotify() {
         val ports = PairingDiscoveryPortState()

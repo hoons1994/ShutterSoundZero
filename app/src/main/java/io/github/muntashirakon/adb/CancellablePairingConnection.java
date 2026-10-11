@@ -19,6 +19,9 @@ import javax.net.ssl.SSLSocket;
 
 /** Single-use pairing client. close() aborts I/O; only start()'s worker destroys native PAKE state. */
 public final class CancellablePairingConnection implements Closeable {
+    public interface StageListener {
+        void onStage(PairingFailureException.Phase phase, long durationMillis, PairingFailureException failure);
+    }
     private static final int PEER_INFO_SIZE = 8192;
     private static final int MAX_PAYLOAD = 2 * PEER_INFO_SIZE;
     private final Object lifecycle = new Object();
@@ -41,6 +44,10 @@ public final class CancellablePairingConnection implements Closeable {
     }
 
     public void start(long timeoutMillis) throws Exception {
+        start(timeoutMillis, (phase, duration, failure) -> { });
+    }
+
+    public void start(long timeoutMillis, StageListener listener) throws Exception {
         final byte[] code;
         synchronized (lifecycle) {
             if (started || closed) throw new IOException("Pairing client is not ready");
@@ -51,14 +58,25 @@ public final class CancellablePairingConnection implements Closeable {
         PairingAuthCtx auth = null;
         byte[] exported = null;
         byte[] combined = null;
+        PairingFailureException.Phase phase = PairingFailureException.Phase.TCP_CONNECT;
+        long phaseStarted = System.nanoTime();
         try {
             CancellableSocket.Deadline deadline = new CancellableSocket.Deadline(timeoutMillis);
             transport.connect(host, port, deadline);
+            report(listener, phase, phaseStarted, null);
+            phase = PairingFailureException.Phase.TLS_HANDSHAKE;
+            phaseStarted = System.nanoTime();
             SSLSocket socket = transport.startTls(LocalAdbTls.create(keys.getPrivateKey(),
                     (X509Certificate) keys.getCertificate(), LocalAdbTls.Identity.PAIRING), host, port, deadline);
+            report(listener, phase, phaseStarted, null);
+            phase = PairingFailureException.Phase.TLS_EXPORT;
+            phaseStarted = System.nanoTime();
             DataInputStream input = new DataInputStream(socket.getInputStream());
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
             exported = exportKeyingMaterial(socket);
+            report(listener, phase, phaseStarted, null);
+            phase = PairingFailureException.Phase.CODE_AUTHENTICATION;
+            phaseStarted = System.nanoTime();
             combined = new byte[code.length + exported.length];
             System.arraycopy(code, 0, combined, 0, code.length);
             System.arraycopy(exported, 0, combined, code.length, exported.length);
@@ -79,9 +97,18 @@ public final class CancellablePairingConnection implements Closeable {
             if (encrypted == null) throw new IOException("Unable to encrypt pairing peer info");
             writePacket(output, 1, encrypted, deadline);
             byte[] decrypted = auth.decrypt(readPacket(input, 1, deadline));
+            if (decrypted == null) throw new IOException("Pairing authentication failed");
+            report(listener, phase, phaseStarted, null);
+            phase = PairingFailureException.Phase.PEER_INFO;
+            phaseStarted = System.nanoTime();
             PairingPeerInfo.requireDeviceGuid(decrypted);
             transport.checkOpen();
             deadline.remainingMillis();
+            report(listener, phase, phaseStarted, null);
+        } catch (Exception error) {
+            PairingFailureException failure = new PairingFailureException(phase, error);
+            report(listener, phase, phaseStarted, failure);
+            throw failure;
         } finally {
             // Never race native state destruction against a crypto call on another thread.
             try {
@@ -93,6 +120,15 @@ public final class CancellablePairingConnection implements Closeable {
                 close();
                 transport.dispose();
             }
+        }
+    }
+
+    private static void report(StageListener listener, PairingFailureException.Phase phase,
+            long started, PairingFailureException failure) {
+        try {
+            listener.onStage(phase, Math.max(0L, (System.nanoTime() - started) / 1_000_000L), failure);
+        } catch (RuntimeException ignored) {
+            // Diagnostics cannot change authentication, cancellation or resource ownership.
         }
     }
 
