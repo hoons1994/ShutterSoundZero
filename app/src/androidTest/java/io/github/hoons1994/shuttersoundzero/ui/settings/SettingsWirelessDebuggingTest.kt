@@ -51,8 +51,7 @@ class SettingsWirelessDebuggingTest {
             approveEmulatorWifiNetwork()
             shell("settings put global adb_wifi_enabled 0")
             awaitCondition("Wireless debugging did not stop before the test") {
-                DeveloperOptionsManager.readWirelessDebuggingEnabled(context) == false &&
-                    shell("getprop service.adb.tls.port").trim().toIntOrNull().let { it == null || it <= 0 }
+                DeveloperOptionsManager.readWirelessDebuggingEnabled(context) == false
             }
             shell("settings put system ${CscMuteManager.CSC_KEY} ${if (muted) 0 else 1}")
             composeTestRule.setContent { SettingsScreen(onBackClick = {}) }
@@ -116,13 +115,14 @@ class SettingsWirelessDebuggingTest {
         }
         try {
             shell("settings put global adb_wifi_enabled 1")
+            var readySince: Long? = null
             awaitCondition("The emulator Wi-Fi debugging approval did not complete") {
                 val root = automation.rootInActiveWindow
                 val wifiApprovalActive = root?.packageName?.toString() == "com.android.systemui" &&
                     shell("dumpsys activity activities").lineSequence().any {
                         it.contains("ResumedActivity") && it.contains("WifiDebuggingActivity")
                     }
-                if (wifiApprovalActive && root != null) {
+                if (wifiApprovalActive) {
                     val checkbox = root.findAccessibilityNodeInfosByViewId("android:id/alwaysUse")
                         .singleOrNull()
                     val allow = root.findAccessibilityNodeInfosByViewId("android:id/button1")
@@ -134,10 +134,15 @@ class SettingsWirelessDebuggingTest {
                         check(allow.performAction(AccessibilityNodeInfo.ACTION_CLICK))
                     }
                 }
-                // The setting alone becomes true before SystemUI has approved the network.
-                // Wait for the actual TLS listener and for the test Activity to be visible.
-                val port = shell("getprop service.adb.tls.port").trim().toIntOrNull() ?: 0
-                port > 0 && automation.rootInActiveWindow?.packageName?.toString() == targetPackage
+                // The setting becomes true before the approval Activity appears. Require a
+                // stable return to the test Activity. Internal adbd properties are SELinux-
+                // restricted even for shell and are not a readiness signal for this UI test.
+                val ready = !wifiApprovalActive &&
+                    DeveloperOptionsManager.readWirelessDebuggingEnabled(instrumentation.targetContext) == true &&
+                    automation.rootInActiveWindow?.packageName?.toString() == targetPackage
+                val now = SystemClock.elapsedRealtime()
+                readySince = if (ready) readySince ?: now else null
+                readySince?.let { now - it >= 1_000 } == true
             }
         } finally {
             automation.serviceInfo = automation.serviceInfo.apply { flags = originalFlags }
