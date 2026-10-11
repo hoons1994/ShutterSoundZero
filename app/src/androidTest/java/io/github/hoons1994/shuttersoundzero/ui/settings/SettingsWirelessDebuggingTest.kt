@@ -111,27 +111,39 @@ class SettingsWirelessDebuggingTest {
         val automation = instrumentation.uiAutomation
         val originalFlags = automation.serviceInfo.flags
         automation.serviceInfo = automation.serviceInfo.apply {
-            flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+            flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
         try {
             shell("settings put global adb_wifi_enabled 1")
             var readySince: Long? = null
-            awaitCondition("The emulator Wi-Fi debugging approval did not complete") {
-                val root = automation.rootInActiveWindow
-                val wifiApprovalActive = root?.packageName?.toString() == "com.android.systemui" &&
-                    shell("dumpsys activity activities").lineSequence().any {
-                        it.contains("ResumedActivity") && it.contains("WifiDebuggingActivity")
-                    }
+            var approvalState = "waiting"
+            awaitCondition("The emulator Wi-Fi debugging approval did not complete", { "; $approvalState" }) {
+                val wifiApprovalActive = shell("dumpsys activity activities").lineSequence().any {
+                    it.contains("ResumedActivity") && it.contains("WifiDebuggingActivity")
+                }
+                approvalState = if (wifiApprovalActive) "approval visible; controls unavailable" else "approval absent"
                 if (wifiApprovalActive) {
-                    val checkbox = root.findAccessibilityNodeInfosByViewId("android:id/alwaysUse")
-                        .singleOrNull()
-                    val allow = root.findAccessibilityNodeInfosByViewId("android:id/button1")
-                        .singleOrNull()
-                    if (checkbox != null && allow != null) {
-                        if (!checkbox.isChecked) {
-                            check(checkbox.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                    // On API 32 the active accessibility root can still belong to the
+                    // previous window when the SystemUI Activity is already resumed.
+                    // Inspect interactive windows as well, and refresh their snapshots.
+                    val roots = automation.windows.mapNotNull { it.root } +
+                        listOfNotNull(automation.rootInActiveWindow)
+                    for (root in roots) {
+                        root.refresh()
+                        if (root.packageName?.toString() !in setOf("com.android.systemui", "android")) continue
+                        val checkbox = root.findAccessibilityNodeInfosByViewId("android:id/alwaysUse")
+                            .singleOrNull()
+                        val allow = root.findAccessibilityNodeInfosByViewId("android:id/button1")
+                            .singleOrNull()
+                        if (checkbox != null && allow != null && allow.isEnabled) {
+                            if (!checkbox.isChecked) {
+                                check(checkbox.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                            }
+                            check(allow.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                            approvalState = "approval accepted"
+                            break
                         }
-                        check(allow.performAction(AccessibilityNodeInfo.ACTION_CLICK))
                     }
                 }
                 // The setting becomes true before the approval Activity appears. Require a
@@ -149,13 +161,13 @@ class SettingsWirelessDebuggingTest {
         }
     }
 
-    private fun awaitCondition(message: String, condition: () -> Boolean) {
+    private fun awaitCondition(message: String, diagnostic: () -> String = { "" }, condition: () -> Boolean) {
         val deadline = SystemClock.elapsedRealtime() + 20_000
         while (SystemClock.elapsedRealtime() < deadline) {
             if (condition()) return
             SystemClock.sleep(100)
         }
-        fail(message)
+        fail(message + diagnostic())
     }
 
     private fun shell(command: String): String {
