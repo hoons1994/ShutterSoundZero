@@ -1,18 +1,27 @@
 package io.github.hoons1994.shuttersoundzero.ui.settings
 
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import org.junit.Assume.assumeTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Exercises the real Settings observer without resuming the Activity. Emulator only. */
 class SettingsWirelessDebuggingTest {
@@ -36,20 +45,47 @@ class SettingsWirelessDebuggingTest {
         try {
             shell("pm grant ${context.packageName} $permission")
             shell("settings put global development_settings_enabled 1")
+            // A fresh AVD otherwise opens SystemUI's Wi-Fi approval Activity in the middle
+            // of the assertion, hiding every Compose root and introducing ON_RESUME.
+            // Approve only this emulator network before exercising the observer.
+            approveEmulatorWifiNetwork()
             shell("settings put global adb_wifi_enabled 0")
+            awaitCondition("Wireless debugging did not stop before the test") {
+                DeveloperOptionsManager.readWirelessDebuggingEnabled(context) == false &&
+                    shell("getprop service.adb.tls.port").trim().toIntOrNull().let { it == null || it <= 0 }
+            }
             shell("settings put system ${CscMuteManager.CSC_KEY} ${if (muted) 0 else 1}")
-            assumeTrue("Wireless debugging must initially be off", DeveloperOptionsManager.readWirelessDebuggingEnabled(context) == false)
             composeTestRule.setContent { SettingsScreen(onBackClick = {}) }
             composeTestRule.onNodeWithText(
                 if (muted) "카메라 셔터음 원래대로 복원" else "카메라 무음 다시 적용"
             ).performClick()
             composeTestRule.onNodeWithText("무선 디버깅을 켜 주세요").assertExists()
 
-            // A settings notification must close the prompt even without ON_RESUME.
-            shell("settings put global adb_wifi_enabled 1")
-            assumeTrue("Emulator must support enabling wireless debugging", DeveloperOptionsManager.readWirelessDebuggingEnabled(context) == true)
-            composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                composeTestRule.onAllNodesWithText("무선 디버깅을 켜 주세요").fetchSemanticsNodes().isEmpty()
+            val resumeEvents = AtomicInteger()
+            val lifecycleObserver = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) resumeEvents.incrementAndGet()
+            }
+            composeTestRule.runOnIdle {
+                context.lifecycle.addObserver(lifecycleObserver)
+                resumeEvents.set(0) // Ignore the initial lifecycle catch-up callback.
+            }
+            try {
+                // A provider notification must close the prompt without a lifecycle refresh.
+                shell("settings put global adb_wifi_enabled 1")
+                composeTestRule.waitUntil(timeoutMillis = 10_000) {
+                    val settingsVisible = composeTestRule.onAllNodesWithText("설정")
+                        .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+                    val promptGone = composeTestRule.onAllNodesWithText("무선 디버깅을 켜 주세요")
+                        .fetchSemanticsNodes(atLeastOneRootRequired = false).isEmpty()
+                    settingsVisible && promptGone
+                }
+                composeTestRule.onNodeWithText("설정").assertExists()
+                assertTrue(DeveloperOptionsManager.readWirelessDebuggingEnabled(context) == true)
+                assertEquals("The observer must work without ON_RESUME", 0, resumeEvents.get())
+            } finally {
+                InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                    context.lifecycle.removeObserver(lifecycleObserver)
+                }
             }
         } finally {
             restoreSetting("system", CscMuteManager.CSC_KEY, csc)
@@ -68,9 +104,59 @@ class SettingsWirelessDebuggingTest {
         }
     }
 
-    private fun shell(command: String) {
+    /** The CI creates disposable AVDs; never approve a network on a physical device. */
+    private fun approveEmulatorWifiNetwork() {
+        check(isEmulator())
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val targetPackage = instrumentation.targetContext.packageName
+        val automation = instrumentation.uiAutomation
+        val originalFlags = automation.serviceInfo.flags
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+        }
+        try {
+            shell("settings put global adb_wifi_enabled 1")
+            awaitCondition("The emulator Wi-Fi debugging approval did not complete") {
+                val root = automation.rootInActiveWindow
+                val wifiApprovalActive = root?.packageName?.toString() == "com.android.systemui" &&
+                    shell("dumpsys activity activities").lineSequence().any {
+                        it.contains("ResumedActivity") && it.contains("WifiDebuggingActivity")
+                    }
+                if (wifiApprovalActive && root != null) {
+                    val checkbox = root.findAccessibilityNodeInfosByViewId("android:id/alwaysUse")
+                        .singleOrNull()
+                    val allow = root.findAccessibilityNodeInfosByViewId("android:id/button1")
+                        .singleOrNull()
+                    if (checkbox != null && allow != null) {
+                        if (!checkbox.isChecked) {
+                            check(checkbox.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                        }
+                        check(allow.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                    }
+                }
+                // The setting alone becomes true before SystemUI has approved the network.
+                // Wait for the actual TLS listener and for the test Activity to be visible.
+                val port = shell("getprop service.adb.tls.port").trim().toIntOrNull() ?: 0
+                port > 0 && automation.rootInActiveWindow?.packageName?.toString() == targetPackage
+            }
+        } finally {
+            automation.serviceInfo = automation.serviceInfo.apply { flags = originalFlags }
+        }
+    }
+
+    private fun awaitCondition(message: String, condition: () -> Boolean) {
+        val deadline = SystemClock.elapsedRealtime() + 20_000
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (condition()) return
+            SystemClock.sleep(100)
+        }
+        fail(message)
+    }
+
+    private fun shell(command: String): String {
         val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
-        android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
+        return android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor)
+            .bufferedReader().use { it.readText() }
     }
 
     private fun isEmulator(): Boolean = Build.FINGERPRINT.startsWith("generic") ||
