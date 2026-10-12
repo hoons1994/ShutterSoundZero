@@ -23,7 +23,7 @@ class MainScreenStateTest {
         val disabled = MainUiState(showSwitchFailureHelp = true)
         assertTrue(disabled.withWirelessDebuggingState(false).showSwitchFailureHelp)
         val enabled = disabled.withWirelessDebuggingState(true)
-        assertTrue(enabled.isWirelessDebuggingEnabled)
+        assertEquals(true, enabled.isWirelessDebuggingEnabled)
         assertFalse(enabled.showSwitchFailureHelp)
         assertFalse(enabled.withWirelessDebuggingState(false).showSwitchFailureHelp)
     }
@@ -35,7 +35,7 @@ class MainScreenStateTest {
         )
         assertTrue(enabled.withWirelessDebuggingState(true).showWirelessDebuggingCleanupHelp)
         val disabled = enabled.withWirelessDebuggingState(false)
-        assertFalse(disabled.isWirelessDebuggingEnabled)
+        assertEquals(false, disabled.isWirelessDebuggingEnabled)
         assertFalse(disabled.showWirelessDebuggingCleanupHelp)
         assertFalse(disabled.withWirelessDebuggingState(true).showWirelessDebuggingCleanupHelp)
     }
@@ -50,6 +50,18 @@ class MainScreenStateTest {
         assertEquals(CameraMuteFailure.CONNECTION, refreshed.cameraMuteFailure)
         assertTrue(refreshed.hasCscPermission)
         assertEquals(false, refreshed.isCscMuted)
+    }
+
+    @Test fun unreadableWirelessStateCannotKeepAnEnablePromptOrConfirmCleanup() {
+        val state = MainUiState(
+            showSwitchFailureHelp = true,
+            showWirelessDebuggingCleanupHelp = true,
+            cameraMuteFailure = CameraMuteFailure.CONNECTION
+        ).withWirelessDebuggingState(null)
+        assertEquals(null, state.isWirelessDebuggingEnabled)
+        assertFalse(state.showSwitchFailureHelp)
+        assertTrue(state.showWirelessDebuggingCleanupHelp)
+        assertEquals(CameraMuteFailure.CONNECTION, state.cameraMuteFailure)
     }
 
     @Test fun pendingMuteCannotBePresentedAsReady() {

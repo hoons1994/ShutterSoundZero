@@ -1,4 +1,6 @@
-package io.github.hoons1994.shuttersoundzero.core.adb
+package io.github.hoons1994.shuttersoundzero.core.coordination
+
+import io.github.hoons1994.shuttersoundzero.core.coordination.CameraMuteOperationGate
 
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit

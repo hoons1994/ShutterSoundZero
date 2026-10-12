@@ -1,4 +1,4 @@
-package io.github.hoons1994.shuttersoundzero.theme
+package io.github.hoons1994.shuttersoundzero.data.model
 
 enum class AppThemeMode {
     SYSTEM, LIGHT, DARK;

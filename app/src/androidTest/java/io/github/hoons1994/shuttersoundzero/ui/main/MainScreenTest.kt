@@ -20,6 +20,19 @@ import org.junit.Test
 
 /** UI smoke tests for the state-focused home flow. */
 class MainScreenTest {
+    @Test fun unreadableWirelessStateDoesNotAskToTurnItOnAgain() {
+        showHome(MainUiState(
+            isCscMuted = false,
+            hasCscPermission = true,
+            isWirelessDebuggingEnabled = null
+        ))
+        composeTestRule.onNodeWithText("무선 디버깅 다시 켜기").assertDoesNotExist()
+        composeTestRule.onNodeWithText("무선 디버깅 설정 열기").assertHasClickAction()
+        composeTestRule.onNodeWithText(
+            "무선 디버깅 상태를 확인하지 못했습니다. 기기 설정에서 현재 상태를 확인한 뒤 앱으로 돌아와 다시 시도해 주세요."
+        ).assertExists()
+    }
+
     @Test fun pendingCameraChangeNeverShowsCompletionOrAllowsAnotherAction() {
         showHome(MainUiState(
             isCscMuted = true,
@@ -43,7 +56,7 @@ class MainScreenTest {
 
     @Test
     fun setupRequiredHome_focusesOnCurrentAction() {
-        showHome(MainUiState())
+        showHome(MainUiState(isWirelessDebuggingEnabled = false))
 
         composeTestRule.onNodeWithText("셔터사운드 제로").fetchSemanticsNode()
         composeTestRule.onNodeWithText("처음 한 번만 설정해 주세요").fetchSemanticsNode()
@@ -115,7 +128,7 @@ class MainScreenTest {
         var pairingStarted = false
         composeTestRule.setContent {
             HomeContent(
-                uiState = MainUiState(isCscMuted = false, hasCscPermission = true),
+                uiState = MainUiState(isCscMuted = false, hasCscPermission = true, isWirelessDebuggingEnabled = false),
                 onSetup = { pairingStarted = true },
                 onOpenWirelessDebugging = { opened = true }
             )
@@ -189,7 +202,7 @@ class MainScreenTest {
 
     @Test
     fun reapplyInProgressDoesNotShowPrematureSuccessOrAllowRepeatedRequests() {
-        showHome(MainUiState(hasCscPermission = true, isCscChangeInProgress = true))
+        showHome(MainUiState(hasCscPermission = true, isCscChangeInProgress = true, isWirelessDebuggingEnabled = false))
         composeTestRule.onNode(hasText("카메라 설정 변경 중") and hasClickAction()).assertIsNotEnabled()
         composeTestRule.onNodeWithText("무선 디버깅 다시 켜기").assertIsNotEnabled()
         assertTrue(

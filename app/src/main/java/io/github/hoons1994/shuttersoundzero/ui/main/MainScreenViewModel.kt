@@ -6,9 +6,11 @@ import android.content.Context
 import android.media.AudioManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.hoons1994.shuttersoundzero.camera.CameraSettingsRepository
+import io.github.hoons1994.shuttersoundzero.camera.ChangeCameraMute
+import io.github.hoons1994.shuttersoundzero.AppDependencies
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
-import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 import io.github.hoons1994.shuttersoundzero.core.SystemVolumeVerifier
@@ -24,39 +26,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class MainUiState(
-    val isCscMuted: Boolean? = null,
-    val hasCscPermission: Boolean = false,
-    val isDeveloperOptionsEnabled: Boolean = false,
-    val isWirelessDebuggingEnabled: Boolean = false,
-    val setupIssue: SetupIssue? = null,
-    val infoMessage: String? = null,
-    val errorMessage: String? = null,
-    val showSwitchFailureHelp: Boolean = false,
-    val cameraMuteFailure: CameraMuteFailure? = null,
-    val isCscChangeInProgress: Boolean = false,
-    val showWirelessDebuggingCleanupHelp: Boolean = false,
-    val systemVolume: SystemVolumeUiState = SystemVolumeUiState()
-)
-
-data class SystemVolumeUiState(
-    val current: Int? = null,
-    val min: Int = 0,
-    val max: Int = 0,
-    val isFixed: Boolean = false,
-    val error: String? = null,
-    val isRingerMuted: Boolean = false,
-    val isStreamMuted: Boolean = false,
-    val requested: Int? = null
-)
-
-internal fun MainUiState.withWirelessDebuggingState(enabled: Boolean): MainUiState = copy(
-    isWirelessDebuggingEnabled = enabled,
-    showSwitchFailureHelp = showSwitchFailureHelp && !enabled,
-    showWirelessDebuggingCleanupHelp = showWirelessDebuggingCleanupHelp && enabled
-)
-
-class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
+class MainScreenViewModel internal constructor(
+    application: Application,
+    private val changeCameraMute: ChangeCameraMute,
+    private val cameraSettings: CameraSettingsRepository
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(
+        application, AppDependencies.changeCameraMute(application), AppDependencies.cameraSettings(application)
+    )
     private val prefs = PreferencesRepository.getInstance(application)
     private val adbManager = StandaloneAdbManager.getInstance(application)
     private val audioManager = application.getSystemService(AudioManager::class.java)
@@ -77,7 +54,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
             isDeveloperOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(app),
-            isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
+            isWirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app),
             setupIssue = prefs.lastSetupIssue,
             systemVolume = readSystemVolume()
         )
@@ -87,7 +64,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val app = getApplication<Application>()
         val perm = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
         val isMuted = CscMuteManager.readCscMutedState(app)
-        val wirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app)
+        val wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app)
 
         if (perm && isMuted == true && prefs.lastSetupIssue != null) {
             prefs.lastSetupIssue = null
@@ -252,14 +229,17 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
-        if (!DeveloperOptionsManager.isWirelessDebuggingEnabled(app)) {
+        val wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app)
+        if (wirelessDebuggingEnabled != true) {
             _uiState.update {
                 it.copy(
-                    isWirelessDebuggingEnabled = false,
-                    showSwitchFailureHelp = true,
+                    isWirelessDebuggingEnabled = wirelessDebuggingEnabled,
+                    showSwitchFailureHelp = wirelessDebuggingEnabled == false,
                     showWirelessDebuggingCleanupHelp = false,
                     cameraMuteFailure = null,
-                    errorMessage = null,
+                    errorMessage = if (wirelessDebuggingEnabled == null) {
+                        app.getString(R.string.wireless_debugging_state_unknown_guidance)
+                    } else null,
                     infoMessage = null
                 )
             }
@@ -278,18 +258,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
         viewModelScope.launch {
             try {
-                val adbResult = adbManager.setCameraMute(enableMute)
-                val actualStateMatchesRequest = adbResult.isSuccess && CscStateVerifier.waitFor(enableMute) {
-                    CscMuteManager.readCscMutedState(app)
-                }
-                if (actualStateMatchesRequest) {
+                val adbResult = changeCameraMute(enableMute)
+                if (adbResult.isSuccess) {
                     if (enableMute) {
                         prefs.lastSetupIssue = null
                     }
-                    val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(app)
+                    val wirelessCleanup = adbResult.getOrThrow().wirelessCleanup
                     _uiState.update {
                         it.copy(
-                            isWirelessDebuggingEnabled = DeveloperOptionsManager.isWirelessDebuggingEnabled(app),
+                            isWirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app),
                             setupIssue = prefs.lastSetupIssue,
                             infoMessage = when {
                                 enableMute && wirelessCleanup.isSuccess ->
@@ -351,7 +328,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         viewModelScope.launch {
-            val result = adbManager.revokePermissionViaAdb()
+            val result = cameraSettings.revokePermissionViaAdb()
             if (result.isSuccess) {
                 prefs.lastSetupIssue = null
             }

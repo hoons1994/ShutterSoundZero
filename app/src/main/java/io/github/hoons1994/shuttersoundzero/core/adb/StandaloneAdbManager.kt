@@ -1,18 +1,19 @@
 package io.github.hoons1994.shuttersoundzero.core.adb
 
+import io.github.hoons1994.shuttersoundzero.core.coordination.CameraMuteOperationGate
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
-import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
-import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
-import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticLogger
+import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 import io.github.muntashirakon.adb.AdbShellIdentity
 import io.github.muntashirakon.adb.CancellableAdbConnection
 import io.github.muntashirakon.adb.CancellablePairingConnection
+import io.github.muntashirakon.adb.PairingFailureException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -96,18 +97,22 @@ class StandaloneAdbManager(context: Context) {
     fun startPairingDiscovery(
         onPairingPortDiscovered: (Int) -> Unit,
         onConnectPortDiscovered: (Int) -> Unit,
-        onFailure: (Int) -> Unit
+        onFailure: (Int) -> Unit,
+        onPairingPortLost: () -> Unit = {},
+        onConnectPortLost: () -> Unit = {}
     ) {
         LocalNetworkAccess.requireGranted(context)
         stopPairingDiscovery()
         val session = pairingDiscoveryPorts.begin()
         try {
             pairingMulticastLease = multicastLeaseManager.acquire()
-            pairingMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_PAIRING, onFailure = onFailure) { _, port ->
-                pairingDiscoveryPorts.onPairingPort(session, port, onPairingPortDiscovered)
+            pairingMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_PAIRING, onFailure = onFailure,
+                onLost = { pairingDiscoveryPorts.onPairingLost(session, it, onPairingPortLost) }) { _, port, service ->
+                pairingDiscoveryPorts.onPairingPort(session, port, service, onPairingPortDiscovered)
             }
-            pairingConnectMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT, onFailure = onFailure) { _, port ->
-                pairingDiscoveryPorts.onConnectPort(session, port, onConnectPortDiscovered)
+            pairingConnectMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT, onFailure = onFailure,
+                onLost = { pairingDiscoveryPorts.onConnectLost(session, it, onConnectPortLost) }) { _, port, service ->
+                pairingDiscoveryPorts.onConnectPort(session, port, service, onConnectPortDiscovered)
             }
         } catch (error: Exception) {
             stopPairingDiscovery()
@@ -132,13 +137,14 @@ class StandaloneAdbManager(context: Context) {
     private fun startMdnsDiscovery(
         serviceType: String,
         onFailure: (Int) -> Unit = {},
-        onDiscovered: (InetAddress, Int) -> Unit
+        onLost: (String) -> Unit = {},
+        onDiscovered: (InetAddress, Int, String) -> Unit
     ): SafeAdbMdnsDiscovery {
         LocalNetworkAccess.requireGranted(context)
-        return SafeAdbMdnsDiscovery(context, serviceType, onFailure) { address, port ->
+        return SafeAdbMdnsDiscovery(context, serviceType, onFailure, onLost) { address, port, service ->
             if (LocalAdbEndpointPolicy.isLocalDeviceAddress(address) && port in 1..65535) {
                 logSensitive { "Local mDNS endpoint: $address:$port for $serviceType" }
-                onDiscovered(address, port)
+                onDiscovered(address, port, service)
             } else {
                 Log.w(TAG, "Ignoring invalid or non-local mDNS service")
             }
@@ -176,7 +182,8 @@ class StandaloneAdbManager(context: Context) {
             val result = operationRunner.run(block)
             val error = result.exceptionOrNull()
             if (error == null || error is LocalNetworkPermissionRequiredException ||
-                error is AdbServiceNotFoundException || error is AdbConnectionFailedException) result
+                error is AdbServiceNotFoundException || error is AdbConnectionFailedException ||
+                error is PairingFailureException) result
             else {
                 logFailure(message, error)
                 val userMessage = when (error) {
@@ -211,85 +218,56 @@ class StandaloneAdbManager(context: Context) {
         require(port in 1..65535) { "Invalid pairing port" }
         require(PairingCode.isValid(pairingCode)) { "Invalid pairing code" }
         val host = LOCAL_ADB_HOST
+        val identityStarted = System.nanoTime()
+        val keys = try {
+            keyPairAndCert.also {
+                recordPairingPhase(PairingFailureException.Phase.IDENTITY,
+                    (System.nanoTime() - identityStarted) / 1_000_000L, null)
+            }
+        } catch (error: Exception) {
+            val failure = PairingFailureException(PairingFailureException.Phase.IDENTITY, error)
+            recordPairingPhase(failure.phase, (System.nanoTime() - identityStarted) / 1_000_000L, failure)
+            throw failure
+        }
         val password = pairingCode.toByteArray(Charsets.UTF_8)
         val client = try {
-            CancellablePairingConnection(host, port, password, keyPairAndCert.first, keyPairAndCert.second, DEVICE_NAME)
+            CancellablePairingConnection(host, port, password, keys.first, keys.second, DEVICE_NAME)
         } finally { password.fill(0) }
         client.use {
             runInterruptible(Dispatchers.IO) {
                 BoundedBlockingOperation.run(PAIRING_OPERATION_TIMEOUT_MS, "SSZ-AdbPairing", client::close) {
-                    client.start(PAIRING_OPERATION_TIMEOUT_MS)
+                    client.start(PAIRING_OPERATION_TIMEOUT_MS, ::recordPairingPhase)
                 }
             }
         }
     }
 
-    suspend fun applyCameraMuteViaAdb(connectPort: Int? = null): Result<Unit> = operation(
-        "ADB 권한 적용 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."
+    private fun recordPairingPhase(
+        phase: PairingFailureException.Phase, durationMillis: Long, failure: PairingFailureException?
     ) {
-        ensureConnection(connectPort, 7_000)
-        val prefs = PreferencesRepository.getInstance(context)
-        val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
-        executeShellCommand(AdbShellCommands.grantWriteSecureSettings(context.packageName, userId))
-        if (!CscMuteManager.hasWritePermission(context)) throw IOException("WRITE_SECURE_SETTINGS 권한 부여 상태를 확인할 수 없습니다.")
-        prefs.isPermissionRevokedByUser = false
-        applyAndVerifyMute(true)
-        prefs.shouldMuteOnBoot = true
+        val stage = when (phase) {
+            PairingFailureException.Phase.IDENTITY -> DiagnosticLogger.Stage.PAIRING_IDENTITY
+            PairingFailureException.Phase.TCP_CONNECT -> DiagnosticLogger.Stage.PAIRING_TCP_CONNECT
+            PairingFailureException.Phase.TLS_HANDSHAKE -> DiagnosticLogger.Stage.PAIRING_TLS_HANDSHAKE
+            PairingFailureException.Phase.TLS_EXPORT -> DiagnosticLogger.Stage.PAIRING_TLS_EXPORT
+            PairingFailureException.Phase.CODE_AUTHENTICATION -> DiagnosticLogger.Stage.PAIRING_CODE_AUTHENTICATION
+            PairingFailureException.Phase.PEER_INFO -> DiagnosticLogger.Stage.PAIRING_PEER_INFO
+        }
+        DiagnosticLogger.record(context, stage,
+            if (failure == null) DiagnosticLogger.Outcome.SUCCESS else DiagnosticLogger.Outcome.FAILURE,
+            failure, durationMillis = durationMillis)
     }
 
-    suspend fun revokePermissionViaAdb(): Result<Unit> = operation(
-        "권한 연동 해제 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."
-    ) {
-        val prefs = PreferencesRepository.getInstance(context)
-        try {
-            ensureConnection(null, 4_000)
-            applyAndVerifyMute(false)
-            prefs.shouldMuteOnBoot = false
-            var commandFailure: Exception? = null
-            try {
-                val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
-                executeShellCommand(AdbShellCommands.revokeWriteSecureSettings(context.packageName, userId))
-            } catch (error: CancellationException) { throw error }
-            catch (error: Exception) {
-                commandFailure = error
-                logFailure("Permission revoke command did not complete cleanly", error)
-            }
-            if (CscMuteManager.hasWritePermission(context)) {
-                prefs.isPermissionRevokedByUser = false
-                throw commandFailure ?: IOException("WRITE_SECURE_SETTINGS 권한 회수 상태를 확인할 수 없습니다.")
-            }
-            prefs.lastConnectPort = -1
-            prefs.isPermissionRevokedByUser = true
-        } catch (error: CancellationException) { throw error }
-        catch (error: Exception) {
-            if (!CscMuteManager.hasWritePermission(context)) {
-                prefs.lastConnectPort = -1
-                prefs.isPermissionRevokedByUser = true
-            }
-            throw error
+    /** The command session is valid only inside this serialized operation. */
+    internal suspend fun runCommands(
+        message: String,
+        block: suspend AdbCommandSession.() -> Unit
+    ): Result<Unit> = operation(message) {
+        val session = object : AdbCommandSession {
+            override suspend fun connect(port: Int?, timeoutMs: Long) = ensureConnection(port, timeoutMs)
+            override suspend fun execute(command: String): String = executeShellCommand(command)
         }
-    }
-
-    suspend fun setCameraMute(enableMute: Boolean): Result<Unit> = operation(
-        "셔터음 설정 변경 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."
-    ) {
-        diagnosed(if (enableMute) DiagnosticLogger.Stage.CSC_REAPPLY else DiagnosticLogger.Stage.CSC_RESTORE) {
-            ensureConnection(null, 4_000)
-            applyAndVerifyMute(enableMute)
-            PreferencesRepository.getInstance(context).shouldMuteOnBoot = enableMute
-        }
-    }
-
-    private suspend fun applyAndVerifyMute(mute: Boolean) {
-        val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
-        diagnosed(DiagnosticLogger.Stage.CSC_WRITE) {
-            executeShellCommand(AdbShellCommands.setCameraMute(mute, userId))
-        }
-        diagnosed(DiagnosticLogger.Stage.CSC_VERIFY) {
-            if (!CscStateVerifier.waitFor(mute) { CscMuteManager.readCscMutedState(context) }) {
-                throw IOException("카메라 설정 적용 상태를 확인할 수 없습니다.")
-            }
-        }
+        session.block()
     }
 
     private suspend fun ensureConnection(requestedPort: Int?, discoveryTimeout: Long) {
@@ -364,7 +342,7 @@ class StandaloneAdbManager(context: Context) {
         val discovered = CountDownLatch(1)
         val mdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT, onFailure = {
             failure.set(IOException("로컬 ADB 서비스 주소를 확인하지 못했습니다. ($it)"))
-        }) { address, port ->
+        }) { address, port, _ ->
             if (endpoint.compareAndSet(null, address to port)) discovered.countDown()
         }
         return try {

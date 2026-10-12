@@ -28,8 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
-import io.github.hoons1994.shuttersoundzero.theme.AppThemeMode
-import io.github.hoons1994.shuttersoundzero.theme.rememberAppThemeMode
+import io.github.hoons1994.shuttersoundzero.data.model.AppThemeMode
+import io.github.hoons1994.shuttersoundzero.ui.rememberAppThemeMode
 
 @Composable
 internal fun ThemeSettingsSection(prefs: PreferencesRepository) {

@@ -15,7 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import io.github.hoons1994.shuttersoundzero.theme.ShutterSoundZeroTheme
+import io.github.hoons1994.shuttersoundzero.ui.AppTheme
 import org.junit.Rule
 import org.junit.Test
 
@@ -31,7 +31,7 @@ class SettingsAccessibilityInstrumentedTest {
             CompositionLocalProvider(
                 LocalDensity provides Density(density.density, fontScale = 2f)
             ) {
-                ShutterSoundZeroTheme(darkTheme = false) {
+                AppTheme(darkTheme = false) {
                     Box(
                         modifier = Modifier
                             .width(320.dp)

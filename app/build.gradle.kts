@@ -125,6 +125,8 @@ dependencies {
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
+  // Android provides org.json at runtime; local parser tests need its JVM implementation.
+  testImplementation(libs.json.test)
   testImplementation(libs.kotlinx.coroutines.test)
 
   // Instrumented tests: jUnit rules and runners
