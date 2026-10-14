@@ -20,6 +20,14 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class SetupSettingsNavigatorInstrumentedTest {
+    @Test fun permissionSettingsTargetsOnlyThisAppAndReportsUnavailableSettings() {
+        val context = RecordingContext(application, failures = 0)
+        assertTrue(SetupSettingsNavigator.openAppPermissionSettings(context).isSuccess)
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, context.attempts.single().action)
+        assertEquals("package:${application.packageName}", context.attempts.single().data.toString())
+        assertTrue(SetupSettingsNavigator.openAppPermissionSettings(RecordingContext(application, Int.MAX_VALUE)).isFailure)
+    }
+
     private val application: Application get() = ApplicationProvider.getApplicationContext()
 
     @Test fun primarySettingsLaunchKeepsItsIntentAndDoesNotRetry() {

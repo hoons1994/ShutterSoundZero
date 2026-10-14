@@ -48,10 +48,10 @@ class MainActivity : ComponentActivity() {
         }
 
     private val requestLocalNetworkPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
             localNetworkPermissionRequestInProgress = false
-            localNetworkPermissionDeniedThisSession = !isGranted
-            if (!isGranted) {
+            localNetworkPermissionDeniedThisSession = !LocalNetworkAccess.isGranted(this)
+            if (localNetworkPermissionDeniedThisSession) {
                 android.widget.Toast.makeText(
                     this,
                     getString(R.string.main_local_network_reapply_prompt),

@@ -15,6 +15,7 @@ import io.github.hoons1994.shuttersoundzero.MainActivity
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.receiver.PairingNotificationReceiver
 import io.github.hoons1994.shuttersoundzero.service.PairingForegroundService
+import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 
 object PairingNotificationHelper {
     const val CHANNEL_ID = "adb_pairing_private_v2"
@@ -157,6 +158,14 @@ object PairingNotificationHelper {
             )
         }
 
+        if (state == PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED) {
+            val permissionSettings = PendingIntent.getActivity(context, 4,
+                SetupSettingsNavigator.appPermissionSettingsIntent(context),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            builder.setContentIntent(permissionSettings)
+            builder.addAction(R.mipmap.ic_launcher, context.getString(R.string.pairing_action_permission_settings), permissionSettings)
+        }
+
         val retryApply = state == PairingNotificationState.CONNECTION_RETRY ||
             state == PairingNotificationState.CAMERA_APPLY_FAILED
         if (retryApply) {
@@ -166,7 +175,8 @@ object PairingNotificationHelper {
                 PendingIntent.getService(context, 3, PairingForegroundService.retryApplyIntent(context),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             ).build())
-        } else if (pairingPort != null && state != PairingNotificationState.PAIRING_IDENTITY_FAILED) {
+        } else if (pairingPort != null && state != PairingNotificationState.PAIRING_IDENTITY_FAILED &&
+            state != PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED) {
             builder.addAction(replyAction)
         }
         builder.addAction(cancelAction)

@@ -224,9 +224,11 @@ class PairingNotificationReceiverInstrumentedTest {
             notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
         )
         assertEquals(
-            "앱 설정에서 로컬 네트워크 권한을 허용한 뒤 1회 설정을 다시 시작해 주세요.",
+            "[앱 권한 설정]에서 [근처 기기]를 허용한 뒤 앱으로 돌아와 1회 설정을 계속해 주세요. 기기에 따라 [로컬 네트워크]로 표시될 수 있습니다.",
             notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
         )
+        assertNotNull(notification.contentIntent)
+        assertTrue(notification.actions.orEmpty().any { it.title.toString() == "앱 권한 설정" })
     }
 
     @Test

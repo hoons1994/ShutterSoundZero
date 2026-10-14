@@ -41,6 +41,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -62,9 +63,6 @@ import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
 import io.github.hoons1994.shuttersoundzero.security.AppLockSession
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
-
-private const val LOCAL_NETWORK_PERMISSION_MESSAGE =
-    "카메라 설정을 바꾸려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용한 뒤 다시 시도해 주세요."
 
 private enum class CameraAction { REAPPLY, RESTORE }
 
@@ -119,7 +117,8 @@ fun SettingsScreen(
     val cameraState = rememberCameraSettingsState()
     var restoreResultMessage by remember { mutableStateOf<String?>(null) }
     var cameraMuteFailure by remember { mutableStateOf<CameraMuteFailure?>(null) }
-    var pendingLocalNetworkAction by remember { mutableStateOf<CameraAction?>(null) }
+    var pendingLocalNetworkAction by rememberSaveable { mutableStateOf<CameraAction?>(null) }
+    var deniedLocalNetworkAction by rememberSaveable { mutableStateOf<CameraAction?>(null) }
 
     LaunchedEffect(cameraState.wirelessDebuggingEnabled) {
         if (cameraState.wirelessDebuggingEnabled == true) {
@@ -142,29 +141,48 @@ fun SettingsScreen(
 
     val runReapply: () -> Unit = {
         if (!operationState.isReapplyInProgress) {
-            if (!LocalNetworkAccess.isGranted(context)) {
-                restoreResultMessage = LOCAL_NETWORK_PERMISSION_MESSAGE
+            if (!CscMuteManager.hasWritePermission(context)) {
+                restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+            } else if (DeveloperOptionsManager.readWirelessDebuggingEnabled(context) != true) {
+                showReapplyWirelessDebuggingHelp = true
+            } else if (!LocalNetworkAccess.isGranted(context)) {
+                deniedLocalNetworkAction = CameraAction.REAPPLY
             } else {
                 cameraSettingsViewModel.setCameraMute(true)
             }
         }
     }
 
-    val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
+    val resumeCameraAction: (CameraAction) -> Unit = { action ->
+        cameraState.refresh()
+        if (!CscMuteManager.hasWritePermission(context)) {
+            restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+        } else if (cameraState.wirelessDebuggingEnabled != true) {
+            if (action == CameraAction.REAPPLY) showReapplyWirelessDebuggingHelp = true
+            else showRestoreWirelessDebuggingHelp = true
+        } else if (!LocalNetworkAccess.isGranted(context)) {
+            deniedLocalNetworkAction = action
+        } else when (action) {
+            CameraAction.REAPPLY -> runReapply()
+            CameraAction.RESTORE -> showRestoreConfirm = true
+        }
+    }
+
+    val permissionSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
         val action = pendingLocalNetworkAction
         pendingLocalNetworkAction = null
-        if (action != null) {
-            if (isGranted && LocalNetworkAccess.isGranted(context)) {
-                when (action) {
-                    CameraAction.REAPPLY -> runReapply()
-                    CameraAction.RESTORE -> showRestoreConfirm = true
-                }
-            } else {
-                restoreResultMessage = LOCAL_NETWORK_PERMISSION_MESSAGE
-            }
-        }
+        if (action != null) resumeCameraAction(action)
+    }
+
+    val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        val action = pendingLocalNetworkAction
+        pendingLocalNetworkAction = null
+        // The current OS permission is authoritative, including after an OTA or settings return.
+        if (action != null) resumeCameraAction(action)
     }
 
     val requestLocalNetworkPermission: (CameraAction) -> Unit = { action ->
@@ -503,12 +521,26 @@ fun SettingsScreen(
                 onReconnect = onPairingRecoveryRequested,
                 onOpenSettings = {
                     if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
-                        context.startActivity(Intent(
-                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.fromParts("package", context.packageName, null)
-                        ))
+                        handleSettingsLaunch(SetupSettingsNavigator.openAppPermissionSettings(context))
                     } else {
                         handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))
+                    }
+                }
+            )
+        }
+
+        deniedLocalNetworkAction?.let { action ->
+            CameraMuteFailureDialog(
+                failure = CameraMuteFailure.LOCAL_NETWORK_PERMISSION,
+                onDismiss = { deniedLocalNetworkAction = null },
+                onReconnect = {},
+                onOpenSettings = {
+                    pendingLocalNetworkAction = action
+                    try {
+                        permissionSettingsLauncher.launch(SetupSettingsNavigator.appPermissionSettingsIntent(context))
+                    } catch (_: Exception) {
+                        pendingLocalNetworkAction = null
+                        Toast.makeText(context, settingsLaunchFailureMessage, Toast.LENGTH_LONG).show()
                     }
                 }
             )
