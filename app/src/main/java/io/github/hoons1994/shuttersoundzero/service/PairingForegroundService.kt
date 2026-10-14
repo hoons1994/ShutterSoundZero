@@ -15,6 +15,10 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import io.github.hoons1994.shuttersoundzero.AppDependencies
 import io.github.hoons1994.shuttersoundzero.pairing.PairingWorkflow
+import io.github.hoons1994.shuttersoundzero.pairing.PairingEvent
+import io.github.hoons1994.shuttersoundzero.core.adb.AdbServiceNotFoundException
+import io.github.hoons1994.shuttersoundzero.core.adb.AdbConnectionFailedException
+import java.net.SocketTimeoutException
 import io.github.hoons1994.shuttersoundzero.pairing.PairingWorkflowFeedback
 import io.github.hoons1994.shuttersoundzero.MainActivity
 import io.github.hoons1994.shuttersoundzero.R
@@ -45,6 +49,7 @@ class PairingForegroundService : Service() {
         private const val ACTION_START = "io.github.hoons1994.shuttersoundzero.action.START_PAIRING"
         private const val ACTION_STOP = "io.github.hoons1994.shuttersoundzero.action.STOP_PAIRING"
         private const val ACTION_SUBMIT_CODE = "io.github.hoons1994.shuttersoundzero.action.SUBMIT_PAIRING_CODE"
+        private const val ACTION_RETRY_APPLY = "io.github.hoons1994.shuttersoundzero.action.RETRY_PAIRING_APPLY"
         private const val EXTRA_DEV_OPTIONS_OFF = "dev_options_off"
         private const val EXTRA_PAIRING_CODE = "pairing_code"
 
@@ -78,6 +83,9 @@ class PairingForegroundService : Service() {
                 .setClass(context, PairingForegroundService::class.java)
         }
 
+        fun retryApplyIntent(context: Context): Intent =
+            Intent(ACTION_RETRY_APPLY).setClass(context, PairingForegroundService::class.java)
+
     }
 
     private val adbManager by lazy { StandaloneAdbManager.getInstance(this) }
@@ -91,6 +99,8 @@ class PairingForegroundService : Service() {
     private var isSetupObserverRegistered = false
     private var isPairingActive = false
     private var isPairingCompleting = false
+    private var hasPaired = false
+    private var applyFailureState = PairingNotificationState.CONNECTION_RETRY
     private val notificationRefresh = PairingNotificationRefreshState()
 
     private val setupObserver = object : ContentObserver(mainHandler) {
@@ -103,6 +113,9 @@ class PairingForegroundService : Service() {
         when (intent?.action) {
             ACTION_START -> startPairing()
             ACTION_SUBMIT_CODE -> submitPairingCode(intent.getStringExtra(EXTRA_PAIRING_CODE).orEmpty().trim())
+            ACTION_RETRY_APPLY -> {
+                if (isPairingActive && hasPaired) retryApply() else stopSelf(startId)
+            }
             ACTION_STOP -> stopPairing(showSuccess = false, wirelessDebuggingDisabled = false)
             else -> stopSelf(startId)
         }
@@ -118,6 +131,7 @@ class PairingForegroundService : Service() {
         adbManager.clearDiscoveredPorts()
         isPairingActive = true
         isPairingCompleting = false
+        hasPaired = false
         val setupState = readPairingSetupState()
         notificationRefresh.reset(setupState)
 
@@ -231,6 +245,10 @@ class PairingForegroundService : Service() {
 
     private fun submitPairingCode(code: String) {
         if (pairingJob?.isActive == true || isPairingCompleting) return
+        if (hasPaired) {
+            retryApply()
+            return
+        }
         val pairingPort = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
 
         if (!PairingCode.isValid(code)) {
@@ -253,14 +271,24 @@ class PairingForegroundService : Service() {
             return
         }
 
-        isPairingCompleting = false
-
         prefs.lastSetupIssue = null
         DiagnosticLogger.record(
             this,
             DiagnosticLogger.Stage.PAIRING_CODE_SUBMITTED,
             DiagnosticLogger.Outcome.INFO
         )
+
+        launchWorkflow(code)
+    }
+
+    private fun retryApply() {
+        if (pairingJob != null || isPairingCompleting || !hasPaired) return
+        launchWorkflow(null)
+    }
+
+    private fun launchWorkflow(code: String?) {
+        isPairingCompleting = false
+        prefs.lastSetupIssue = null
 
         startForeground(
             PairingNotificationHelper.NOTIFICATION_ID,
@@ -279,13 +307,31 @@ class PairingForegroundService : Service() {
                     onFailed = { isPairingCompleting = false },
                     onCompleted = { postSuccessfulCompletion(generation, it) }
                 )
-                PairingWorkflow(
+                val workflow = PairingWorkflow(
                     discoveredPort = { adbManager.lastDiscoveredPairingPort },
                     pair = adbManager::pairLocal,
                     applyCameraMute = { AppDependencies.cameraSettings(this@PairingForegroundService).applyCameraMuteViaAdb() }
-                ).run(code) { event ->
-                    commitPairingSideEffect(generation) { feedback.handle(event) }
+                )
+                val handleEvent: (PairingEvent) -> Unit = { event ->
+                    commitPairingSideEffect(generation) {
+                        if (event == PairingEvent.PairingSucceeded) hasPaired = true
+                        val pairedEvent = when {
+                            hasPaired && event == PairingEvent.TimedOut ->
+                                PairingEvent.ApplyFailed(SocketTimeoutException())
+                            hasPaired && event is PairingEvent.Failed ->
+                                PairingEvent.ApplyFailed(event.error)
+                            else -> event
+                        }
+                        if (pairedEvent is PairingEvent.ApplyFailed) {
+                            applyFailureState = if (pairedEvent.error is AdbServiceNotFoundException ||
+                                pairedEvent.error is AdbConnectionFailedException) {
+                                PairingNotificationState.CONNECTION_RETRY
+                            } else PairingNotificationState.CAMERA_APPLY_FAILED
+                        }
+                        feedback.handle(pairedEvent)
+                    }
                 }
+                if (code == null) workflow.retryApply(handleEvent) else workflow.run(code, handleEvent)
             } finally {
                 // 이전 세대의 늦은 finally가 새 pairingJob 참조를 지우지 못하게 한다.
                 if (pairingGeneration.isCurrent(generation) && pairingJob === coroutineContext[Job]) {
@@ -360,6 +406,7 @@ class PairingForegroundService : Service() {
 
     private fun stopPairing(showSuccess: Boolean, wirelessDebuggingDisabled: Boolean) {
         isPairingActive = false
+        hasPaired = false
         unregisterSetupObserver()
         pairingGeneration.invalidate()
         pairingJob?.cancel()
@@ -395,6 +442,12 @@ class PairingForegroundService : Service() {
         if (!isPairingActive || isPairingCompleting) return
         val state = readPairingSetupState()
         notificationRefresh.observeSetup(state)
+        if (hasPaired) {
+            if (pairingJob == null) {
+                PairingNotificationHelper.showPairingNotification(this, state = applyFailureState)
+            }
+            return
+        }
         when (val update = notificationRefresh.takeUpdate(blocked = pairingJob != null)) {
             null -> return
             is PairingNotificationRefreshState.Update.DiscoveryFailed -> {

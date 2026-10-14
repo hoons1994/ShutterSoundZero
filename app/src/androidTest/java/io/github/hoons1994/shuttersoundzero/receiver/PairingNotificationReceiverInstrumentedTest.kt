@@ -22,6 +22,16 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PairingNotificationReceiverInstrumentedTest {
+    @Test fun authenticatedRecoveryOffersApplyRetryWithoutCodeEntry() {
+        for (state in listOf(PairingNotificationState.CONNECTION_RETRY, PairingNotificationState.CAMERA_APPLY_FAILED)) {
+            val notification = PairingNotificationHelper.buildPairingNotification(baseContext, pairingPort = 37123, state = state)
+            assertFalse(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
+            val retry = notification.actions.orEmpty().single { it.title.toString() == "연결·설정 재시도" }
+            if (android.os.Build.VERSION.SDK_INT >= 31) assertTrue(retry.actionIntent.isImmutable)
+            assertTrue(retry.remoteInputs.isNullOrEmpty())
+        }
+    }
+
     @Test fun identityFailureDoesNotOfferCodeEntryEvenWhenAPortIsRediscovered() {
         val notification = PairingNotificationHelper.buildPairingNotification(baseContext, pairingPort = 37123,
             state = PairingNotificationState.PAIRING_IDENTITY_FAILED)

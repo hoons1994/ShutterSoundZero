@@ -61,6 +61,9 @@ internal class PairingWorkflowFeedback(
                     DiagnosticLogger.Outcome.STARTED
                 )
             }
+            PairingEvent.ApplyRetrying -> {
+                PairingNotificationHelper.showProgressNotification(context)
+            }
             PairingEvent.ApplySucceeded -> {
                 onCompleting()
                 prefs.lastSetupIssue = null
@@ -115,7 +118,7 @@ internal class PairingWorkflowFeedback(
                     context,
                     state = PairingNotificationState.CAMERA_APPLY_FAILED
                 )
-                restartPairingDiscovery()
+                // Code authentication already succeeded. Keep recovery on the connection/apply step.
             }
             is PairingEvent.PairingFailed -> {
                 val localNetworkPermissionMissing =

@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.pairing
 
+import io.github.hoons1994.shuttersoundzero.core.adb.AdbServiceNotFoundException
+import io.github.hoons1994.shuttersoundzero.core.adb.AdbConnectionFailedException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -11,6 +13,7 @@ internal sealed interface PairingEvent {
     data object PairingStarted : PairingEvent
     data object PairingSucceeded : PairingEvent
     data object ApplyStarted : PairingEvent
+    data object ApplyRetrying : PairingEvent
     data object ApplySucceeded : PairingEvent
     data class ApplyFailed(val error: Throwable?) : PairingEvent
     data class PairingFailed(val error: Throwable?) : PairingEvent
@@ -53,9 +56,7 @@ internal class PairingWorkflow(
                 emit(PairingEvent.PairingSucceeded)
                 delay(300)
                 emit(PairingEvent.ApplyStarted)
-                val applied = applyCameraMute()
-                emit(if (applied.isSuccess) PairingEvent.ApplySucceeded
-                    else PairingEvent.ApplyFailed(applied.exceptionOrNull()))
+                applyWithRetry(onEvent)
                 true
             }
             currentCoroutineContext().ensureActive()
@@ -65,5 +66,36 @@ internal class PairingWorkflow(
         } catch (error: Exception) {
             emit(PairingEvent.Failed(error))
         }
+    }
+
+    /** Retry the established identity without retaining or asking for the pairing code. */
+    suspend fun retryApply(onEvent: (PairingEvent) -> Unit) {
+        try {
+            val completed = withTimeoutOrNull(25_000) {
+                onEvent(PairingEvent.ApplyStarted)
+                applyWithRetry(onEvent)
+                true
+            }
+            currentCoroutineContext().ensureActive()
+            if (completed == null) onEvent(PairingEvent.TimedOut)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            onEvent(PairingEvent.Failed(error))
+        }
+    }
+
+    private suspend fun applyWithRetry(onEvent: (PairingEvent) -> Unit) {
+        var applied = applyCameraMute()
+        currentCoroutineContext().ensureActive()
+        if (applied.exceptionOrNull().let { it is AdbServiceNotFoundException || it is AdbConnectionFailedException }) {
+            onEvent(PairingEvent.ApplyRetrying)
+            delay(500)
+            currentCoroutineContext().ensureActive()
+            applied = applyCameraMute()
+        }
+        currentCoroutineContext().ensureActive()
+        onEvent(if (applied.isSuccess) PairingEvent.ApplySucceeded
+            else PairingEvent.ApplyFailed(applied.exceptionOrNull()))
     }
 }

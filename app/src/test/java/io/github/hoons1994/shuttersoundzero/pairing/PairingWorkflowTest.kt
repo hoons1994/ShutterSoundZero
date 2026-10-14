@@ -1,6 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.pairing
 
 import io.github.hoons1994.shuttersoundzero.service.OperationGeneration
+import io.github.hoons1994.shuttersoundzero.core.adb.AdbServiceNotFoundException
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -16,6 +17,46 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PairingWorkflowTest {
+    @Test fun discoveryFailureRetriesApplyWithoutPairingAgain() = runTest {
+        var pairs = 0
+        var applies = 0
+        val events = mutableListOf<PairingEvent>()
+        PairingWorkflow({ 37123 }, { _, _ -> pairs++; Result.success(Unit) }, {
+            applies++
+            if (applies == 1) Result.failure(AdbServiceNotFoundException()) else Result.success(Unit)
+        }).run("123456", events::add)
+        assertEquals(1, pairs)
+        assertEquals(2, applies)
+        assertTrue(events.contains(PairingEvent.ApplyRetrying))
+        assertEquals(PairingEvent.ApplySucceeded, events.last())
+    }
+
+    @Test fun manualRetryDoesNotNeedCodeOrPairingPortAndIsBounded() = runTest {
+        val failure = AdbServiceNotFoundException()
+        val events = mutableListOf<PairingEvent>()
+        var applies = 0
+        PairingWorkflow({ error("must not discover pairing") }, { _, _ -> error("must not pair") }, {
+            applies++
+            Result.failure(failure)
+        }).retryApply(events::add)
+        assertEquals(2, applies)
+        assertEquals(PairingEvent.ApplyFailed(failure), events.last())
+        assertFalse(events.contains(PairingEvent.PairingStarted))
+    }
+
+    @Test fun cancellationWhileWaitingForRetryDoesNotApplyAgain() = runTest {
+        var applies = 0
+        val job = launch {
+            PairingWorkflow({ null }, { _, _ -> error("must not pair") }, {
+                applies++
+                Result.failure(AdbServiceNotFoundException())
+            }).retryApply { }
+        }
+        runCurrent()
+        job.cancelAndJoin()
+        assertEquals(1, applies)
+    }
+
     @Test fun discoveredPortIsUsedAndApplyFollowsSuccessfulPairing() = runTest {
         val events = mutableListOf<PairingEvent>()
         var applied = false

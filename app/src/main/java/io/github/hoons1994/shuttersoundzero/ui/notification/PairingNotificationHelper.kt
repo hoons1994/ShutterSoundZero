@@ -157,7 +157,18 @@ object PairingNotificationHelper {
             )
         }
 
-        if (pairingPort != null && state != PairingNotificationState.PAIRING_IDENTITY_FAILED) builder.addAction(replyAction)
+        val retryApply = state == PairingNotificationState.CONNECTION_RETRY ||
+            state == PairingNotificationState.CAMERA_APPLY_FAILED
+        if (retryApply) {
+            builder.addAction(NotificationCompat.Action.Builder(
+                R.mipmap.ic_launcher,
+                context.getString(R.string.pairing_action_retry_apply),
+                PendingIntent.getService(context, 3, PairingForegroundService.retryApplyIntent(context),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            ).build())
+        } else if (pairingPort != null && state != PairingNotificationState.PAIRING_IDENTITY_FAILED) {
+            builder.addAction(replyAction)
+        }
         builder.addAction(cancelAction)
 
         val notification = builder.build()
@@ -204,6 +215,7 @@ object PairingNotificationHelper {
             PairingNotificationState.INVALID_PAIRING_CODE -> context.getString(R.string.pairing_state_invalid_code)
             PairingNotificationState.DISCOVERY_WAITING -> context.getString(R.string.pairing_state_discovery_waiting)
             PairingNotificationState.CAMERA_APPLY_FAILED -> context.getString(R.string.pairing_state_camera_apply_failed)
+            PairingNotificationState.CONNECTION_RETRY -> context.getString(R.string.pairing_state_connection_retry)
             PairingNotificationState.PAIRING_FAILED -> context.getString(R.string.pairing_state_failed)
             PairingNotificationState.PAIRING_IDENTITY_FAILED -> context.getString(R.string.pairing_state_identity_failed)
             PairingNotificationState.PAIRING_TLS_FAILED -> context.getString(R.string.pairing_state_tls_failed)
@@ -226,6 +238,7 @@ object PairingNotificationHelper {
             PairingNotificationState.DISCOVERY_WAITING -> R.string.pairing_help_discovery
             PairingNotificationState.INVALID_PAIRING_CODE -> R.string.pairing_help_invalid_code
             PairingNotificationState.CAMERA_APPLY_FAILED -> R.string.pairing_help_camera_apply
+            PairingNotificationState.CONNECTION_RETRY -> R.string.pairing_help_connection_retry
             PairingNotificationState.PAIRING_FAILED,
             PairingNotificationState.PAIRING_ERROR -> R.string.pairing_help_connection
             PairingNotificationState.PAIRING_TIMEOUT -> R.string.pairing_help_timeout
