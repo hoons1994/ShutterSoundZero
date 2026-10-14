@@ -13,6 +13,17 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 class DiagnosticLoggerTest {
+    @Test fun discoveryFailureRecordsOnlyFixedReasonAndNumericNsdCode() {
+        val failure = io.github.hoons1994.shuttersoundzero.core.adb.AdbServiceNotFoundException(
+            IOException("192.168.1.5 secret-service-name 123456"),
+            io.github.hoons1994.shuttersoundzero.core.adb.AdbDiscoveryReason.RESOLVE_FAILED, 3)
+        val line = DiagnosticLogger.formatEvent(DiagnosticLogger.Stage.ADB_CONNECT_DISCOVERY,
+            DiagnosticLogger.Outcome.FAILURE, failure, "time", 7000)
+        assertTrue(line.contains("reason=RESOLVE_FAILED | nsd_error=3"))
+        assertTrue(line.contains("duration_ms=7000"))
+        for (secret in listOf("192.168.1.5", "secret-service-name", "123456")) assertFalse(line.contains(secret))
+    }
+
     @Test fun volumeFailureRetainsRequestedAndActualValuesWithoutInventingZeroForReadFailure() {
         val line = DiagnosticLogger.formatSystemVolume(7, null, DiagnosticLogger.Outcome.FAILURE,
             DiagnosticLogger.VolumeReason.READ_FAILED, "time", 500)

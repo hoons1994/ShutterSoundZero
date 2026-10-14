@@ -2,6 +2,7 @@ package io.github.hoons1994.shuttersoundzero.logging
 
 import android.content.Context
 import io.github.muntashirakon.adb.PairingFailureException
+import io.github.hoons1994.shuttersoundzero.core.adb.AdbServiceNotFoundException
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -124,6 +125,11 @@ object DiagnosticLogger {
             if (error is PairingFailureException) {
                 append(" | reason=")
                 append(error.reason.name)
+            }
+            if (error is AdbServiceNotFoundException) {
+                append(" | reason=")
+                append(error.reason.name)
+                error.nsdErrorCode?.let { append(" | nsd_error=$it") }
             }
             if (durationMillis != null) {
                 append(" | duration_ms=")

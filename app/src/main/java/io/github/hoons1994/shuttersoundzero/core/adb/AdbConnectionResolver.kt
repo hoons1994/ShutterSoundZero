@@ -54,7 +54,11 @@ internal object AdbConnectionResolver {
     }
 }
 
-internal class AdbServiceNotFoundException(cause: Throwable? = null) : IOException(
+internal class AdbServiceNotFoundException(
+    cause: Throwable? = null,
+    val reason: AdbDiscoveryReason = AdbDiscoveryReason.UNKNOWN,
+    val nsdErrorCode: Int? = null
+) : IOException(
     "무선 디버깅의 연결 서비스를 찾지 못했습니다.", cause
 )
 
