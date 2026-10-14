@@ -27,13 +27,19 @@ internal class PairingWorkflow(
     private val pair: suspend (Int, String) -> Result<Unit>,
     private val applyCameraMute: suspend () -> Result<Unit>
 ) {
+    companion object {
+        // Initial setup also includes code authentication (up to 12s) before connection retries.
+        const val SETUP_TIMEOUT_MS = 40_000L
+        const val APPLY_TIMEOUT_MS = 25_000L
+    }
+
     suspend fun run(code: String, onEvent: (PairingEvent) -> Unit) {
         suspend fun emit(event: PairingEvent) {
             currentCoroutineContext().ensureActive()
             onEvent(event)
         }
         try {
-            val completed = withTimeoutOrNull(25_000) {
+            val completed = withTimeoutOrNull(SETUP_TIMEOUT_MS) {
                 var port = discoveredPort()?.takeIf { it in 1..65535 }
                 if (port == null) {
                     for (attempt in 0 until 15) {
@@ -71,7 +77,7 @@ internal class PairingWorkflow(
     /** Retry the established identity without retaining or asking for the pairing code. */
     suspend fun retryApply(onEvent: (PairingEvent) -> Unit) {
         try {
-            val completed = withTimeoutOrNull(25_000) {
+            val completed = withTimeoutOrNull(APPLY_TIMEOUT_MS) {
                 onEvent(PairingEvent.ApplyStarted)
                 applyWithRetry(onEvent)
                 true

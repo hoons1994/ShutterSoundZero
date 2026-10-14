@@ -8,6 +8,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
@@ -17,6 +18,26 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PairingWorkflowTest {
+    @Test fun slowPairingLeavesEnoughTimeForBothConnectionDiscoveryAttempts() = runTest {
+        var attempts = 0
+        var paired = 0
+        val events = mutableListOf<PairingEvent>()
+        PairingWorkflow({ 37123 }, { _, _ ->
+            paired++
+            delay(12_000)
+            Result.success(Unit)
+        }, {
+            attempts++
+            delay(7_000)
+            if (attempts == 1) Result.failure(AdbServiceNotFoundException()) else Result.success(Unit)
+        }).run("123456", events::add)
+        assertEquals(1, paired)
+        assertEquals(2, attempts)
+        assertEquals(26_800L, currentTime)
+        assertEquals(PairingEvent.ApplySucceeded, events.last())
+        assertFalse(events.contains(PairingEvent.TimedOut))
+    }
+
     @Test fun discoveryFailureRetriesApplyWithoutPairingAgain() = runTest {
         var pairs = 0
         var applies = 0
@@ -116,9 +137,17 @@ class PairingWorkflowTest {
         val events = mutableListOf<PairingEvent>()
         PairingWorkflow({ 37123 }, { _, _ -> Result.success(Unit) },
             { awaitCancellation() }).run("123456", events::add)
-        assertEquals(25_000L, currentTime)
+        assertEquals(40_000L, currentTime)
         assertEquals(PairingEvent.TimedOut, events.last())
         assertFalse(events.contains(PairingEvent.ApplySucceeded))
+    }
+
+    @Test fun manualApplyRetryStillTimesOutWithoutRepeatingCodeAuthentication() = runTest {
+        val events = mutableListOf<PairingEvent>()
+        PairingWorkflow({ error("must not discover pairing") }, { _, _ -> error("must not pair") },
+            { awaitCancellation() }).retryApply(events::add)
+        assertEquals(25_000L, currentTime)
+        assertEquals(listOf(PairingEvent.ApplyStarted, PairingEvent.TimedOut), events)
     }
 
     @Test fun serviceCancellationDoesNotReportFailureOrTimeout() = runTest {

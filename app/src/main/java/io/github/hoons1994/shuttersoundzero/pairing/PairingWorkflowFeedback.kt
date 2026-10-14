@@ -147,7 +147,7 @@ internal class PairingWorkflowFeedback(
                     DiagnosticLogger.Stage.PAIRING_WORKFLOW,
                     DiagnosticLogger.Outcome.TIMEOUT
                 )
-                Log.w(TAG, "Pairing timed out after 25 seconds")
+                Log.w(TAG, "Pairing workflow exceeded its time limit")
                 PairingNotificationHelper.showPairingNotification(
                     context,
                     state = PairingNotificationState.PAIRING_TIMEOUT
