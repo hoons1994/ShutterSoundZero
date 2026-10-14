@@ -262,7 +262,7 @@ class MainScreenTest {
         )
 
         composeTestRule.onNodeWithText(
-            "기기 연결은 됐지만 카메라 설정을 적용하지 못했습니다. 무선 디버깅을 켠 상태에서 다시 시도해 주세요."
+            "코드 인증은 완료됐지만 연결 또는 설정 적용을 마치지 못했습니다. 무선 디버깅을 켠 뒤 [연결·설정 재시도]를 눌러 주세요."
         ).fetchSemanticsNode()
         assertTrue(
             composeTestRule.onAllNodesWithText("알림 팝업 설정 열기").fetchSemanticsNodes().isEmpty()

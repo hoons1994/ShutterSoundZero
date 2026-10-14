@@ -46,7 +46,9 @@ internal fun StatusHeroCard(
         HomeStatus.READY -> "카메라 설정값 적용 완료"
         HomeStatus.REAPPLY_REQUIRED -> "카메라 무음 다시 적용 필요"
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_unknown_title)
-        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
+        HomeStatus.SETUP_REQUIRED -> if (setupIssue == SetupIssue.CAMERA_APPLY) {
+            "연결·설정을 다시 시도해 주세요"
+        } else if (hasSetupIssue) {
             "1회 설정을 다시 진행해 주세요"
         } else {
             "처음 한 번만 설정해 주세요"
@@ -86,7 +88,11 @@ internal fun StatusHeroCard(
         HomeStatus.READY -> null
         HomeStatus.REAPPLY_REQUIRED -> "다시 적용하기"
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_retry)
-        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "1회 설정 다시 시작" else "1회 설정 시작"
+        HomeStatus.SETUP_REQUIRED -> when {
+            setupIssue == SetupIssue.CAMERA_APPLY -> "연결·설정 재시도"
+            hasSetupIssue -> "1회 설정 다시 시작"
+            else -> "1회 설정 시작"
+        }
     }
 
     Card(

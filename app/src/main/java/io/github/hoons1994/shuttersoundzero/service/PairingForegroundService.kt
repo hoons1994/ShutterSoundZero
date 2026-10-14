@@ -52,11 +52,13 @@ class PairingForegroundService : Service() {
         private const val ACTION_RETRY_APPLY = "io.github.hoons1994.shuttersoundzero.action.RETRY_PAIRING_APPLY"
         private const val EXTRA_DEV_OPTIONS_OFF = "dev_options_off"
         private const val EXTRA_PAIRING_CODE = "pairing_code"
+        private const val EXTRA_RESUME_APPLY = "resume_apply"
 
-        fun start(context: Context, isDevOptionsOff: Boolean) {
+        fun start(context: Context, isDevOptionsOff: Boolean, resumeApply: Boolean = false) {
             val intent = Intent(context, PairingForegroundService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_DEV_OPTIONS_OFF, isDevOptionsOff)
+                putExtra(EXTRA_RESUME_APPLY, resumeApply)
             }
             ContextCompat.startForegroundService(context, intent)
         }
@@ -111,10 +113,16 @@ class PairingForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> startPairing()
+            ACTION_START -> when {
+                isPairingActive && hasPaired -> retryApply()
+                intent.getBooleanExtra(EXTRA_RESUME_APPLY, false) -> startApplyRecovery()
+                else -> startPairing()
+            }
             ACTION_SUBMIT_CODE -> submitPairingCode(intent.getStringExtra(EXTRA_PAIRING_CODE).orEmpty().trim())
             ACTION_RETRY_APPLY -> {
-                if (isPairingActive && hasPaired) retryApply() else stopSelf(startId)
+                if (isPairingActive) {
+                    if (hasPaired) retryApply()
+                } else stopSelf(startId)
             }
             ACTION_STOP -> stopPairing(showSuccess = false, wirelessDebuggingDisabled = false)
             else -> stopSelf(startId)
@@ -160,6 +168,19 @@ class PairingForegroundService : Service() {
         }
         // Re-read after registration so a change during service startup cannot be missed.
         refreshPairingSetupNotification()
+    }
+
+    private fun startApplyRecovery() {
+        pairingGeneration.invalidate()
+        pairingJob?.cancel()
+        pairingJob = null
+        stopPairingDiscovery()
+        isPairingActive = true
+        isPairingCompleting = false
+        hasPaired = true
+        notificationRefresh.reset(readPairingSetupState())
+        retryApply()
+        registerSetupObserver()
     }
 
     private fun startPairingDiscovery(): Boolean {
@@ -405,6 +426,10 @@ class PairingForegroundService : Service() {
     }
 
     private fun stopPairing(showSuccess: Boolean, wirelessDebuggingDisabled: Boolean) {
+        // Explicit cancellation permits a fresh pairing next time, without deleting credentials.
+        if (!showSuccess && hasPaired && prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY) {
+            prefs.lastSetupIssue = null
+        }
         isPairingActive = false
         hasPaired = false
         unregisterSetupObserver()

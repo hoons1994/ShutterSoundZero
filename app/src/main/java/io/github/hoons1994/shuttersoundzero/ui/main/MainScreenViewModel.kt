@@ -189,23 +189,27 @@ class MainScreenViewModel internal constructor(
     }
 
     fun startNotificationPairing(context: Context) {
+        val resumeApply = prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY
         val devOptionsOff = !DeveloperOptionsManager.isDeveloperOptionsEnabled(context)
         if (!handleSettingsLaunch(SetupSettingsNavigator.openPairingSetupScreen(context))) return
-        prefs.clearTransientAdbConnectionState()
-        prefs.lastSetupIssue = null
-        adbManager.clearDiscoveredPorts()
+        if (!resumeApply) {
+            prefs.clearTransientAdbConnectionState()
+            prefs.lastSetupIssue = null
+            adbManager.clearDiscoveredPorts()
+        }
         _uiState.update {
             it.copy(
-                setupIssue = null,
+                setupIssue = if (resumeApply) SetupIssue.CAMERA_APPLY else null,
                 cameraMuteFailure = null,
                 showSwitchFailureHelp = false,
                 showWirelessDebuggingCleanupHelp = false
             )
         }
-        PairingForegroundService.start(context, devOptionsOff)
+        PairingForegroundService.start(context, devOptionsOff, resumeApply)
         _uiState.update {
             it.copy(
-                infoMessage = context.getString(R.string.main_pairing_code_entry_guidance),
+                infoMessage = context.getString(if (resumeApply) R.string.pairing_help_connection_retry
+                    else R.string.main_pairing_code_entry_guidance),
                 errorMessage = null
             )
         }
