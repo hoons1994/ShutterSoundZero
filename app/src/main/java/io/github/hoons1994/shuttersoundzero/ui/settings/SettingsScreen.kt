@@ -238,7 +238,7 @@ fun SettingsScreen(
                 } else if (cameraState.isCscMuted == true) {
                     ClickableRow(
                         title = "카메라 셔터음 원래대로 복원",
-                        subtitle = "현재 무음 설정 적용됨",
+                        subtitle = "현재 셔터음 강제 해제 설정값 적용됨",
                         onClick = {
                             cameraState.refresh()
                             if (!CscMuteManager.hasWritePermission(context)) {

@@ -39,7 +39,7 @@ class MainScreenTest {
             hasCscPermission = true,
             isCscChangeInProgress = true
         ))
-        composeTestRule.onNodeWithText("카메라 무음 설정 완료").assertDoesNotExist()
+        composeTestRule.onNodeWithText("카메라 설정값 적용 완료").assertDoesNotExist()
         composeTestRule.onNodeWithText("카메라 열어보기").assertDoesNotExist()
         composeTestRule.onNode(hasText("카메라 설정 변경 중") and hasClickAction()).assertIsNotEnabled()
     }
@@ -105,9 +105,10 @@ class MainScreenTest {
             )
         )
 
-        composeTestRule.onNodeWithText("정상").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("카메라 무음 설정 완료").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("설정값 확인됨").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("카메라 설정값 적용 완료").fetchSemanticsNode()
         composeTestRule.onNodeWithText("카메라 열어보기").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("셔터음 강제 설정값이 해제되어 있습니다. [카메라 열어보기]로 실제 촬영음을 확인해 주세요.").assertExists()
         assertTrue(
             composeTestRule.onAllNodesWithText("다시 적용하기").fetchSemanticsNodes().isEmpty()
         )
@@ -195,7 +196,7 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("카메라 설정 상태 확인 불가").fetchSemanticsNode()
         composeTestRule.onNodeWithText("상태 다시 확인").performClick()
         assertTrue(retried)
-        for (claim in listOf("정상", "카메라 무음 설정 완료", "카메라 무음 다시 적용 필요", "다시 적용하기")) {
+        for (claim in listOf("설정값 확인됨", "카메라 설정값 적용 완료", "카메라 무음 다시 적용 필요", "다시 적용하기")) {
             assertTrue(composeTestRule.onAllNodesWithText(claim).fetchSemanticsNodes().isEmpty())
         }
     }
@@ -206,7 +207,7 @@ class MainScreenTest {
         composeTestRule.onNode(hasText("카메라 설정 변경 중") and hasClickAction()).assertIsNotEnabled()
         composeTestRule.onNodeWithText("무선 디버깅 다시 켜기").assertIsNotEnabled()
         assertTrue(
-            composeTestRule.onAllNodesWithText("카메라 무음 설정 완료").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText("카메라 설정값 적용 완료").fetchSemanticsNodes().isEmpty()
         )
     }
 
