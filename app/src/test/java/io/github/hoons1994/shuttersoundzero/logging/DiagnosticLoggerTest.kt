@@ -13,6 +13,14 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 class DiagnosticLoggerTest {
+    @Test fun volumeFailureRetainsRequestedAndActualValuesWithoutInventingZeroForReadFailure() {
+        val line = DiagnosticLogger.formatSystemVolume(7, null, DiagnosticLogger.Outcome.FAILURE,
+            DiagnosticLogger.VolumeReason.READ_FAILED, "time", 500)
+        assertTrue(line.contains("requested=7 | actual=unknown | reason=READ_FAILED"))
+        assertTrue(line.contains("duration_ms=500"))
+        assertFalse(line.contains("actual=0"))
+    }
+
     @Test fun pairingDetailsAreFixedCategoriesWithoutSensitiveExceptionMessages() {
         val error = io.github.muntashirakon.adb.PairingFailureException(
             io.github.muntashirakon.adb.PairingFailureException.Phase.IDENTITY,

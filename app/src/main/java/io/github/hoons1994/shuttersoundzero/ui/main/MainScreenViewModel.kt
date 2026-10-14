@@ -4,6 +4,8 @@ import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
 import android.media.AudioManager
+import android.os.SystemClock
+import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.hoons1994.shuttersoundzero.camera.CameraSettingsRepository
@@ -99,19 +101,35 @@ class MainScreenViewModel internal constructor(
         if (existing.requested != null) return existing.requested
         val volume = readSystemVolume()
         if (volume.current == null || volume.isFixed || volume.isRingerMuted || volume.max <= volume.min) {
+            DiagnosticLogger.recordSystemVolume(getApplication(), index, volume.current, DiagnosticLogger.Outcome.FAILURE,
+                when {
+                    volume.current == null -> DiagnosticLogger.VolumeReason.READ_FAILED
+                    volume.isFixed -> DiagnosticLogger.VolumeReason.FIXED
+                    volume.isRingerMuted -> DiagnosticLogger.VolumeReason.RINGER_MUTED
+                    else -> DiagnosticLogger.VolumeReason.NO_RANGE
+                })
             _uiState.update { it.copy(systemVolume = volume) }
             return volume.current
         }
 
         val requested = index.coerceIn(volume.min, volume.max)
+        val started = SystemClock.elapsedRealtime()
+        DiagnosticLogger.recordSystemVolume(getApplication(), requested, volume.current,
+            DiagnosticLogger.Outcome.STARTED, DiagnosticLogger.VolumeReason.REQUESTED)
         try {
             audioManager.setStreamVolume(AudioManager.STREAM_SYSTEM, requested, 0)
         } catch (_: SecurityException) {
+            DiagnosticLogger.recordSystemVolume(getApplication(), requested, volume.current,
+                DiagnosticLogger.Outcome.FAILURE, DiagnosticLogger.VolumeReason.SECURITY_BLOCKED,
+                SystemClock.elapsedRealtime() - started)
             _uiState.update { it.copy(systemVolume = volume.copy(
                 error = getApplication<Application>().getString(R.string.system_volume_permission_blocked)
             )) }
             return volume.current
         } catch (_: RuntimeException) {
+            DiagnosticLogger.recordSystemVolume(getApplication(), requested, volume.current,
+                DiagnosticLogger.Outcome.FAILURE, DiagnosticLogger.VolumeReason.CHANGE_FAILED,
+                SystemClock.elapsedRealtime() - started)
             _uiState.update { it.copy(systemVolume = volume.copy(
                 error = getApplication<Application>().getString(R.string.system_volume_change_failed)
             )) }
@@ -129,6 +147,16 @@ class MainScreenViewModel internal constructor(
                 }
             }
             val actual = readSystemVolume()
+            val reason = when {
+                actual.current == null -> DiagnosticLogger.VolumeReason.READ_FAILED
+                actual.isRingerMuted -> DiagnosticLogger.VolumeReason.RINGER_MUTED
+                actual.current == requested -> DiagnosticLogger.VolumeReason.INDEX_APPLIED
+                actual.isStreamMuted && isDoNotDisturbEnabled() -> DiagnosticLogger.VolumeReason.DND_BLOCKED
+                else -> DiagnosticLogger.VolumeReason.NOT_APPLIED
+            }
+            DiagnosticLogger.recordSystemVolume(getApplication(), requested, actual.current,
+                if (reason == DiagnosticLogger.VolumeReason.INDEX_APPLIED) DiagnosticLogger.Outcome.SUCCESS
+                else DiagnosticLogger.Outcome.FAILURE, reason, SystemClock.elapsedRealtime() - started)
             val updated = if (actual.current != null && actual.current != requested && !actual.isRingerMuted) {
                 actual.copy(error = getApplication<Application>().getString(
                     if (actual.isStreamMuted && isDoNotDisturbEnabled()) {

@@ -58,6 +58,8 @@ object DiagnosticReportBuilder {
             appendLine("로컬 네트워크 접근: ${yesNo(LocalNetworkAccess.isGranted(context))}")
             appendLine("마지막 ADB 연결 포트: ${if (prefs.lastConnectPort in 1..65535) "저장됨" else "저장 안 됨"}")
             appendLine()
+            appendLine(AudioDiagnosticSnapshot.read(context).format())
+            appendLine()
             appendLine("[최근 진단 이벤트]")
             if (events.isEmpty()) {
                 appendLine("기록된 진단 이벤트가 없습니다.")
