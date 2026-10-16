@@ -274,7 +274,7 @@ private fun SetupStepRow(
             ) {
                 Text(
                     text = when (state) {
-                        StepVisualState.COMPLETE -> "✓"
+                        StepVisualState.COMPLETE -> "V"
                         StepVisualState.ERROR -> "!"
                         else -> number.toString()
                     },
