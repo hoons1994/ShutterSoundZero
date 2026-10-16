@@ -46,6 +46,7 @@ class SetupSettingsNavigatorInstrumentedTest {
         val context = RecordingContext(application, failures = 0)
         assertTrue(SetupSettingsNavigator.openAppPermissionSettings(context).isSuccess)
         assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, context.attempts.single().action)
+        assertEquals("com.android.settings", context.attempts.single().`package`)
         assertEquals("package:${application.packageName}", context.attempts.single().data.toString())
         assertTrue(SetupSettingsNavigator.openAppPermissionSettings(RecordingContext(application, Int.MAX_VALUE)).isFailure)
     }
