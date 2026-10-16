@@ -47,6 +47,7 @@ class SetupSettingsNavigatorInstrumentedTest {
         assertTrue(SetupSettingsNavigator.openAppPermissionSettings(context).isSuccess)
         assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, context.attempts.single().action)
         assertEquals("com.android.settings", context.attempts.single().`package`)
+        assertTrue(context.attempts.single().flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
         assertEquals("package:${application.packageName}", context.attempts.single().data.toString())
         assertTrue(SetupSettingsNavigator.openAppPermissionSettings(RecordingContext(application, Int.MAX_VALUE)).isFailure)
     }

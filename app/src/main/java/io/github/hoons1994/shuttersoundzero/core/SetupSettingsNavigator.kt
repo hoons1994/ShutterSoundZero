@@ -20,10 +20,9 @@ object SetupSettingsNavigator {
 
     fun appPermissionSettingsIntent(context: Context): Intent =
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-            Uri.fromParts("package", context.packageName, null)).apply {
-            setPackage(SETTINGS_PACKAGE)
-            flags = settingsTaskFlags(context)
-        }
+            Uri.fromParts("package", context.packageName, null))
+            .setPackage(SETTINGS_PACKAGE)
+            .setFlags(settingsTaskFlags(context))
 
     /** 휴대전화 정보 화면을 열고 소프트웨어 정보 항목을 강조한다. */
     fun openSoftwareInfoSettings(context: Context): Result<Unit> = launchSettings(primary = {
