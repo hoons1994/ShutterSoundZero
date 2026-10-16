@@ -338,6 +338,16 @@
             <pgp value="FB35C8D02B4724DADA23DE0AFD116C1969FCCFF3"/>
          </artifact>
       </component>
+      <component group="org.json" name="json" version="20260814">
+         <artifact name="json-20260814.jar">
+            <sha256 value="7dd2de1533e766e2b6c07d8194da85145ad313a167a4760050f5c9b6839604fe" origin="Maven Central" reason="Verified with the existing JSON-java signing key"/>
+            <pgp value="FB35C8D02B4724DADA23DE0AFD116C1969FCCFF3"/>
+         </artifact>
+         <artifact name="json-20260814.pom">
+            <sha256 value="61937e25d261f93d16e8d9f5ccdb1b700780ec1ccb4876444654736628c62095" origin="Maven Central" reason="Verified with the existing JSON-java signing key"/>
+            <pgp value="FB35C8D02B4724DADA23DE0AFD116C1969FCCFF3"/>
+         </artifact>
+      </component>
       <component group="org.ow2" name="ow2" version="1.5.1">
          <artifact name="ow2-1.5.1.pom">
             <pgp value="10F3C7A02ECA55E502BADCF3991EFB94DB91127D"/>

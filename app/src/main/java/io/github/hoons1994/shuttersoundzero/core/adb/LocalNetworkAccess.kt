@@ -16,9 +16,13 @@ internal object LocalNetworkAccess {
     const val PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
 
     fun isGranted(context: Context): Boolean {
-        return !requiresRuntimePermission(Build.VERSION.SDK_INT) ||
+        return isGranted(Build.VERSION.SDK_INT) {
             ContextCompat.checkSelfPermission(context, PERMISSION) == PackageManager.PERMISSION_GRANTED
+        }
     }
+
+    internal fun isGranted(sdkInt: Int, checkPermission: () -> Boolean): Boolean =
+        !requiresRuntimePermission(sdkInt) || checkPermission()
 
     fun requireGranted(context: Context) {
         if (!isGranted(context)) {
