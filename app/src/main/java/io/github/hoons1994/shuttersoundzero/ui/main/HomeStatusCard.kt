@@ -43,10 +43,12 @@ internal fun StatusHeroCard(
     val hasSetupIssue = status == HomeStatus.SETUP_REQUIRED && setupIssue != null
     val title = when (status) {
         HomeStatus.APPLYING -> stringResource(R.string.camera_settings_applying)
-        HomeStatus.READY -> "카메라 무음 설정 완료"
+        HomeStatus.READY -> "카메라 설정값 적용 완료"
         HomeStatus.REAPPLY_REQUIRED -> "카메라 무음 다시 적용 필요"
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_unknown_title)
-        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
+        HomeStatus.SETUP_REQUIRED -> if (setupIssue == SetupIssue.CAMERA_APPLY) {
+            "연결·설정을 다시 시도해 주세요"
+        } else if (hasSetupIssue) {
             "1회 설정을 다시 진행해 주세요"
         } else {
             "처음 한 번만 설정해 주세요"
@@ -54,7 +56,7 @@ internal fun StatusHeroCard(
     }
     val subtitle = when (status) {
         HomeStatus.APPLYING -> "실제 적용 상태를 확인하고 있습니다. 완료될 때까지 기다려 주세요."
-        HomeStatus.READY -> "진동·무음 모드에서 촬영음이 나지 않도록 설정되어 있습니다."
+        HomeStatus.READY -> "셔터음 강제 설정값이 해제되어 있습니다. [카메라 열어보기]로 실제 촬영음을 확인해 주세요."
         HomeStatus.REAPPLY_REQUIRED -> when (isWirelessDebuggingEnabled) {
             true -> "앱 권한은 유지되어 있습니다. [다시 적용하기]를 눌러 주세요."
             false -> "앱 권한은 유지되어 있습니다. 무선 디버깅을 켠 뒤 [다시 적용하기]를 눌러 주세요."
@@ -69,7 +71,7 @@ internal fun StatusHeroCard(
     }
     val badgeText = when (status) {
         HomeStatus.APPLYING -> "처리 중"
-        HomeStatus.READY -> "정상"
+        HomeStatus.READY -> "설정값 확인됨"
         HomeStatus.REAPPLY_REQUIRED -> "조치 필요"
         HomeStatus.STATE_UNKNOWN -> "확인 필요"
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "확인 필요" else "설정 필요"
@@ -86,7 +88,11 @@ internal fun StatusHeroCard(
         HomeStatus.READY -> null
         HomeStatus.REAPPLY_REQUIRED -> "다시 적용하기"
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_retry)
-        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "1회 설정 다시 시작" else "1회 설정 시작"
+        HomeStatus.SETUP_REQUIRED -> when {
+            setupIssue == SetupIssue.CAMERA_APPLY -> "연결·설정 재시도"
+            hasSetupIssue -> "1회 설정 다시 시작"
+            else -> "1회 설정 시작"
+        }
     }
 
     Card(
@@ -120,7 +126,7 @@ internal fun StatusHeroCard(
 
             if (status == HomeStatus.READY) {
                 Text(
-                    text = "앱을 종료해도 설정은 유지됩니다. 소리 모드에서는 시스템 음량에 따라 촬영음이 들릴 수 있습니다.",
+                    text = "앱을 종료해도 설정값은 유지됩니다. 실제 촬영음은 기기·카메라 앱과 소리 상태에 따라 달라질 수 있습니다. 소리 모드에서는 시스템 음량도 확인해 주세요.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 18.sp

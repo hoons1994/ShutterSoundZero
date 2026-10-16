@@ -61,6 +61,9 @@ internal class PairingWorkflowFeedback(
                     DiagnosticLogger.Outcome.STARTED
                 )
             }
+            PairingEvent.ApplyRetrying -> {
+                PairingNotificationHelper.showProgressNotification(context)
+            }
             PairingEvent.ApplySucceeded -> {
                 onCompleting()
                 prefs.lastSetupIssue = null
@@ -115,7 +118,7 @@ internal class PairingWorkflowFeedback(
                     context,
                     state = PairingNotificationState.CAMERA_APPLY_FAILED
                 )
-                restartPairingDiscovery()
+                // Code authentication already succeeded. Keep recovery on the connection/apply step.
             }
             is PairingEvent.PairingFailed -> {
                 val localNetworkPermissionMissing =
@@ -144,7 +147,7 @@ internal class PairingWorkflowFeedback(
                     DiagnosticLogger.Stage.PAIRING_WORKFLOW,
                     DiagnosticLogger.Outcome.TIMEOUT
                 )
-                Log.w(TAG, "Pairing timed out after 25 seconds")
+                Log.w(TAG, "Pairing workflow exceeded its time limit")
                 PairingNotificationHelper.showPairingNotification(
                     context,
                     state = PairingNotificationState.PAIRING_TIMEOUT

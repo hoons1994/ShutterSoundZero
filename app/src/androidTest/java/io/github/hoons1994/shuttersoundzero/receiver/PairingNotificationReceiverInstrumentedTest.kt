@@ -22,6 +22,16 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PairingNotificationReceiverInstrumentedTest {
+    @Test fun authenticatedRecoveryOffersApplyRetryWithoutCodeEntry() {
+        for (state in listOf(PairingNotificationState.CONNECTION_RETRY, PairingNotificationState.CAMERA_APPLY_FAILED)) {
+            val notification = PairingNotificationHelper.buildPairingNotification(baseContext, pairingPort = 37123, state = state)
+            assertFalse(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
+            val retry = notification.actions.orEmpty().single { it.title.toString() == "연결·설정 재시도" }
+            if (android.os.Build.VERSION.SDK_INT >= 31) assertTrue(retry.actionIntent.isImmutable)
+            assertTrue(retry.remoteInputs.isNullOrEmpty())
+        }
+    }
+
     @Test fun identityFailureDoesNotOfferCodeEntryEvenWhenAPortIsRediscovered() {
         val notification = PairingNotificationHelper.buildPairingNotification(baseContext, pairingPort = 37123,
             state = PairingNotificationState.PAIRING_IDENTITY_FAILED)
@@ -214,9 +224,11 @@ class PairingNotificationReceiverInstrumentedTest {
             notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
         )
         assertEquals(
-            "앱 설정에서 로컬 네트워크 권한을 허용한 뒤 1회 설정을 다시 시작해 주세요.",
+            "[앱 권한 설정]에서 [근처 기기]를 허용한 뒤 앱으로 돌아와 1회 설정을 계속해 주세요. 기기에 따라 [로컬 네트워크]로 표시될 수 있습니다.",
             notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
         )
+        assertNotNull(notification.contentIntent)
+        assertTrue(notification.actions.orEmpty().any { it.title.toString() == "앱 권한 설정" })
     }
 
     @Test
