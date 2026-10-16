@@ -2,6 +2,7 @@ package io.github.hoons1994.shuttersoundzero.logging
 
 import android.content.Context
 import io.github.muntashirakon.adb.PairingFailureException
+import io.github.hoons1994.shuttersoundzero.core.adb.AdbServiceNotFoundException
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -42,6 +43,7 @@ object DiagnosticLogger {
         CSC_REAPPLY,
         CSC_RESTORE,
         WIRELESS_DEBUGGING_CLEANUP,
+        SYSTEM_VOLUME_CHANGE,
         PAIRING_WORKFLOW
     }
 
@@ -53,6 +55,26 @@ object DiagnosticLogger {
         TIMEOUT,
         CANCELLED
     }
+
+    enum class VolumeReason {
+        REQUESTED, INDEX_APPLIED, READ_FAILED, FIXED, RINGER_MUTED, NO_RANGE,
+        SECURITY_BLOCKED, CHANGE_FAILED, DND_BLOCKED, NOT_APPLIED
+    }
+
+    fun recordSystemVolume(
+        context: Context, requested: Int, actual: Int?, outcome: Outcome,
+        reason: VolumeReason, durationMillis: Long? = null
+    ) {
+        val line = formatSystemVolume(requested, actual, outcome, reason,
+            formatTimestamp(System.currentTimeMillis()), durationMillis)
+        save(context) { it + line }
+    }
+
+    internal fun formatSystemVolume(
+        requested: Int, actual: Int?, outcome: Outcome, reason: VolumeReason,
+        timestamp: String, durationMillis: Long? = null
+    ): String = formatEvent(Stage.SYSTEM_VOLUME_CHANGE, outcome, null, timestamp, durationMillis) +
+        " | requested=$requested | actual=${actual ?: "unknown"} | reason=${reason.name}"
 
     private const val DIRECTORY_NAME = "diagnostics"
     private const val FILE_NAME = "events.log"
@@ -103,6 +125,11 @@ object DiagnosticLogger {
             if (error is PairingFailureException) {
                 append(" | reason=")
                 append(error.reason.name)
+            }
+            if (error is AdbServiceNotFoundException) {
+                append(" | reason=")
+                append(error.reason.name)
+                error.nsdErrorCode?.let { append(" | nsd_error=$it") }
             }
             if (durationMillis != null) {
                 append(" | duration_ms=")

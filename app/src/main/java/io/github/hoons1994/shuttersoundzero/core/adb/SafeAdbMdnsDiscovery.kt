@@ -18,6 +18,8 @@ internal class SafeAdbMdnsDiscovery(
     private val serviceType: String,
     private val onFailure: (Int) -> Unit = {},
     private val onLost: (String) -> Unit = {},
+    private val onServiceFound: () -> Unit = {},
+    private val onFailureDetail: (AdbDiscoveryReason, Int?) -> Unit = { _, _ -> },
     private val onDiscovered: (InetAddress, Int, String) -> Unit
 ) {
     companion object {
@@ -48,6 +50,7 @@ internal class SafeAdbMdnsDiscovery(
             services.clear()
             registration.onStartFailed()
             resolver.cancel(resolutionOwner)
+            onFailureDetail(AdbDiscoveryReason.START_FAILED, errorCode)
             onFailure(errorCode)
             Log.w(TAG, "mDNS discovery start failed ($errorCode)")
         }
@@ -67,6 +70,7 @@ internal class SafeAdbMdnsDiscovery(
 
         override fun onServiceFound(serviceInfo: NsdServiceInfo) {
             if (!registration.shouldDeliverCallbacks()) return
+            onServiceFound()
             resolve(serviceInfo)
         }
 
@@ -127,6 +131,7 @@ internal class SafeAdbMdnsDiscovery(
                     if (registration.shouldDeliverCallbacks()) {
                         val address = resolved.host
                         if (address != null) onDiscovered(address, resolved.port, key)
+                        else onFailureDetail(AdbDiscoveryReason.INVALID_ENDPOINT, null)
                     }
                 }
             },
@@ -134,6 +139,7 @@ internal class SafeAdbMdnsDiscovery(
                 services.deliverIfCurrent(key, token) {
                     if (registration.shouldDeliverCallbacks()) {
                         Log.w(TAG, "mDNS resolution failed ($errorCode)")
+                        onFailureDetail(AdbDiscoveryReason.RESOLVE_FAILED, errorCode)
                         onFailure(errorCode)
                     }
                 }
