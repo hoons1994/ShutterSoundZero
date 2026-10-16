@@ -6,7 +6,7 @@ internal const val PAIRING_RECOVERY_LABEL = "6자리 코드로 다시 연결"
 enum class CameraMuteFailure(val title: String, val message: String) {
     LOCAL_NETWORK_PERMISSION(
         "앱 권한을 확인해 주세요",
-        "카메라 설정을 바꾸려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용한 뒤 다시 시도해 주세요."
+        "카메라 설정을 바꾸려면 로컬 네트워크 권한이 필요합니다. [앱 권한 설정]에서 [근처 기기]를 허용해 주세요. 기기에 따라 [로컬 네트워크]로 표시될 수 있습니다."
     ),
     DISCOVERY(
         "무선 디버깅 연결을 찾지 못했어요",

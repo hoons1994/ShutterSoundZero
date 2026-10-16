@@ -20,6 +20,38 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class SetupSettingsNavigatorInstrumentedTest {
+    @Test fun homeApplyRetryPreservesSavedEndpointAndDoesNotAskForAnotherCode() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val prefs = PreferencesRepository.getInstance(application)
+            val savedPort = prefs.lastConnectPort
+            val savedIssue = prefs.lastSetupIssue
+            try {
+                val viewModel = MainScreenViewModel(application)
+                prefs.lastConnectPort = 43210
+                prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
+                val context = RecordingContext(application, 0)
+                viewModel.startNotificationPairing(context)
+                assertEquals(43210, prefs.lastConnectPort)
+                assertEquals(SetupIssue.CAMERA_APPLY, prefs.lastSetupIssue)
+                assertTrue(context.serviceIntent!!.getBooleanExtra("resume_apply", false))
+                assertFalse(viewModel.uiState.value.infoMessage.orEmpty().contains("[코드 입력]"))
+            } finally {
+                prefs.lastConnectPort = savedPort
+                prefs.lastSetupIssue = savedIssue
+            }
+        }
+    }
+
+    @Test fun permissionSettingsTargetsOnlyThisAppAndReportsUnavailableSettings() {
+        val context = RecordingContext(application, failures = 0)
+        assertTrue(SetupSettingsNavigator.openAppPermissionSettings(context).isSuccess)
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, context.attempts.single().action)
+        assertEquals("com.android.settings", context.attempts.single().`package`)
+        assertTrue(context.attempts.single().flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+        assertEquals("package:${application.packageName}", context.attempts.single().data.toString())
+        assertTrue(SetupSettingsNavigator.openAppPermissionSettings(RecordingContext(application, Int.MAX_VALUE)).isFailure)
+    }
+
     private val application: Application get() = ApplicationProvider.getApplicationContext()
 
     @Test fun primarySettingsLaunchKeepsItsIntentAndDoesNotRetry() {
@@ -89,12 +121,14 @@ class SetupSettingsNavigatorInstrumentedTest {
         val attempts = mutableListOf<Intent>()
         val events = mutableListOf<String>()
         var serviceStarts = 0
+        var serviceIntent: Intent? = null
         override fun startActivity(intent: Intent) {
             attempts.add(intent)
             events.add("settings")
             if (attempts.size <= failures) throw ActivityNotFoundException("injected settings launch failure")
         }
         override fun startForegroundService(service: Intent): ComponentName? {
+            serviceIntent = Intent(service)
             serviceStarts++
             events.add("service")
             return service.component

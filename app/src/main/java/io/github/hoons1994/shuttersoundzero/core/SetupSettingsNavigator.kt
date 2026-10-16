@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 
 /** 1회 설정에 필요한 Android 설정 화면으로 이동한다. */
@@ -12,6 +13,16 @@ object SetupSettingsNavigator {
     private const val SETTINGS_FRAGMENT_ARG_KEY = ":settings:fragment_args_key"
     private const val SOFTWARE_INFO_PREFERENCE_KEY = "software_info"
     private const val WIRELESS_DEBUGGING_PREFERENCE_KEY = "toggle_adb_wireless"
+
+    fun openAppPermissionSettings(context: Context): Result<Unit> = launchSettings(primary = {
+        context.startActivity(appPermissionSettingsIntent(context))
+    })
+
+    fun appPermissionSettingsIntent(context: Context): Intent =
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null))
+            .setPackage(SETTINGS_PACKAGE)
+            .setFlags(settingsTaskFlags(context))
 
     /** 휴대전화 정보 화면을 열고 소프트웨어 정보 항목을 강조한다. */
     fun openSoftwareInfoSettings(context: Context): Result<Unit> = launchSettings(primary = {

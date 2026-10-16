@@ -55,10 +55,10 @@ internal class CameraSettingsOperationViewModel(
                     appliedMutedState = mute
                     val cleanup = result.getOrThrow().wirelessCleanup
                     resultMessage = when {
-                        mute && cleanup.isSuccess -> "카메라 무음 설정을 다시 적용했습니다."
-                        !mute && cleanup.isSuccess -> "카메라 셔터음을 기본 상태로 복원했습니다."
-                        mute -> "카메라 무음 설정은 적용했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
-                        else -> "카메라 셔터음은 복원했습니다. 무선 디버깅은 기기 설정에서 직접 꺼 주세요."
+                        mute && cleanup.isSuccess -> "카메라 설정값을 다시 적용했습니다. 실제 촬영음을 확인해 주세요."
+                        !mute && cleanup.isSuccess -> "셔터음 강제 설정값을 기본 상태로 복원했습니다."
+                        mute -> "카메라 설정값은 적용했습니다. 실제 촬영음을 확인하고 무선 디버깅은 직접 꺼 주세요."
+                        else -> "셔터음 강제 설정값은 복원했습니다. 무선 디버깅은 직접 꺼 주세요."
                     }
                 } else {
                     failure = CameraMuteFailure.from(result.exceptionOrNull())
