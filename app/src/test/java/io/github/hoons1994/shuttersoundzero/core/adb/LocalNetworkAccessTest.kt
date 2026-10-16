@@ -5,6 +5,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LocalNetworkAccessTest {
+    @Test fun settingsReturnAndRevocationAreReadWithoutCachingPermission() {
+        var granted = false
+        assertFalse(LocalNetworkAccess.isGranted(37) { granted })
+        granted = true
+        assertTrue(LocalNetworkAccess.isGranted(37) { granted })
+        granted = false
+        assertFalse(LocalNetworkAccess.isGranted(37) { granted })
+    }
+
+    @Test fun preAndroid17DoesNotCheckAnUnsupportedPermission() {
+        assertTrue(LocalNetworkAccess.isGranted(36) { error("permission must not be queried") })
+    }
+
 
     @Test
     fun runtimePermission_isRequiredOnlyFromAndroid17() {

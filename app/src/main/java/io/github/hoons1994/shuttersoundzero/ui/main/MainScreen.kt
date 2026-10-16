@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -52,6 +53,8 @@ import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 import io.github.hoons1994.shuttersoundzero.core.WifiConnectionStatus
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
+import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
+import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import io.github.hoons1994.shuttersoundzero.ui.components.CameraMuteFailureDialog
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
 
@@ -76,16 +79,26 @@ fun MainScreen(
         viewModel.startNotificationPairing(context)
     }
 
+    var resumePairingAfterPermissionSettings by rememberSaveable { mutableStateOf(false) }
+    val permissionSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val resume = resumePairingAfterPermissionSettings
+        resumePairingAfterPermissionSettings = false
+        if (resume) {
+            if (LocalNetworkAccess.isGranted(context)) startPairing()
+            else viewModel.reportLocalNetworkPermissionDenied()
+        }
+    }
+
     val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
+    ) { _ ->
+        if (LocalNetworkAccess.isGranted(context)) {
             startPairing()
         } else {
             viewModel.reportLocalNetworkPermissionDenied()
             Toast.makeText(
                 context,
-                "기기 연결을 위해 로컬 네트워크 권한이 필요합니다. [앱 설정]에서 허용해 주세요.",
+                "기기 연결을 위해 [앱 설정 → 권한 → 근처 기기]를 허용해 주세요. 기기에 따라 [로컬 네트워크]로 표시될 수 있습니다.",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -261,12 +274,13 @@ fun MainScreen(
                 viewModel.handleSettingsLaunch(SetupSettingsNavigator.openSoftwareInfoSettings(context))
             },
             onOpenAppSettings = {
-                context.startActivity(
-                    Intent(
-                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        android.net.Uri.fromParts("package", context.packageName, null)
-                    )
-                )
+                resumePairingAfterPermissionSettings = uiState.setupIssue == SetupIssue.LOCAL_NETWORK_PERMISSION
+                try {
+                    permissionSettingsLauncher.launch(SetupSettingsNavigator.appPermissionSettingsIntent(context))
+                } catch (_: Exception) {
+                    resumePairingAfterPermissionSettings = false
+                    viewModel.handleSettingsLaunch(Result.failure(IllegalStateException()))
+                }
             },
             onSystemVolumeChange = viewModel::setSystemVolume,
             onOpenSoundSettings = {

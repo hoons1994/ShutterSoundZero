@@ -138,14 +138,18 @@ class StandaloneAdbManager(context: Context) {
         serviceType: String,
         onFailure: (Int) -> Unit = {},
         onLost: (String) -> Unit = {},
+        onServiceFound: () -> Unit = {},
+        onFailureDetail: (AdbDiscoveryReason, Int?) -> Unit = { _, _ -> },
         onDiscovered: (InetAddress, Int, String) -> Unit
     ): SafeAdbMdnsDiscovery {
         LocalNetworkAccess.requireGranted(context)
-        return SafeAdbMdnsDiscovery(context, serviceType, onFailure, onLost) { address, port, service ->
-            if (LocalAdbEndpointPolicy.isLocalDeviceAddress(address) && port in 1..65535) {
+        return SafeAdbMdnsDiscovery(context, serviceType, onFailure, onLost, onServiceFound, onFailureDetail) { address, port, service ->
+            val local = LocalAdbEndpointPolicy.isLocalDeviceAddress(address)
+            if (local && port in 1..65535) {
                 logSensitive { "Local mDNS endpoint: $address:$port for $serviceType" }
                 onDiscovered(address, port, service)
             } else {
+                onFailureDetail(if (local) AdbDiscoveryReason.INVALID_ENDPOINT else AdbDiscoveryReason.NO_LOCAL_ENDPOINT, null)
                 Log.w(TAG, "Ignoring invalid or non-local mDNS service")
             }
         }.also { it.start() }
@@ -198,16 +202,20 @@ class StandaloneAdbManager(context: Context) {
         }
 
     private suspend fun <T> diagnosed(stage: DiagnosticLogger.Stage, block: suspend () -> T): T {
+        val started = SystemClock.elapsedRealtime()
         DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.STARTED)
         try {
             return block().also {
-                DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.SUCCESS)
+                DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.SUCCESS,
+                    durationMillis = SystemClock.elapsedRealtime() - started)
             }
         } catch (error: CancellationException) {
-            DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.CANCELLED)
+            DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.CANCELLED,
+                durationMillis = SystemClock.elapsedRealtime() - started)
             throw error
         } catch (error: Exception) {
-            DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.FAILURE, error)
+            DiagnosticLogger.record(context, stage, DiagnosticLogger.Outcome.FAILURE, error,
+                durationMillis = SystemClock.elapsedRealtime() - started)
             throw error
         }
     }
@@ -284,7 +292,7 @@ class StandaloneAdbManager(context: Context) {
                 },
                 discover = {
                     diagnosed(DiagnosticLogger.Stage.ADB_CONNECT_DISCOVERY) {
-                        discoverLocalTlsPort(discoveryTimeout) ?: throw AdbServiceNotFoundException()
+                        discoverLocalTlsPort(discoveryTimeout)
                     }
                 }
             )
@@ -335,26 +343,29 @@ class StandaloneAdbManager(context: Context) {
         PreferencesRepository.getInstance(context).lastConnectPort = port
     }
 
-    private suspend fun discoverLocalTlsPort(timeoutMs: Long): Int? {
+    private suspend fun discoverLocalTlsPort(timeoutMs: Long): Int {
         LocalNetworkAccess.requireGranted(context)
         val endpoint = AtomicReference<Pair<InetAddress, Int>?>(null)
-        val failure = AtomicReference<IOException?>(null)
+        val trace = AdbDiscoveryTrace()
         val discovered = CountDownLatch(1)
-        val mdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT, onFailure = {
-            failure.set(IOException("로컬 ADB 서비스 주소를 확인하지 못했습니다. ($it)"))
-        }) { address, port, _ ->
-            if (endpoint.compareAndSet(null, address to port)) discovered.countDown()
+        val mdns = try {
+            startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT,
+                onServiceFound = trace::serviceFound,
+                onFailureDetail = { reason, code ->
+                    trace.failed(reason, code)
+                    // A start failure is terminal; a single resolution failure may still recover.
+                    if (reason == AdbDiscoveryReason.START_FAILED) discovered.countDown()
+                }
+            ) { address, port, _ ->
+                if (endpoint.compareAndSet(null, address to port)) discovered.countDown()
+            }
+        } catch (error: RuntimeException) {
+            throw AdbServiceNotFoundException(error, AdbDiscoveryReason.START_FAILED)
         }
         return try {
-            val found = runInterruptible(Dispatchers.IO) { discovered.await(timeoutMs, TimeUnit.MILLISECONDS) }
-            if (!found) {
-                failure.get()?.let { throw AdbServiceNotFoundException(it) }
-                null
-            } else {
-                // mDNS validates that the service belongs to this device, but only its port is
-                // consumed. Never send credentials to a Wi-Fi address that may later change owner.
-                endpoint.get()?.second
-            }
+            runInterruptible(Dispatchers.IO) { discovered.await(timeoutMs, TimeUnit.MILLISECONDS) }
+            // Only a validated local endpoint wins, even if a failure callback released the latch.
+            endpoint.get()?.second ?: throw trace.failure()
         } finally { mdns.stop() }
     }
 

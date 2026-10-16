@@ -28,9 +28,9 @@
     <string name="main_pairing_code_entry_guidance">[페어링 코드로 기기 페어링] 화면에서 알림의 [코드 입력]을 사용해 6자리 코드를 입력해 주세요.</string>
     <string name="main_write_secure_settings_required">보안 설정 변경 권한이 필요합니다. 아래 [1회 설정 시작]을 진행해 주세요.</string>
     <string name="main_local_network_permission_required">Android 17에서 무선 ADB를 사용하려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용해 주세요.</string>
-    <string name="main_mute_applied_wireless_disabled">카메라 무음 설정을 적용했고 무선 디버깅도 껐습니다.</string>
+    <string name="main_mute_applied_wireless_disabled">카메라 설정값을 적용했고 무선 디버깅도 껐습니다. 실제 촬영음을 확인해 주세요.</string>
     <string name="main_restore_applied_wireless_disabled">카메라 셔터음을 기본 상태로 복원했고 무선 디버깅도 껐습니다.</string>
-    <string name="main_mute_applied_disable_wireless_manually">카메라 무음 설정은 완료됐습니다. 무선 디버깅은 직접 꺼 주세요.</string>
+    <string name="main_mute_applied_disable_wireless_manually">카메라 설정값을 적용했습니다. 실제 촬영음을 확인하고 무선 디버깅은 직접 꺼 주세요.</string>
     <string name="main_restore_applied_disable_wireless_manually">카메라 셔터음은 기본 상태로 복원됐습니다. 무선 디버깅은 직접 꺼 주세요.</string>
     <string name="main_reset_local_network_permission_required">Android 17에서 권한 연동을 해제하려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용해 주세요.</string>
     <string name="main_permission_reset_success">권한 연동이 해제되었습니다. 다시 연동하려면 아래 버튼을 눌러주세요.</string>
@@ -39,11 +39,11 @@
     <string name="tile_action_permission_link_revoked">권한 연동이 해제되어 있습니다. 앱을 열어 다시 연동해 주세요.</string>
     <string name="tile_action_local_network_required">Android 17에서 기기 연결을 위해 로컬 네트워크 권한이 필요합니다. 앱을 열어 권한을 허용해 주세요.</string>
     <string name="tile_action_enable_wireless_debugging">설정을 바꾸려면 무선 디버깅을 잠시 켠 뒤 타일을 다시 눌러 주세요.</string>
-    <string name="tile_action_mute_applied">카메라 무음 설정이 적용되었습니다.</string>
+    <string name="tile_action_mute_applied">카메라 설정값이 적용되었습니다. 실제 촬영음을 확인해 주세요.</string>
     <string name="tile_action_restore_applied">카메라 셔터음이 기본 상태로 복원되었습니다.</string>
-    <string name="tile_action_mute_applied_wireless_disabled">카메라 무음 설정이 적용되었습니다. 무선 디버깅도 껐습니다.</string>
+    <string name="tile_action_mute_applied_wireless_disabled">카메라 설정값이 적용되었습니다. 실제 촬영음을 확인해 주세요. 무선 디버깅도 껐습니다.</string>
     <string name="tile_action_restore_applied_wireless_disabled">카메라 셔터음이 기본 상태로 복원되었습니다. 무선 디버깅도 껐습니다.</string>
-    <string name="tile_action_mute_applied_disable_wireless_manually">카메라 무음 설정이 적용되었습니다. 무선 디버깅은 직접 꺼 주세요.</string>
+    <string name="tile_action_mute_applied_disable_wireless_manually">카메라 설정값이 적용되었습니다. 실제 촬영음을 확인해 주세요. 무선 디버깅은 직접 꺼 주세요.</string>
     <string name="tile_action_restore_applied_disable_wireless_manually">카메라 셔터음이 기본 상태로 복원되었습니다. 무선 디버깅은 직접 꺼 주세요.</string>
     <string name="tile_action_apply_failed">설정 변경 실패: 실제 카메라 설정을 확인하지 못했습니다. 무선 디버깅을 켠 뒤 다시 시도해 주세요.</string>
 
@@ -51,6 +51,10 @@
     <string name="pairing_channel_description">기기 연결과 6자리 코드 입력 등 1회 설정 진행 상태를 안내합니다.</string>
     <string name="pairing_code_input_hint">6자리 코드 (예: 123456)</string>
     <string name="pairing_action_enter_code">코드 입력</string>
+    <string name="pairing_action_permission_settings">앱 권한 설정</string>
+    <string name="pairing_action_retry_apply">연결·설정 재시도</string>
+    <string name="pairing_state_connection_retry">코드 인증 완료 · 연결 확인 필요</string>
+    <string name="pairing_help_connection_retry">코드 인증은 완료됐지만 연결 또는 설정 적용을 마치지 못했습니다. Wi-Fi와 무선 디버깅을 켠 상태에서 [연결·설정 재시도]를 눌러 주세요. 코드를 다시 입력할 필요는 없습니다. 계속 실패하면 앱에서 진단 정보를 보내 주세요.</string>
     <string name="action_cancel">취소</string>
     <string name="pairing_default_dev_options_summary">[소프트웨어 정보]에서 [빌드번호]를 7번 눌러 개발자 옵션을 켜 주세요.</string>
     <string name="pairing_default_code_summary">화면에 표시된 6자리 코드를 [코드 입력]에 입력해 주세요.</string>
@@ -67,7 +71,7 @@
     <string name="pairing_state_discovery_start_failed">페어링 연결 화면을 찾지 못했습니다</string>
     <string name="pairing_state_invalid_code">확인: 숫자 6자리 페어링 코드를 정확히 입력해 주세요.</string>
     <string name="pairing_state_discovery_waiting">페어링 연결 화면을 찾지 못했습니다</string>
-    <string name="pairing_state_camera_apply_failed">주의: 기기 연결은 완료됐지만 카메라 무음 설정을 적용하지 못했습니다.</string>
+    <string name="pairing_state_camera_apply_failed">코드 인증은 완료됐지만 카메라 설정을 적용하지 못했습니다.</string>
     <string name="pairing_state_failed">기기에 연결하지 못했습니다</string>
     <string name="pairing_state_identity_failed">연결 인증 정보를 준비하지 못했습니다</string>
     <string name="pairing_state_tls_failed">보안 연결을 완료하지 못했습니다</string>
@@ -77,28 +81,28 @@
     <string name="pairing_help_authentication">페어링 창을 다시 열고 새 6자리 코드를 입력해 주세요. 창은 코드를 제출할 때까지 열어 두세요.</string>
     <string name="pairing_state_timeout">기기 응답 시간이 초과되었습니다</string>
     <string name="pairing_state_error">기기 연결 중 문제가 발생했습니다</string>
-    <string name="pairing_help_local_network">앱 설정에서 로컬 네트워크 권한을 허용한 뒤 1회 설정을 다시 시작해 주세요.</string>
+    <string name="pairing_help_local_network">[앱 권한 설정]에서 [근처 기기]를 허용한 뒤 앱으로 돌아와 1회 설정을 계속해 주세요. 기기에 따라 [로컬 네트워크]로 표시될 수 있습니다.</string>
     <string name="pairing_help_discovery">Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 다시 열어 둔 채 시도해 주세요.</string>
     <string name="pairing_help_discovery_restart">Wi-Fi와 무선 디버깅을 확인해 주세요. 알림을 눌러 앱으로 돌아간 뒤 [1회 설정 시작]을 다시 눌러 주세요.</string>
     <string name="pairing_help_invalid_code">연결 화면의 숫자 6자리를 확인하고 새 코드가 표시되면 그 코드를 입력해 주세요.</string>
     <string name="pairing_help_connection">페어링 창이 닫혔거나 연결 정보가 바뀌었을 수 있습니다. 창을 다시 열고 새 6자리 코드로 시도해 주세요.</string>
     <string name="pairing_help_timeout">Wi-Fi와 무선 디버깅을 확인한 뒤 페어링 창을 다시 열고 새 코드로 시도해 주세요.</string>
-    <string name="pairing_help_camera_apply">무선 디버깅을 켠 상태에서 홈의 1회 설정을 다시 시작해 주세요.</string>
+    <string name="pairing_help_camera_apply">무선 디버깅을 켠 상태에서 [연결·설정 재시도]를 눌러 주세요. 계속 실패하면 앱에서 진단 정보를 보내 주세요.</string>
     <string name="pairing_state_next_step">무선 디버깅을 켠 뒤 [페어링 코드로 기기 페어링]을 열어 주세요.</string>
     <string name="pairing_code_entry_detail">[코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요.</string>
     <string name="pairing_continue_setup_detail">홈 화면의 안내에 따라 1회 설정을 계속해 주세요.</string>
     <string name="pairing_progress_title">카메라 무음 설정 적용 중</string>
     <string name="pairing_progress_text">기기 연결을 확인하고 카메라 설정을 적용하고 있습니다.</string>
-    <string name="pairing_success_title">%1$s: 설정 완료</string>
-    <string name="pairing_success_wireless_disabled">카메라 무음 설정이 완료되었습니다. 앱을 계속 열어둘 필요가 없습니다.</string>
-    <string name="pairing_success_disable_wireless_manually">카메라 무음 설정은 완료되었습니다. 기기 설정에서 무선 디버깅을 직접 꺼 주세요.</string>
+    <string name="pairing_success_title">%1$s: 설정값 적용 완료</string>
+    <string name="pairing_success_wireless_disabled">카메라 설정값을 적용했습니다. 실제 촬영음을 확인해 주세요. 앱은 종료해도 됩니다.</string>
+    <string name="pairing_success_disable_wireless_manually">카메라 설정값을 적용했습니다. 실제 촬영음을 확인하고 무선 디버깅은 직접 꺼 주세요.</string>
     <string name="pairing_public_title_completed">ShutterSoundZero 알림</string>
     <string name="pairing_public_title_in_progress">1회 설정 진행 중</string>
     <string name="pairing_public_text_completed">앱을 열어 결과를 확인하세요.</string>
     <string name="pairing_public_text_in_progress">설정을 계속하려면 기기를 잠금 해제하세요.</string>
 
-    <string name="foreground_pairing_success_wireless_disabled">설정 완료. 카메라 무음 설정을 적용하고 무선 디버깅도 껐습니다.</string>
-    <string name="foreground_pairing_success_disable_wireless_manually">카메라 무음 설정이 완료됐습니다. 무선 디버깅은 직접 꺼 주세요.</string>
+    <string name="foreground_pairing_success_wireless_disabled">카메라 설정값을 적용하고 무선 디버깅도 껐습니다. 실제 촬영음을 확인해 주세요.</string>
+    <string name="foreground_pairing_success_disable_wireless_manually">카메라 설정값을 적용했습니다. 실제 촬영음을 확인하고 무선 디버깅은 직접 꺼 주세요.</string>
 
     <string name="boot_notification_channel_name">카메라 무음 상태 알림</string>
     <string name="boot_notification_channel_description">재부팅·소프트웨어 업데이트 후 카메라 무음 상태 확인 및 재적용 안내</string>
