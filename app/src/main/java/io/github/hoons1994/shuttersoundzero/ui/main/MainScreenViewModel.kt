@@ -31,7 +31,10 @@ import kotlinx.coroutines.launch
 class MainScreenViewModel internal constructor(
     application: Application,
     private val changeCameraMute: ChangeCameraMute,
-    private val cameraSettings: CameraSettingsRepository
+    private val cameraSettings: CameraSettingsRepository,
+    private val isSamsungDevice: () -> Boolean = CscMuteManager::isSamsungDevice,
+    private val localNetworkGranted: (Context) -> Boolean = LocalNetworkAccess::isGranted,
+    private val wirelessDebuggingState: (Context) -> Boolean? = DeveloperOptionsManager::readWirelessDebuggingEnabled
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(
         application, AppDependencies.changeCameraMute(application), AppDependencies.cameraSettings(application)
@@ -56,7 +59,7 @@ class MainScreenViewModel internal constructor(
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
             isDeveloperOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(app),
-            isWirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app),
+            isWirelessDebuggingEnabled = wirelessDebuggingState(app),
             setupIssue = prefs.lastSetupIssue,
             systemVolume = readSystemVolume()
         )
@@ -66,7 +69,7 @@ class MainScreenViewModel internal constructor(
         val app = getApplication<Application>()
         val perm = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
         val isMuted = CscMuteManager.readCscMutedState(app)
-        val wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app)
+        val wirelessDebuggingEnabled = wirelessDebuggingState(app)
 
         if (perm && isMuted == true && prefs.lastSetupIssue != null) {
             prefs.lastSetupIssue = null
@@ -201,6 +204,7 @@ class MainScreenViewModel internal constructor(
             it.copy(
                 setupIssue = if (resumeApply) SetupIssue.CAMERA_APPLY else null,
                 cameraMuteFailure = null,
+                pendingCameraMuteTarget = null,
                 showSwitchFailureHelp = false,
                 showWirelessDebuggingCleanupHelp = false
             )
@@ -235,8 +239,9 @@ class MainScreenViewModel internal constructor(
     fun toggleCscMute(enableMute: Boolean) {
         if (_uiState.value.isCscChangeInProgress) return
         val app = getApplication<Application>()
+        _uiState.update { it.copy(pendingCameraMuteTarget = null) }
 
-        if (!CscMuteManager.isSamsungDevice()) {
+        if (!isSamsungDevice()) {
             _uiState.update {
                 it.copy(errorMessage = app.getString(R.string.main_non_samsung_device_error))
             }
@@ -250,18 +255,12 @@ class MainScreenViewModel internal constructor(
             return
         }
 
-        if (!LocalNetworkAccess.isGranted(app)) {
-            _uiState.update {
-                it.copy(
-                    showSwitchFailureHelp = false,
-                    infoMessage = null,
-                    errorMessage = app.getString(R.string.main_local_network_permission_required)
-                )
-            }
+        if (!localNetworkGranted(app)) {
+            reportCameraMutePermissionRequired(enableMute)
             return
         }
 
-        val wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app)
+        val wirelessDebuggingEnabled = wirelessDebuggingState(app)
         if (wirelessDebuggingEnabled != true) {
             _uiState.update {
                 it.copy(
@@ -269,6 +268,7 @@ class MainScreenViewModel internal constructor(
                     showSwitchFailureHelp = wirelessDebuggingEnabled == false,
                     showWirelessDebuggingCleanupHelp = false,
                     cameraMuteFailure = null,
+                    pendingCameraMuteTarget = enableMute,
                     errorMessage = if (wirelessDebuggingEnabled == null) {
                         app.getString(R.string.wireless_debugging_state_unknown_guidance)
                     } else null,
@@ -283,6 +283,7 @@ class MainScreenViewModel internal constructor(
             it.copy(
                 isCscChangeInProgress = true,
                 cameraMuteFailure = null,
+                pendingCameraMuteTarget = null,
                 showSwitchFailureHelp = false,
                 showWirelessDebuggingCleanupHelp = false
             )
@@ -298,7 +299,7 @@ class MainScreenViewModel internal constructor(
                     val wirelessCleanup = adbResult.getOrThrow().wirelessCleanup
                     _uiState.update {
                         it.copy(
-                            isWirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(app),
+                            isWirelessDebuggingEnabled = wirelessDebuggingState(app),
                             setupIssue = prefs.lastSetupIssue,
                             infoMessage = when {
                                 enableMute && wirelessCleanup.isSuccess ->
@@ -315,10 +316,13 @@ class MainScreenViewModel internal constructor(
                         )
                     }
                 } else {
+                    val failure = CameraMuteFailure.from(adbResult.exceptionOrNull())
                     _uiState.update {
-                        it.copy(
+                        if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
+                            it.awaitCameraMutePermission(enableMute)
+                        } else it.copy(
                             showSwitchFailureHelp = false,
-                            cameraMuteFailure = CameraMuteFailure.from(adbResult.exceptionOrNull()),
+                            cameraMuteFailure = failure,
                             errorMessage = null,
                             infoMessage = null
                         )
@@ -331,12 +335,16 @@ class MainScreenViewModel internal constructor(
         }
     }
 
+    fun reportCameraMutePermissionRequired(enableMute: Boolean) {
+        _uiState.update { it.awaitCameraMutePermission(enableMute) }
+    }
+
     fun dismissCameraMuteFailure() {
-        _uiState.update { it.copy(cameraMuteFailure = null) }
+        _uiState.update { it.copy(cameraMuteFailure = null, pendingCameraMuteTarget = null) }
     }
 
     fun dismissSwitchFailureHelp() {
-        _uiState.update { it.copy(showSwitchFailureHelp = false) }
+        _uiState.update { it.copy(showSwitchFailureHelp = false, pendingCameraMuteTarget = null) }
     }
 
     fun dismissWirelessDebuggingCleanupHelp() {

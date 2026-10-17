@@ -63,30 +63,33 @@ class PairingForegroundService : Service() {
             ContextCompat.startForegroundService(context, intent)
         }
 
-        fun submitCode(context: Context, code: String) {
+        fun submitCode(context: Context, code: String, sessionId: String) {
             val intent = Intent(context, PairingForegroundService::class.java).apply {
                 action = ACTION_SUBMIT_CODE
+                identifier = sessionId
                 putExtra(EXTRA_PAIRING_CODE, code)
             }
             ContextCompat.startForegroundService(context, intent)
         }
 
-        fun stop(context: Context) {
+        fun stop(context: Context, sessionId: String) {
             try {
-                context.startService(stopIntent(context))
-            } catch (_: Exception) {
-                context.stopService(Intent(context, PairingForegroundService::class.java))
-                PairingNotificationHelper.cancelNotification(context)
+                context.startService(stopIntent(context, sessionId))
+            } catch (error: Exception) {
+                // A stale action must never fall back to stopping a replacement session globally.
+                Log.w(TAG, "Unable to deliver pairing cancellation (${error.javaClass.simpleName})")
             }
         }
 
-        fun stopIntent(context: Context): Intent {
+        fun stopIntent(context: Context, sessionId: String): Intent {
             return Intent(ACTION_STOP)
                 .setClass(context, PairingForegroundService::class.java)
+                .setIdentifier(sessionId)
         }
 
-        fun retryApplyIntent(context: Context): Intent =
+        fun retryApplyIntent(context: Context, sessionId: String): Intent =
             Intent(ACTION_RETRY_APPLY).setClass(context, PairingForegroundService::class.java)
+                .setIdentifier(sessionId)
 
     }
 
@@ -119,17 +122,24 @@ class PairingForegroundService : Service() {
             }
             ACTION_SUBMIT_CODE -> {
                 val accepted = session.dispatchCode(
+                    sessionId = intent.identifier,
                     onPair = { submitPairingCode(intent.getStringExtra(EXTRA_PAIRING_CODE).orEmpty().trim()) },
                     onRetryApply = ::retryApply
                 )
-                if (!accepted) stopSelf(startId)
+                if (!accepted && !session.isActive) stopSelf(startId)
             }
             ACTION_RETRY_APPLY -> {
-                if (session.isActive) {
+                val accepted = session.dispatchCommand(intent.identifier) {
                     if (session.hasPaired) retryApply()
-                } else stopSelf(startId)
+                }
+                if (!accepted && !session.isActive) stopSelf(startId)
             }
-            ACTION_STOP -> stopPairing(showSuccess = false, wirelessDebuggingDisabled = false)
+            ACTION_STOP -> {
+                val accepted = session.dispatchCommand(intent.identifier) {
+                    stopPairing(showSuccess = false, wirelessDebuggingDisabled = false)
+                }
+                if (!accepted && !session.isActive) stopSelf(startId)
+            }
             else -> stopSelf(startId)
         }
         return START_NOT_STICKY
@@ -156,6 +166,7 @@ class PairingForegroundService : Service() {
 
         val notification = PairingNotificationHelper.buildPairingNotification(
             this,
+            sessionId = requireNotNull(session.id),
             state = setupState.notificationState,
             isDevOptionsOff = !setupState.developerOptionsEnabled
         )
@@ -257,6 +268,7 @@ class PairingForegroundService : Service() {
             Log.w(TAG, "Unable to start pairing discovery (${e.javaClass.simpleName})")
             PairingNotificationHelper.showPairingNotification(
                 this,
+                sessionId = requireNotNull(session.id),
                 state = if (localNetworkPermissionMissing) {
                     PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED
                 } else {
@@ -280,6 +292,7 @@ class PairingForegroundService : Service() {
             )
             val notification = PairingNotificationHelper.buildPairingNotification(
                 this,
+                sessionId = requireNotNull(session.id),
                 pairingPort = pairingPort,
                 state = PairingNotificationState.INVALID_PAIRING_CODE
             )
@@ -321,6 +334,7 @@ class PairingForegroundService : Service() {
             try {
                 val feedback = PairingWorkflowFeedback(
                     context = this@PairingForegroundService,
+                    sessionId = requireNotNull(session.id),
                     stopPairingDiscovery = ::stopPairingDiscovery,
                     restartPairingDiscovery = ::restartPairingDiscovery,
                     onCompleting = { isPairingCompleting = true },
@@ -467,7 +481,7 @@ class PairingForegroundService : Service() {
         notificationRefresh.observeSetup(state)
         if (session.hasPaired) {
             if (pairingJob == null) {
-                PairingNotificationHelper.showPairingNotification(this, state = applyFailureState)
+                PairingNotificationHelper.showPairingNotification(this, requireNotNull(session.id), state = applyFailureState)
             }
             return
         }
@@ -485,6 +499,7 @@ class PairingForegroundService : Service() {
                 Log.w(TAG, "Asynchronous pairing discovery failed (${update.errorCode})")
                 PairingNotificationHelper.showPairingNotification(
                     this,
+                    sessionId = requireNotNull(session.id),
                     state = PairingNotificationState.DISCOVERY_START_FAILED
                 )
                 return
@@ -510,6 +525,7 @@ class PairingForegroundService : Service() {
         }
         PairingNotificationHelper.showPairingNotification(
             this,
+            sessionId = requireNotNull(session.id),
             pairingPort = port,
             state = if (!state.developerOptionsEnabled || state.wirelessDebuggingEnabled != true) {
                 state.notificationState

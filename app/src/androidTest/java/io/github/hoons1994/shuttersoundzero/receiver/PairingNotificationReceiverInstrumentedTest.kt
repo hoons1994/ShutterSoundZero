@@ -22,9 +22,62 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PairingNotificationReceiverInstrumentedTest {
+    private val sessionId = "test-session"
+
+    @Test fun codeRetryAndStopPendingIntentsDoNotCrossSessionBoundaries() {
+        fun codeNotification(id: String) = PairingNotificationHelper.buildPairingNotification(
+            baseContext, sessionId = id, pairingPort = 37123)
+        fun retryNotification(id: String) = PairingNotificationHelper.buildPairingNotification(
+            baseContext, sessionId = id, state = PairingNotificationState.CONNECTION_RETRY)
+        fun action(notification: Notification, title: String) =
+            notification.actions.orEmpty().single { it.title.toString() == title }.actionIntent
+
+        val old = codeNotification(sessionId)
+        val current = codeNotification("replacement-session")
+        assertFalse(action(old, "코드 입력") == action(current, "코드 입력"))
+        assertFalse(action(old, "취소") == action(current, "취소"))
+        assertEquals(action(old, "코드 입력"), action(codeNotification(sessionId), "코드 입력"))
+        val oldRetry = action(retryNotification(sessionId), "연결·설정 재시도")
+        val currentRetry = action(retryNotification("replacement-session"), "연결·설정 재시도")
+        assertFalse(oldRetry == currentRetry)
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            assertTrue(oldRetry.isImmutable)
+            assertTrue(action(old, "취소").isImmutable)
+            assertFalse(action(old, "코드 입력").isImmutable)
+        }
+    }
+
+    @Test fun mutableReplyFillInCannotReplaceTheFixedSessionIdentity() {
+        val context = RecordingContext(baseContext)
+        val command = PairingNotificationHelper.codeSubmissionIntent(context, sessionId)
+        val fillIn = Intent().setIdentifier("replacement-session")
+            .putExtra("session_id", "replacement-session")
+        val remoteInput = RemoteInput.Builder(PairingNotificationHelper.KEY_PAIRING_CODE).build()
+        RemoteInput.addResultsToIntent(arrayOf(remoteInput), fillIn, Bundle().apply {
+            putCharSequence(PairingNotificationHelper.KEY_PAIRING_CODE, "123456")
+        })
+        command.fillIn(fillIn, 0)
+
+        PairingNotificationReceiver().onReceive(context, command)
+
+        assertEquals(sessionId, context.lastForegroundServiceIntent?.identifier)
+        assertEquals("123456", context.lastForegroundServiceIntent?.getStringExtra("pairing_code"))
+    }
+
+    @Test fun extrasWithoutFixedIdentityCannotSubmitOrCancel() {
+        val context = RecordingContext(baseContext)
+        for (action in listOf(PairingNotificationHelper.ACTION_SUBMIT_PAIRING_CODE,
+            PairingNotificationHelper.ACTION_CANCEL_PAIRING)) {
+            PairingNotificationReceiver().onReceive(context,
+                Intent(action).putExtra("session_id", sessionId))
+            assertNull(context.lastForegroundServiceIntent)
+            assertNull(context.lastStartedServiceIntent)
+        }
+    }
+
     @Test fun authenticatedRecoveryOffersApplyRetryWithoutCodeEntry() {
         for (state in listOf(PairingNotificationState.CONNECTION_RETRY, PairingNotificationState.CAMERA_APPLY_FAILED)) {
-            val notification = PairingNotificationHelper.buildPairingNotification(baseContext, pairingPort = 37123, state = state)
+            val notification = PairingNotificationHelper.buildPairingNotification(baseContext, sessionId = sessionId, pairingPort = 37123, state = state)
             assertFalse(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
             val retry = notification.actions.orEmpty().single { it.title.toString() == "연결·설정 재시도" }
             if (android.os.Build.VERSION.SDK_INT >= 31) assertTrue(retry.actionIntent.isImmutable)
@@ -33,7 +86,7 @@ class PairingNotificationReceiverInstrumentedTest {
     }
 
     @Test fun identityFailureDoesNotOfferCodeEntryEvenWhenAPortIsRediscovered() {
-        val notification = PairingNotificationHelper.buildPairingNotification(baseContext, pairingPort = 37123,
+        val notification = PairingNotificationHelper.buildPairingNotification(baseContext, sessionId = sessionId, pairingPort = 37123,
             state = PairingNotificationState.PAIRING_IDENTITY_FAILED)
         assertEquals("연결 인증 정보를 준비하지 못했습니다",
             notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
@@ -43,9 +96,9 @@ class PairingNotificationReceiverInstrumentedTest {
     }
 
     @Test fun tlsAndCodeAuthenticationFailuresShowDifferentRecoveryInstructions() {
-        val tls = PairingNotificationHelper.buildPairingNotification(baseContext,
+        val tls = PairingNotificationHelper.buildPairingNotification(baseContext, sessionId = sessionId,
             state = PairingNotificationState.PAIRING_TLS_FAILED)
-        val authentication = PairingNotificationHelper.buildPairingNotification(baseContext,
+        val authentication = PairingNotificationHelper.buildPairingNotification(baseContext, sessionId = sessionId,
             state = PairingNotificationState.PAIRING_AUTHENTICATION_FAILED)
         assertTrue(tls.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("날짜·시간"))
         assertFalse(tls.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("6자리"))
@@ -56,6 +109,7 @@ class PairingNotificationReceiverInstrumentedTest {
     fun unreadableWirelessStateDoesNotOfferCodeEntryOrAskToTurnItOn() {
         val notification = PairingNotificationHelper.buildPairingNotification(
             baseContext,
+            sessionId = sessionId,
             state = PairingNotificationState.WIRELESS_DEBUGGING_STATE_UNKNOWN
         )
         assertEquals(
@@ -74,7 +128,7 @@ class PairingNotificationReceiverInstrumentedTest {
     @Test
     fun remoteInput_trimsCodeAndForwardsSubmitCommand() {
         val context = RecordingContext(baseContext)
-        val intent = Intent(PairingNotificationHelper.ACTION_SUBMIT_PAIRING_CODE)
+        val intent = Intent(PairingNotificationHelper.ACTION_SUBMIT_PAIRING_CODE).setIdentifier(sessionId)
         val remoteInput = RemoteInput.Builder(PairingNotificationHelper.KEY_PAIRING_CODE).build()
         val results = Bundle().apply {
             putCharSequence(PairingNotificationHelper.KEY_PAIRING_CODE, " 123456 ")
@@ -90,6 +144,7 @@ class PairingNotificationReceiverInstrumentedTest {
             forwarded.action
         )
         assertEquals("123456", forwarded.getStringExtra("pairing_code"))
+        assertEquals(sessionId, forwarded.identifier)
         assertEquals(PairingForegroundService::class.java.name, forwarded.component?.className)
         assertNull(context.lastStartedServiceIntent)
     }
@@ -100,7 +155,7 @@ class PairingNotificationReceiverInstrumentedTest {
 
         PairingNotificationReceiver().onReceive(
             context,
-            Intent(PairingNotificationHelper.ACTION_CANCEL_PAIRING)
+            Intent(PairingNotificationHelper.ACTION_CANCEL_PAIRING).setIdentifier(sessionId)
         )
 
         val forwarded = context.lastStartedServiceIntent
@@ -110,6 +165,7 @@ class PairingNotificationReceiverInstrumentedTest {
             forwarded.action
         )
         assertEquals(PairingForegroundService::class.java.name, forwarded.component?.className)
+        assertEquals(sessionId, forwarded.identifier)
         assertNull(context.lastForegroundServiceIntent)
     }
 
@@ -131,6 +187,7 @@ class PairingNotificationReceiverInstrumentedTest {
     fun pairingNotification_hidesInternalPortAndFocusesOnCodeEntry() {
         val notification = PairingNotificationHelper.buildPairingNotification(
             baseContext,
+            sessionId = sessionId,
             pairingPort = 37123
         )
 
@@ -148,6 +205,7 @@ class PairingNotificationReceiverInstrumentedTest {
     fun developerOptionsReadyState_exposesCurrentNextStepWithoutLegacyCopy() {
         val notification = PairingNotificationHelper.buildPairingNotification(
             baseContext,
+            sessionId = sessionId,
             state = PairingNotificationState.DEVELOPER_OPTIONS_READY,
             isDevOptionsOff = true
         )
@@ -167,6 +225,7 @@ class PairingNotificationReceiverInstrumentedTest {
     fun wirelessDebuggingReady_advancesGuidanceWithoutExposingCodeEntryBeforeDiscovery() {
         val notification = PairingNotificationHelper.buildPairingNotification(
             baseContext,
+            sessionId = sessionId,
             state = PairingNotificationState.WIRELESS_DEBUGGING_READY
         )
 
@@ -185,6 +244,7 @@ class PairingNotificationReceiverInstrumentedTest {
     fun pairingFailureState_asksForFreshPairingWindow() {
         val notification = PairingNotificationHelper.buildPairingNotification(
             baseContext,
+            sessionId = sessionId,
             state = PairingNotificationState.PAIRING_FAILED
         )
 
@@ -202,6 +262,7 @@ class PairingNotificationReceiverInstrumentedTest {
     fun discoveryFailure_opensAppForASetupRestartWithoutStaleCodeEntry() {
         val notification = PairingNotificationHelper.buildPairingNotification(
             baseContext,
+            sessionId = sessionId,
             state = PairingNotificationState.DISCOVERY_START_FAILED
         )
 
@@ -216,6 +277,7 @@ class PairingNotificationReceiverInstrumentedTest {
     fun localNetworkPermissionFailure_guidesAppSettings() {
         val notification = PairingNotificationHelper.buildPairingNotification(
             baseContext,
+            sessionId = sessionId,
             state = PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED
         )
 

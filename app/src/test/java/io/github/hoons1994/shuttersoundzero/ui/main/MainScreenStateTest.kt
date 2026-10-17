@@ -1,12 +1,39 @@
 package io.github.hoons1994.shuttersoundzero.ui.main
 
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
+import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MainScreenStateTest {
+    @Test fun existingLinkageGetsPermissionRecoveryWithoutBecomingFirstTimeSetup() {
+        val state = MainUiState(
+            hasCscPermission = true,
+            isCscMuted = false,
+            setupIssue = SetupIssue.CAMERA_APPLY
+        ).awaitCameraMutePermission(true)
+
+        assertEquals(HomeStatus.REAPPLY_REQUIRED, resolveHomeStatus(state))
+        assertEquals(CameraMuteFailure.LOCAL_NETWORK_PERMISSION, state.cameraMuteFailure)
+        assertEquals(true, state.pendingCameraMuteTarget)
+        assertEquals(SetupIssue.CAMERA_APPLY, state.setupIssue)
+        assertTrue(state.hasCscPermission)
+        assertEquals(null, state.errorMessage)
+    }
+
+    @Test fun permissionRecoveryPreservesRestoreEvenWhenAnEarlierRequestWasMute() {
+        val state = MainUiState(hasCscPermission = true, isCscMuted = true)
+            .awaitCameraMutePermission(true)
+            .awaitCameraMutePermission(false)
+
+        assertEquals(false, state.pendingCameraMuteTarget)
+        assertEquals(CameraMuteFailure.LOCAL_NETWORK_PERMISSION, state.cameraMuteFailure)
+        assertEquals(true, state.isCscMuted)
+        assertTrue(state.hasCscPermission)
+    }
+
     @Test fun unreadableCscStateCannotBePresentedAsReadyOrConfirmedReset() {
         assertEquals(HomeStatus.STATE_UNKNOWN, resolveHomeStatus(MainUiState(
             hasCscPermission = true,

@@ -31,6 +31,7 @@ internal class SafeAdbMdnsDiscovery(
         ?: error("NsdManager is unavailable")
     private val registration = MdnsDiscoveryRegistration()
     private val services = MdnsServicePresence()
+    private val failures = MdnsDiscoveryFailureReporter(onFailureDetail, onFailure)
     private val resolver: AdbNsdResolver = if (Build.VERSION.SDK_INT <= 33) {
         LegacyNsdResolver.get(context.applicationContext)
     } else {
@@ -50,8 +51,7 @@ internal class SafeAdbMdnsDiscovery(
             services.clear()
             registration.onStartFailed()
             resolver.cancel(resolutionOwner)
-            onFailureDetail(AdbDiscoveryReason.START_FAILED, errorCode)
-            onFailure(errorCode)
+            failures.report(AdbDiscoveryReason.START_FAILED, errorCode)
             Log.w(TAG, "mDNS discovery start failed ($errorCode)")
         }
 
@@ -131,7 +131,7 @@ internal class SafeAdbMdnsDiscovery(
                     if (registration.shouldDeliverCallbacks()) {
                         val address = resolved.host
                         if (address != null) onDiscovered(address, resolved.port, key)
-                        else onFailureDetail(AdbDiscoveryReason.INVALID_ENDPOINT, null)
+                        else failures.report(AdbDiscoveryReason.INVALID_ENDPOINT, null)
                     }
                 }
             },
@@ -139,8 +139,7 @@ internal class SafeAdbMdnsDiscovery(
                 services.deliverIfCurrent(key, token) {
                     if (registration.shouldDeliverCallbacks()) {
                         Log.w(TAG, "mDNS resolution failed ($errorCode)")
-                        onFailureDetail(AdbDiscoveryReason.RESOLVE_FAILED, errorCode)
-                        onFailure(errorCode)
+                        failures.report(AdbDiscoveryReason.RESOLVE_FAILED, errorCode)
                     }
                 }
             }
