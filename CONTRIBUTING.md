@@ -261,9 +261,10 @@ Gradle 및 GitHub Actions 의존성은 Dependabot이 주기적으로 업데이�
 1. `versionName`과 `versionCode` 변경
 2. PR 생성 및 필수 CI 통과
 3. `main` 병합
-4. 병합된 `main` 커밋에 `vX.Y.Z` 태그 생성
-5. `Android Release` workflow에서 서명된 APK 빌드 및 서명 검증
-6. GitHub Release 자동 생성
+4. 동일한 `main` 커밋의 전체 CI·Scorecard·의존성 제출을 확인하고 Signed Release Preflight 실행
+5. 검증된 `main` 커밋에 `vX.Y.Z` 태그 생성
+6. `Android Release` workflow에서 서명된 APK 빌드 및 서명 검증
+7. GitHub Release 자동 생성
 
 자세한 내용은 [`docs/RELEASE_AUTOMATION.md`](docs/RELEASE_AUTOMATION.md)를 참고해 주세요.
 
