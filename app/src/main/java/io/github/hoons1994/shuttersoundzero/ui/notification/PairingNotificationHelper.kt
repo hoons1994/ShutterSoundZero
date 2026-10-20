@@ -26,6 +26,11 @@ object PairingNotificationHelper {
     const val ACTION_SUBMIT_PAIRING_CODE = "io.github.hoons1994.shuttersoundzero.ACTION_SUBMIT_PAIRING_CODE"
     const val ACTION_CANCEL_PAIRING = "io.github.hoons1994.shuttersoundzero.ACTION_CANCEL_PAIRING"
 
+    internal fun codeSubmissionIntent(context: Context, sessionId: String): Intent =
+        Intent(ACTION_SUBMIT_PAIRING_CODE)
+            .setClass(context, PairingNotificationReceiver::class.java)
+            .setIdentifier(sessionId)
+
     private data class PairingNotificationCopy(
         val title: String,
         val summaryText: String,
@@ -74,6 +79,7 @@ object PairingNotificationHelper {
      */
     fun buildPairingNotification(
         context: Context,
+        sessionId: String,
         pairingPort: Int? = null,
         state: PairingNotificationState? = null,
         isDevOptionsOff: Boolean = false
@@ -87,11 +93,9 @@ object PairingNotificationHelper {
 
         // RemoteInput requires a mutable PendingIntent on modern Android. Keep the authoritative
         // ADB endpoint out of that mutable intent; the service resolves the current port only
-        // from app-owned mDNS discovery state.
-        val submitIntent = Intent(ACTION_SUBMIT_PAIRING_CODE).setClass(
-            context,
-            PairingNotificationReceiver::class.java
-        )
+        // from app-owned mDNS discovery state. The fixed identifier binds both PendingIntent
+        // identity and command admission to this session; no FILL_IN_IDENTIFIER flag is allowed.
+        val submitIntent = codeSubmissionIntent(context, sessionId)
         val submitPendingIntent = PendingIntent.getBroadcast(
             context,
             1,
@@ -111,7 +115,7 @@ object PairingNotificationHelper {
         val cancelPendingIntent = PendingIntent.getService(
             context,
             2,
-            PairingForegroundService.stopIntent(context),
+            PairingForegroundService.stopIntent(context, sessionId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val cancelAction = NotificationCompat.Action.Builder(
@@ -172,7 +176,7 @@ object PairingNotificationHelper {
             builder.addAction(NotificationCompat.Action.Builder(
                 R.mipmap.ic_launcher,
                 context.getString(R.string.pairing_action_retry_apply),
-                PendingIntent.getService(context, 3, PairingForegroundService.retryApplyIntent(context),
+                PendingIntent.getService(context, 3, PairingForegroundService.retryApplyIntent(context, sessionId),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             ).build())
         } else if (pairingPort != null && state != PairingNotificationState.PAIRING_IDENTITY_FAILED &&
@@ -262,12 +266,14 @@ object PairingNotificationHelper {
 
     fun showPairingNotification(
         context: Context,
+        sessionId: String,
         pairingPort: Int? = null,
         state: PairingNotificationState? = null,
         isDevOptionsOff: Boolean = false
     ) {
         val notification = buildPairingNotification(
             context = context,
+            sessionId = sessionId,
             pairingPort = pairingPort,
             state = state,
             isDevOptionsOff = isDevOptionsOff

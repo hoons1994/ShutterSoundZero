@@ -80,10 +80,17 @@ fun MainScreen(
     }
 
     var resumePairingAfterPermissionSettings by rememberSaveable { mutableStateOf(false) }
+    var cameraMuteAfterPermissionSettings by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var cameraMuteAfterWirelessSettings by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val permissionSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val cameraMuteTarget = cameraMuteAfterPermissionSettings
+        cameraMuteAfterPermissionSettings = null
         val resume = resumePairingAfterPermissionSettings
         resumePairingAfterPermissionSettings = false
-        if (resume) {
+        if (cameraMuteTarget != null) {
+            // Recheck current permission and wireless state; never replace a restore with pairing.
+            viewModel.toggleCscMute(cameraMuteTarget)
+        } else if (resume) {
             if (LocalNetworkAccess.isGranted(context)) startPairing()
             else viewModel.reportLocalNetworkPermissionDenied()
         }
@@ -159,6 +166,9 @@ fun MainScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshState()
+                val cameraMuteTarget = cameraMuteAfterWirelessSettings
+                cameraMuteAfterWirelessSettings = null
+                if (cameraMuteTarget != null) viewModel.toggleCscMute(cameraMuteTarget)
             }
         }
         val volumeObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -274,6 +284,8 @@ fun MainScreen(
                 viewModel.handleSettingsLaunch(SetupSettingsNavigator.openSoftwareInfoSettings(context))
             },
             onOpenAppSettings = {
+                cameraMuteAfterPermissionSettings = null
+                cameraMuteAfterWirelessSettings = null
                 resumePairingAfterPermissionSettings = uiState.setupIssue == SetupIssue.LOCAL_NETWORK_PERMISSION
                 try {
                     permissionSettingsLauncher.launch(SetupSettingsNavigator.appPermissionSettingsIntent(context))
@@ -311,16 +323,23 @@ fun MainScreen(
     }
 
     uiState.cameraMuteFailure?.let { failure ->
+        val cameraMuteTarget = uiState.pendingCameraMuteTarget
         CameraMuteFailureDialog(
             failure = failure,
             onDismiss = viewModel::dismissCameraMuteFailure,
             onReconnect = setupAction,
             onOpenSettings = {
                 if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
-                    context.startActivity(Intent(
-                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        android.net.Uri.fromParts("package", context.packageName, null)
-                    ))
+                    resumePairingAfterPermissionSettings = false
+                    cameraMuteAfterWirelessSettings = null
+                    cameraMuteAfterPermissionSettings = cameraMuteTarget
+                    try {
+                        permissionSettingsLauncher.launch(SetupSettingsNavigator.appPermissionSettingsIntent(context))
+                    } catch (error: Exception) {
+                        cameraMuteAfterPermissionSettings = null
+                        cameraMuteTarget?.let(viewModel::reportCameraMutePermissionRequired)
+                        viewModel.handleSettingsLaunch(Result.failure(error))
+                    }
                 } else {
                     viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))
                 }
@@ -329,6 +348,7 @@ fun MainScreen(
     }
 
     if (uiState.showSwitchFailureHelp) {
+        val cameraMuteTarget = uiState.pendingCameraMuteTarget
         AlertDialog(
             onDismissRequest = { viewModel.dismissSwitchFailureHelp() },
             shape = RoundedCornerShape(24.dp),
@@ -336,14 +356,23 @@ fun MainScreen(
             text = {
                 Text(
                     "카메라 설정을 바꾸는 동안에만 무선 디버깅이 필요합니다.\n\n" +
-                        "무선 디버깅을 켠 뒤 앱으로 돌아와 [다시 적용하기]를 눌러 주세요. 완료 후에는 앱이 다시 끄려고 시도합니다."
+                        if (cameraMuteTarget != null) {
+                            "무선 디버깅을 켠 뒤 앱으로 돌아오면 " +
+                                (if (cameraMuteTarget) "다시 적용을" else "원래대로 복원을") +
+                                " 계속합니다. 완료 후에는 앱이 다시 끄려고 시도합니다."
+                        } else {
+                            "무선 디버깅을 켠 뒤 앱으로 돌아와 [다시 적용하기]를 눌러 주세요. 완료 후에는 앱이 다시 끄려고 시도합니다."
+                        }
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
                         viewModel.dismissSwitchFailureHelp()
-                        viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))
+                        cameraMuteAfterWirelessSettings = cameraMuteTarget
+                        if (!viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))) {
+                            cameraMuteAfterWirelessSettings = null
+                        }
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) {

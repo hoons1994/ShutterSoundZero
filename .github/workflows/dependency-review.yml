@@ -51,3 +51,12 @@ jobs:
           fail-on-severity: high
           retry-on-snapshot-warnings: true
           retry-on-snapshot-warnings-timeout: 1200
+
+      # The pinned action can succeed after its snapshot retry timeout. Independently require
+      # a complete comparison, and keep the same high/critical runtime vulnerability policy.
+      - name: Require a complete dependency comparison
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/verify-dependency-review.mjs

@@ -14,6 +14,7 @@ import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationS
 /** Android feedback adapter. The service guards every event with its active generation. */
 internal class PairingWorkflowFeedback(
     private val context: Context,
+    private val sessionId: String,
     private val stopPairingDiscovery: () -> Unit,
     private val restartPairingDiscovery: () -> Unit,
     private val onCompleting: () -> Unit,
@@ -34,6 +35,7 @@ internal class PairingWorkflowFeedback(
                 )
                 PairingNotificationHelper.showPairingNotification(
                     context,
+                    sessionId = sessionId,
                     state = PairingNotificationState.DISCOVERY_WAITING
                 )
             }
@@ -116,6 +118,7 @@ internal class PairingWorkflowFeedback(
                 } ?: Log.w(TAG, "Mute apply failed after pairing")
                 PairingNotificationHelper.showPairingNotification(
                     context,
+                    sessionId = sessionId,
                     state = PairingNotificationState.CAMERA_APPLY_FAILED
                 )
                 // Code authentication already succeeded. Keep recovery on the connection/apply step.
@@ -136,6 +139,7 @@ internal class PairingWorkflowFeedback(
                 } ?: Log.w(TAG, "Pairing failed")
                 PairingNotificationHelper.showPairingNotification(
                     context,
+                    sessionId = sessionId,
                     state = feedback.notification
                 )
                 if (!localNetworkPermissionMissing) restartPairingDiscovery()
@@ -150,6 +154,7 @@ internal class PairingWorkflowFeedback(
                 Log.w(TAG, "Pairing workflow exceeded its time limit")
                 PairingNotificationHelper.showPairingNotification(
                     context,
+                    sessionId = sessionId,
                     state = PairingNotificationState.PAIRING_TIMEOUT
                 )
                 restartPairingDiscovery()
@@ -168,6 +173,7 @@ internal class PairingWorkflowFeedback(
                 logFailure("Pairing error", event.error)
                 PairingNotificationHelper.showPairingNotification(
                     context,
+                    sessionId = sessionId,
                     state = feedback.notification
                 )
                 if (!localNetworkPermissionMissing) restartPairingDiscovery()

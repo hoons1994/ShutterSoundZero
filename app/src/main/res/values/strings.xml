@@ -27,7 +27,6 @@
 
     <string name="main_pairing_code_entry_guidance">[페어링 코드로 기기 페어링] 화면에서 알림의 [코드 입력]을 사용해 6자리 코드를 입력해 주세요.</string>
     <string name="main_write_secure_settings_required">보안 설정 변경 권한이 필요합니다. 아래 [1회 설정 시작]을 진행해 주세요.</string>
-    <string name="main_local_network_permission_required">Android 17에서 무선 ADB를 사용하려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용해 주세요.</string>
     <string name="main_mute_applied_wireless_disabled">카메라 설정값을 적용했고 무선 디버깅도 껐습니다. 실제 촬영음을 확인해 주세요.</string>
     <string name="main_restore_applied_wireless_disabled">카메라 셔터음을 기본 상태로 복원했고 무선 디버깅도 껐습니다.</string>
     <string name="main_mute_applied_disable_wireless_manually">카메라 설정값을 적용했습니다. 실제 촬영음을 확인하고 무선 디버깅은 직접 꺼 주세요.</string>

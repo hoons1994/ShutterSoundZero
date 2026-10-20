@@ -13,9 +13,20 @@ data class MainUiState(
     val errorMessage: String? = null,
     val showSwitchFailureHelp: Boolean = false,
     val cameraMuteFailure: CameraMuteFailure? = null,
+    val pendingCameraMuteTarget: Boolean? = null,
     val isCscChangeInProgress: Boolean = false,
     val showWirelessDebuggingCleanupHelp: Boolean = false,
     val systemVolume: SystemVolumeUiState = SystemVolumeUiState()
+)
+
+/** Keep an existing linkage and the user's exact operation while permission is repaired. */
+internal fun MainUiState.awaitCameraMutePermission(enableMute: Boolean): MainUiState = copy(
+    pendingCameraMuteTarget = enableMute,
+    cameraMuteFailure = CameraMuteFailure.LOCAL_NETWORK_PERMISSION,
+    showSwitchFailureHelp = false,
+    showWirelessDebuggingCleanupHelp = false,
+    infoMessage = null,
+    errorMessage = null
 )
 
 data class SystemVolumeUiState(

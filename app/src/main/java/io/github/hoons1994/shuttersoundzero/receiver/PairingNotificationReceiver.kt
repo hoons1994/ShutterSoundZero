@@ -16,6 +16,7 @@ class PairingNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             PairingNotificationHelper.ACTION_SUBMIT_PAIRING_CODE -> {
+                val sessionId = intent.identifier?.takeIf(String::isNotBlank) ?: return
                 val results = RemoteInput.getResultsFromIntent(intent)
                 val code = results
                     ?.getCharSequence(PairingNotificationHelper.KEY_PAIRING_CODE)
@@ -23,12 +24,13 @@ class PairingNotificationReceiver : BroadcastReceiver() {
                     ?.trim()
                     .orEmpty()
 
-                PairingForegroundService.submitCode(context, code)
+                PairingForegroundService.submitCode(context, code, sessionId)
             }
 
             PairingNotificationHelper.ACTION_CANCEL_PAIRING -> {
+                val sessionId = intent.identifier?.takeIf(String::isNotBlank) ?: return
                 Log.i(TAG, "Pairing cancelled by user from notification")
-                PairingForegroundService.stop(context)
+                PairingForegroundService.stop(context, sessionId)
             }
         }
     }
