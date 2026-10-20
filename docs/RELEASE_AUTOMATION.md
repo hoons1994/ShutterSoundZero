@@ -5,7 +5,7 @@ Shutter Sound Zero는 `vX.Y.Z` 형식의 Git 태그가 `main` 브랜치의 커�
 ## 동작 흐름
 
 1. `app/build.gradle.kts`의 `versionName`과 `versionCode`를 새 버전에 맞게 변경합니다.
-2. 변경 사항을 PR로 병합하고 해당 커밋의 Android CI, CodeQL, 의존성 생성·제출 검사가 통과했는지 확인합니다.
+2. 변경 사항을 PR로 병합하고 해당 커밋의 Android CI, CodeQL, Scorecard, 의존성 생성·제출 검사가 통과했는지 확인합니다.
 3. 병합된 `main` 커밋에 `vX.Y.Z` 형식의 태그를 생성합니다.
 4. `Android Release` workflow가 배포 대상 커밋의 검사를 확인하고, `release-signing` Environment 보호 규칙을 통과한 뒤 실행됩니다.
 5. 태그와 `versionName`의 일치 여부를 확인합니다.
@@ -26,6 +26,7 @@ Shutter Sound Zero는 `vX.Y.Z` 형식의 Git 태그가 `main` 브랜치의 커�
 
 - Android CI: JVM·Debug/Release 빌드·Lint와 Android 11~17 / API 30~37의 모든 계측 검사
 - CodeQL Java/Kotlin 분석
+- OpenSSF Scorecard와 문서화된 과거 예외만 허용하는 SAST 이력 검사
 - Dependency Submission의 의존성 그래프 생성
 - Publish Dependency Graph의 실제 GitHub 의존성 제출
 

@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.5.14-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.5.15-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터사운드 제로 안내 인포그래픽" width="720" />
@@ -19,7 +19,7 @@
 
 접근성 서비스를 이용해 화면이나 카메라 실행을 상시 감시하지 않습니다. 최초 1회 로컬 무선 ADB로 `WRITE_SECURE_SETTINGS` 권한을 연동한 뒤, 필요할 때만 무선 디버깅을 켜서 실제 CSC 값을 변경합니다.
 
-현재 앱 버전은 **v1.5.14**입니다. 설정에서 새 버전을 확인할 수 있으며, 무선 디버깅 상태와 페어링 실패 원인에 맞는 복구 방법을 안내합니다. 사라진 연결 정보와 오래된 탐색 결과를 정리하고 반복되는 진단 로그도 요약합니다. 자세한 변경 사항은 [v1.5.14 릴리즈 노트](.github/release-notes/v1.5.14.md)를 확인해 주세요.
+현재 앱 버전은 **v1.5.15**입니다. 페어링 이후 연결·설정 적용을 다시 시도하는 흐름과 권한 설정에서 돌아왔을 때의 복구 안내를 보완했습니다. 진단 정보와 업데이트 조회의 보안 검증도 강화했습니다. 자세한 변경 사항은 [v1.5.15 릴리즈 노트](.github/release-notes/v1.5.15.md)를 확인해 주세요.
 
 ## 📱 다운로드
 
