@@ -50,6 +50,14 @@ test('dependency publication is required as well as snapshot generation', () => 
   verifyJobs(passedJobs(publication.jobs), publication.jobs, publication.path);
 });
 
+test('release preflight requires Scorecard including its SAST coverage guard', () => {
+  const scorecard = requiredWorkflows.find(workflow => workflow.path === 'scorecard.yml');
+  assert.ok(scorecard);
+  assert.throws(() => verifyJobs([{ name: 'OpenSSF Scorecard', status: 'completed', conclusion: 'failure' }], scorecard.jobs, scorecard.path));
+  assert.throws(() => verifyJobs([{ name: 'OpenSSF Scorecard', status: 'completed', conclusion: 'skipped' }], scorecard.jobs, scorecard.path));
+  verifyJobs(passedJobs(scorecard.jobs), scorecard.jobs, scorecard.path);
+});
+
 test('publication must belong to the exact main snapshot, not a PR sharing the workflow source', () => {
   const publication = overrides => passedRun({
     event: 'workflow_run', path: '.github/workflows/publish-dependency-graph.yml',

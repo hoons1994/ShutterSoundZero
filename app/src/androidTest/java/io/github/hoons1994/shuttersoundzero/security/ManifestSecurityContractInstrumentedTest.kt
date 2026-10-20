@@ -4,6 +4,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.os.Build
+import android.security.NetworkSecurityPolicy
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -91,6 +93,15 @@ class ManifestSecurityContractInstrumentedTest {
             "Application cleartext traffic must remain disabled",
             (applicationInfo.flags and ApplicationInfo.FLAG_USES_CLEARTEXT_TRAFFIC) != 0,
         )
+    }
+
+    @Test
+    fun releaseApiUsesPlatformNetworkSecurityPolicy() {
+        val policy = NetworkSecurityPolicy.getInstance()
+        assertFalse(policy.isCleartextTrafficPermitted("api.github.com"))
+        if (Build.VERSION.SDK_INT >= 36) {
+            assertTrue(policy.isCertificateTransparencyVerificationRequired("api.github.com"))
+        }
     }
 
     private fun appComponent(className: String): ComponentName =

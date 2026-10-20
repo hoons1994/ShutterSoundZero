@@ -5,6 +5,7 @@ import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.HttpURLConnection
 import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import org.json.JSONObject
@@ -12,14 +13,20 @@ import org.json.JSONObject
 /** Public release metadata only. No APK transfer, credentials or device identifiers. */
 internal class GitHubReleaseClient(
     private val openConnection: () -> HttpURLConnection = {
-        URL("https://api.github.com/repos/hoons1994/ShutterSoundZero/releases/latest")
-            .openConnection() as HttpURLConnection
+        URL(LATEST_RELEASE_URL).openConnection() as HttpsURLConnection
     }
 ) {
     suspend fun fetchLatest(): LatestRelease = runInterruptible(Dispatchers.IO) {
         try {
             val connection = openConnection()
             try {
+                // Keep Android's CA and hostname verification. GitHub owns certificate rotation;
+                // see SECURITY.md#reviewed-findings for the narrowly reviewed pinning exception.
+                if (connection !is HttpsURLConnection ||
+                    connection.url.toExternalForm() != LATEST_RELEASE_URL
+                ) {
+                    throw UpdateCheckException(UpdateCheckFailure.INVALID_RESPONSE)
+                }
                 connection.requestMethod = "GET"
                 connection.connectTimeout = 8_000
                 connection.readTimeout = 8_000
@@ -58,6 +65,8 @@ internal class GitHubReleaseClient(
     }
 
     companion object {
+        internal const val LATEST_RELEASE_URL =
+            "https://api.github.com/repos/hoons1994/ShutterSoundZero/releases/latest"
         internal const val MAX_RESPONSE_BYTES = 256 * 1024
 
         internal fun parseLatest(body: String): LatestRelease {

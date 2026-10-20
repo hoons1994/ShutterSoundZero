@@ -95,3 +95,49 @@ The following are generally not treated as vulnerabilities unless they demonstra
 ## Security-related development
 
 Changes affecting ADB, pairing, cryptographic key handling, exported Android components, local-network access, release signing, or GitHub Actions secrets should receive extra review. Pull requests must continue to pass the repository's required Android CI, CodeQL, and Dependency Review checks before merge.
+
+## Reviewed findings
+
+The following decisions were reviewed on 2026-10-20. They do not disable CodeQL queries,
+filter Scorecard SARIF, or authorize general suppressions. Reassess them when the request
+endpoint, data sensitivity, TLS policy, or SAST workflow changes.
+
+### GitHub release metadata and certificate pinning (#55)
+
+`java/android/missing-certificate-pinning` is accepted only for the fixed public release
+metadata endpoint in `GitHubReleaseClient`. GitHub controls the certificate and key rotation;
+this project cannot maintain an independently controlled backup pin. Android's guidance
+[does not recommend certificate pinning](https://developer.android.com/privacy-and-security/security-ssl#Pinning)
+because server CA/key changes can disconnect installed apps.
+
+The client requires `HttpsURLConnection` and the exact release API URL before making a
+request, retains the platform certificate-chain and hostname verifiers, rejects redirects,
+and never falls back to weaker verification after a TLS failure. It sends no credentials,
+device identifiers or personal data, and does not download or install APKs. Release tags
+are validated and response-provided download URLs are ignored. Android's Network Security
+Config permits system CAs only, denies cleartext, and enables Certificate Transparency for
+`api.github.com` on API 36 and later. The public API is not a justification for accepting
+invalid certificates. Keep the missing-pinning query enabled for other endpoints.
+
+### Historical documentation-only SAST coverage (#10)
+
+Scorecard's 26/30 result comes from two merged documentation PRs, each represented by its
+head and merge commit. Their old workflow intentionally skipped documentation-only changes:
+
+| PR | Head without a separate SAST check | Changed files since the analyzed baseline |
+| --- | --- | --- |
+| #190 | `167ab2109b6abb4ee0aabea5fd13b0dc90f0df1d` | v1.5.8/v1.5.9 release notes |
+| #191 | `c37a20c8bbc254dd5ee1ce56547298201fa46145` | the same release notes and README |
+
+Both heads descend from PR #189's SAST-checked head
+`83148cb7187866a9b7fafd9f62b23c69e369a290` with unchanged application, build and workflow
+inputs. This is inherited evidence for identical code, not a claim that the four historical
+commits ran a new analysis. Do not manufacture check runs or rewrite history to change the score.
+
+The current CodeQL workflow analyzes documentation changes as well as code changes.
+`verify-sast-coverage.mjs` independently checks the same recent merged-PR heads as Scorecard.
+Only these two exact historical heads may inherit a successful baseline, and only after a live
+API comparison verifies that the merge base is that baseline and all changes are modifications
+to the three documented Markdown files. Missing/failed checks on any other head, changed code,
+API errors or incomplete check pagination fail the guard. Raw Scorecard output is retained.
+Signed Release Preflight also requires the Scorecard job, so a new coverage failure blocks release.
