@@ -131,6 +131,7 @@ public class CancellableAdbConnectionTest {
     }
 
     @Test public void sequentialShellCommandsIgnoreLateCloseFromPreviousStream() throws Exception {
+        CountDownLatch commandsReceived = new CountDownLatch(1);
         try (Peer peer = new Peer(socket -> {
             socket = handshake(socket);
             int previousLocal = 0;
@@ -146,6 +147,7 @@ public class CancellableAdbConnectionTest {
                 assertEquals(AdbProtocol.A_CLSE, read(socket).command);
                 previousLocal = local;
             }
+            commandsReceived.countDown();
         }); CancellableAdbConnection client = connection(peer.server.getLocalPort())) {
             client.connect(2000);
             for (int remote = 101; remote <= 102; remote++) {
@@ -153,6 +155,9 @@ public class CancellableAdbConnectionTest {
                 client.readShell("echo 한글", 2000, data -> { result.set(new String(data, StandardCharsets.UTF_8)); return true; });
                 assertEquals("result" + remote, result.get());
             }
+            // Let the peer consume the final TLS frames before client.close() cancels the socket.
+            assertTrue("Peer did not receive command acknowledgements",
+                    commandsReceived.await(3, TimeUnit.SECONDS));
         }
     }
 

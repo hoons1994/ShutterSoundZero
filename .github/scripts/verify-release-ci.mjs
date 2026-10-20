@@ -14,6 +14,7 @@ export const requiredWorkflows = [
     ],
   },
   { path: 'codeql.yml', jobs: ['CodeQL Java/Kotlin'] },
+  { path: 'scorecard.yml', jobs: ['OpenSSF Scorecard'] },
   { path: 'dependency-submission.yml', jobs: ['Generate dependency graph'] },
   { path: 'publish-dependency-graph.yml', jobs: ['Submit dependency graph'] },
 ];
