@@ -18,7 +18,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -38,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -356,13 +359,14 @@ fun MainScreen(
             text = {
                 Text(
                     "카메라 설정을 바꾸는 동안에만 무선 디버깅이 필요합니다.\n\n" +
-                        if (cameraMuteTarget != null) {
+                        (if (cameraMuteTarget != null) {
                             "무선 디버깅을 켠 뒤 앱으로 돌아오면 " +
                                 (if (cameraMuteTarget) "다시 적용을" else "원래대로 복원을") +
                                 " 계속합니다. 완료 후에는 앱이 다시 끄려고 시도합니다."
                         } else {
                             "무선 디버깅을 켠 뒤 앱으로 돌아와 [다시 적용하기]를 눌러 주세요. 완료 후에는 앱이 다시 끄려고 시도합니다."
-                        }
+                        }) + "\n\n" + stringResource(R.string.wireless_debugging_auto_blocker_guidance),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
                 )
             },
             confirmButton = {
