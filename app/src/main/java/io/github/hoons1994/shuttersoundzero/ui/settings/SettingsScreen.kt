@@ -414,10 +414,12 @@ fun SettingsScreen(
                 } else "무선 디버깅을 켜 주세요") },
                 text = {
                     Text(
-                        if (cameraState.wirelessDebuggingEnabled == null) {
+                        (if (cameraState.wirelessDebuggingEnabled == null) {
                             stringResource(R.string.wireless_debugging_state_unknown_guidance)
                         } else "카메라 무음 설정을 다시 적용하는 동안에만 필요합니다.\n\n" +
-                            "무선 디버깅을 켠 뒤 앱으로 돌아와 [카메라 무음 다시 적용]을 다시 눌러 주세요."
+                            "무선 디버깅을 켠 뒤 앱으로 돌아와 [카메라 무음 다시 적용]을 다시 눌러 주세요.") +
+                            "\n\n" + stringResource(R.string.wireless_debugging_auto_blocker_guidance),
+                        modifier = Modifier.verticalScroll(rememberScrollState())
                     )
                 },
                 confirmButton = {
@@ -449,10 +451,12 @@ fun SettingsScreen(
                 } else "무선 디버깅을 켜 주세요") },
                 text = {
                     Text(
-                        if (cameraState.wirelessDebuggingEnabled == null) {
+                        (if (cameraState.wirelessDebuggingEnabled == null) {
                             stringResource(R.string.wireless_debugging_state_unknown_guidance)
                         } else "카메라 셔터음을 원래대로 복원하는 동안에만 필요합니다.\n\n" +
-                            "무선 디버깅을 켠 뒤 앱으로 돌아와 [카메라 셔터음 원래대로 복원]을 다시 눌러 주세요."
+                            "무선 디버깅을 켠 뒤 앱으로 돌아와 [카메라 셔터음 원래대로 복원]을 다시 눌러 주세요.") +
+                            "\n\n" + stringResource(R.string.wireless_debugging_auto_blocker_guidance),
+                        modifier = Modifier.verticalScroll(rememberScrollState())
                     )
                 },
                 confirmButton = {

@@ -73,6 +73,18 @@ internal fun HomeContent(
             onCameraAction = onOpenCamera
         )
 
+        if ((homeStatus == HomeStatus.SETUP_REQUIRED || homeStatus == HomeStatus.REAPPLY_REQUIRED) &&
+            uiState.isWirelessDebuggingEnabled != true
+        ) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.wireless_debugging_auto_blocker_guidance),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = ScreenPadding)
+            )
+        }
+
         if (homeStatus == HomeStatus.SETUP_REQUIRED) {
             Spacer(modifier = Modifier.height(20.dp))
             SetupProgressCard(uiState, onOpenSoftwareInfo, onOpenAppSettings)
