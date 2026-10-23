@@ -17,6 +17,7 @@ val localProperties = Properties().apply {
 android {
     namespace = "io.github.hoons1994.shuttersoundzero"
     compileSdk = 37
+    ndkVersion = "27.1.12297006"
     defaultConfig {
         applicationId = "io.github.hoons1994.shuttersoundzero"
         minSdk = 30
@@ -55,6 +56,12 @@ android {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
     compileOptions {
@@ -108,6 +115,8 @@ dependencies {
   // Standalone ADB & Wireless Pairing (100% On-Device)
   implementation(libs.libadb.android) {
     exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
+    // Build the pinned, ownership-corrected SPAKE2 JNI implementation from source.
+    exclude(group = "com.github.MuntashirAkon.spake2-java", module = "spake2-android")
   }
   implementation(libs.bouncycastle.bcpkix)
   implementation(libs.conscrypt.android)

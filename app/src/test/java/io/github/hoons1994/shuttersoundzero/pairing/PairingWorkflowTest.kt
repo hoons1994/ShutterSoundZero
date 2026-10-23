@@ -18,6 +18,30 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PairingWorkflowTest {
+    @Test fun restoreTargetSurvivesRePairingConnectionRetryAndManualApplyRetry() = runTest {
+        val targets = mutableListOf<Boolean>()
+        var calls = 0
+        val workflow = PairingWorkflow({ 37123 }, { _, _ -> Result.success(Unit) }, { target ->
+            targets += target
+            if (++calls <= 2) Result.failure(AdbServiceNotFoundException()) else Result.success(Unit)
+        }, targetMuted = false)
+        val events = mutableListOf<PairingEvent>()
+        workflow.run("123456", events::add)
+        assertTrue(events.last() is PairingEvent.ApplyFailed)
+        workflow.retryApply(events::add)
+        assertEquals(listOf(false, false, false), targets)
+        assertEquals(PairingEvent.ApplySucceeded, events.last())
+    }
+
+    @Test fun initialSetupStillDefaultsToMute() = runTest {
+        var target: Boolean? = null
+        PairingWorkflow({ 37123 }, { _, _ -> Result.success(Unit) }, {
+            target = it
+            Result.success(Unit)
+        }).run("123456") { }
+        assertEquals(true, target)
+    }
+
     @Test fun slowPairingLeavesEnoughTimeForBothConnectionDiscoveryAttempts() = runTest {
         var attempts = 0
         var paired = 0

@@ -41,7 +41,7 @@ internal class CameraSettingsRepository(
         }
     }
 
-    suspend fun applyCameraMuteViaAdb(connectPort: Int? = null): Result<Unit> = runCommands(
+    suspend fun applyCameraMuteViaAdb(connectPort: Int? = null, targetMuted: Boolean = true): Result<Unit> = runCommands(
         "ADB 권한 적용 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."
     ) {
         connect(connectPort, 7_000)
@@ -50,8 +50,8 @@ internal class CameraSettingsRepository(
         execute(AdbShellCommands.grantWriteSecureSettings(context.packageName, userId))
         if (!CscMuteManager.hasWritePermission(context)) throw IOException("WRITE_SECURE_SETTINGS 권한 부여 상태를 확인할 수 없습니다.")
         prefs.isPermissionRevokedByUser = false
-        applyAndVerifyMute(true)
-        prefs.shouldMuteOnBoot = true
+        applyAndVerifyMute(targetMuted)
+        prefs.shouldMuteOnBoot = targetMuted
     }
 
     suspend fun revokePermissionViaAdb(): Result<Unit> = runCommands(

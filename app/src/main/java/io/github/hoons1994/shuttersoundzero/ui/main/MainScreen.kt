@@ -58,6 +58,7 @@ import io.github.hoons1994.shuttersoundzero.core.WifiConnectionStatus
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
+import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.ui.components.CameraMuteFailureDialog
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
 
@@ -68,18 +69,19 @@ fun MainScreen(
     modifier: Modifier = Modifier,
     onItemClick: (NavKey) -> Unit = {},
     viewModel: MainScreenViewModel = viewModel(),
-    pairingRecoveryRequested: Boolean = false,
+    pairingRecoveryTarget: Boolean? = null,
     onPairingRecoveryHandled: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val prefs = remember(context) { PreferencesRepository.getInstance(context) }
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var showWifiRequiredDialog by remember { mutableStateOf(false) }
 
     val startPairing = {
-        viewModel.startNotificationPairing(context)
+        viewModel.startNotificationPairing(context, prefs.pendingPairingTarget ?: true)
     }
 
     var resumePairingAfterPermissionSettings by rememberSaveable { mutableStateOf(false) }
@@ -249,7 +251,7 @@ fun MainScreen(
     val reapplyAction: () -> Unit = {
         viewModel.toggleCscMute(true)
     }
-    val setupAction: () -> Unit = {
+    val startSetup: (Boolean) -> Unit = { targetMuted ->
         if (!CscMuteManager.isSamsungDevice()) {
             Toast.makeText(
                 context,
@@ -257,14 +259,17 @@ fun MainScreen(
                 Toast.LENGTH_LONG
             ).show()
         } else {
+            prefs.pendingPairingTarget = targetMuted
             requestPairingNotification()
         }
     }
 
-    LaunchedEffect(pairingRecoveryRequested) {
-        if (pairingRecoveryRequested) {
+    val setupAction: () -> Unit = { startSetup(prefs.pendingPairingTarget ?: true) }
+
+    LaunchedEffect(pairingRecoveryTarget) {
+        if (pairingRecoveryTarget != null) {
             onPairingRecoveryHandled()
-            setupAction()
+            startSetup(pairingRecoveryTarget)
         }
     }
 
@@ -330,7 +335,7 @@ fun MainScreen(
         CameraMuteFailureDialog(
             failure = failure,
             onDismiss = viewModel::dismissCameraMuteFailure,
-            onReconnect = setupAction,
+            onReconnect = { startSetup(cameraMuteTarget ?: true) },
             onOpenSettings = {
                 if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
                     resumePairingAfterPermissionSettings = false

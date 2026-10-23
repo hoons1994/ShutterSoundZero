@@ -14,6 +14,14 @@ import io.github.hoons1994.shuttersoundzero.data.model.AppThemeMode
 
 @RunWith(AndroidJUnit4::class)
 class PreferencesRepositoryInstrumentedTest {
+    @Test fun pendingRestoreTargetSurvivesRepositoryRecreationAndCanBeCleared() {
+        val repository = PreferencesRepository(context)
+        assertEquals(null, repository.pendingPairingTarget)
+        repository.pendingPairingTarget = false
+        assertEquals(false, PreferencesRepository(context).pendingPairingTarget)
+        repository.pendingPairingTarget = null
+        assertEquals(null, PreferencesRepository(context).pendingPairingTarget)
+    }
 
     private lateinit var context: Context
 
