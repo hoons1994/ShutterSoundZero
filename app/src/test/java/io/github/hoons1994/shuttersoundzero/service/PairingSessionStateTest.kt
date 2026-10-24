@@ -4,6 +4,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PairingSessionStateTest {
+    @Test fun restoreTargetIsRetainedAcrossPairingAndStaleCommandsCannotReplaceIt() {
+        val session = PairingSessionState()
+        val old = session.begin()
+        val restore = session.begin(targetMuted = false)
+        session.markPaired()
+        assertFalse(session.targetMuted)
+        assertFalse(session.dispatchCommand(old) { error("stale session") })
+        assertTrue(session.dispatchCode(restore, { error("already paired") }, { assertFalse(session.targetMuted) }))
+        session.end()
+        session.begin()
+        assertTrue(session.targetMuted)
+    }
+
     @Test fun newlyCreatedServiceDoesNotRunNetworkWorkFromAnOldCodeNotification() {
         val session = PairingSessionState()
         assertFalse(session.dispatchCode("old-session", { error("stale code must not pair") },

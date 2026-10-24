@@ -102,6 +102,8 @@
     <string name="pairing_public_text_in_progress">설정을 계속하려면 기기를 잠금 해제하세요.</string>
 
     <string name="foreground_pairing_success_wireless_disabled">카메라 설정값을 적용하고 무선 디버깅도 껐습니다. 실제 촬영음을 확인해 주세요.</string>
+    <string name="pairing_restore_success_wireless_disabled">셔터음 강제 설정값을 기본 상태로 복원하고 무선 디버깅도 껐습니다.</string>
+    <string name="pairing_restore_success_disable_wireless_manually">셔터음 강제 설정값은 기본 상태로 복원했습니다. 무선 디버깅은 직접 꺼 주세요.</string>
     <string name="foreground_pairing_success_disable_wireless_manually">카메라 설정값을 적용했습니다. 실제 촬영음을 확인하고 무선 디버깅은 직접 꺼 주세요.</string>
 
     <string name="boot_notification_channel_name">카메라 무음 상태 알림</string>

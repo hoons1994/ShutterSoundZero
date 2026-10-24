@@ -71,7 +71,7 @@ private enum class CameraAction { REAPPLY, RESTORE }
 fun SettingsScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onPairingRecoveryRequested: () -> Unit = onBackClick
+    onPairingRecoveryRequested: (Boolean) -> Unit = { onBackClick() }
 ) {
     val context = LocalContext.current
     val settingsLaunchFailureMessage = stringResource(R.string.settings_launch_failed)
@@ -117,6 +117,7 @@ fun SettingsScreen(
     val cameraState = rememberCameraSettingsState()
     var restoreResultMessage by remember { mutableStateOf<String?>(null) }
     var cameraMuteFailure by remember { mutableStateOf<CameraMuteFailure?>(null) }
+    var failedCameraMuteTarget by rememberSaveable { mutableStateOf(true) }
     var pendingLocalNetworkAction by rememberSaveable { mutableStateOf<CameraAction?>(null) }
     var deniedLocalNetworkAction by rememberSaveable { mutableStateOf<CameraAction?>(null) }
 
@@ -134,6 +135,7 @@ fun SettingsScreen(
                 cameraState.isCscMuted = CscMuteManager.readCscMutedState(context)
             }
             cameraMuteFailure = operationState.failure
+            failedCameraMuteTarget = operationState.requestedMutedState
             restoreResultMessage = if (cameraMuteFailure == null) operationState.resultMessage else null
             cameraSettingsViewModel.consumeCompletion()
         }
@@ -522,7 +524,7 @@ fun SettingsScreen(
             CameraMuteFailureDialog(
                 failure = failure,
                 onDismiss = { cameraMuteFailure = null },
-                onReconnect = onPairingRecoveryRequested,
+                onReconnect = { onPairingRecoveryRequested(failedCameraMuteTarget) },
                 onOpenSettings = {
                     if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
                         handleSettingsLaunch(SetupSettingsNavigator.openAppPermissionSettings(context))
@@ -699,7 +701,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "• Android Jetpack / Compose (Apache 2.0)\n• libadb-android (GPL-3.0 / Apache 2.0)\n• Bouncy Castle (Bouncy Castle Licence)\n• Conscrypt (Apache 2.0)",
+                            text = "• Android Jetpack / Compose (Apache 2.0)\n• libadb-android (GPL-3.0 / Apache 2.0)\n• SPAKE2 (Muntashir Al-Islam, LGPL-3.0, 수정된 소스 포함)\n• Bouncy Castle (Bouncy Castle Licence)\n• Conscrypt (Apache 2.0)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 18.sp

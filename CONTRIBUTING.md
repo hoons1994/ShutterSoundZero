@@ -158,6 +158,24 @@ Windows:
 
 가능하면 세 검사를 모두 실행한 뒤 PR을 생성해 주세요.
 
+## SPAKE2 네이티브 회귀 검사
+
+SPAKE2는 `app/src/main/cpp/UPSTREAM.md`에 기록된 소스를 앱에서 직접 빌드합니다.
+JNI 오류 처리에서 context를 해제하지 않으며 Java `destroy()`가 해제를 소유합니다.
+NDK 27.1.12297006과 CMake 3.22.1이 필요합니다. 기존 외부 `spake2-android` AAR을
+다시 포함하면 중복 클래스나 취약한 바이너리가 들어갈 수 있으므로 제외를 유지합니다.
+
+Android 계측 검사에는 잘못된 길이·곡선점, 정상 교환, 중복 정리 검사가 포함됩니다.
+Windows x64에서는 JDK 17과 Zig C/C++ 컴파일러로 같은 Java/JNI 소스를 실행할 수 있습니다.
+호스트 검사는 Android APK·Galaxy 기기 검증을 대체하지 않습니다.
+
+```powershell
+.\scripts\verify-spake2-native.ps1 -ZigPath '<zig.exe 경로>' -AnnotationJar '<annotation-jvm JAR 경로>'
+```
+
+호스트 호환 헤더와 실행 코드는 `app/src/nativeTest/`, 재생성 가능한 출력은
+`build/native-spake2-host/`에 있습니다. 실행 확인에는 Zig 0.17.0을 사용했습니다.
+
 ## 테스트 추가 원칙
 
 버그를 수정하거나 핵심 로직을 변경할 때는 재현 가능한 경우 단위 테스트를 함께 추가해 주세요.

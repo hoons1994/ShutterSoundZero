@@ -18,7 +18,8 @@ internal data class CameraSettingsOperationUiState(
     val completionId: Long = 0,
     val resultMessage: String? = null,
     val appliedMutedState: Boolean? = null,
-    val failure: CameraMuteFailure? = null
+    val failure: CameraMuteFailure? = null,
+    val requestedMutedState: Boolean = true
 )
 
 /** Keeps user-started CSC changes alive while the settings destination leaves composition. */
@@ -36,6 +37,7 @@ internal class CameraSettingsOperationViewModel(
             _uiState.update {
                 it.copy(
                     isReapplyInProgress = mute,
+                    requestedMutedState = mute,
                     isRestoreInProgress = !mute,
                     resultMessage = null,
                     appliedMutedState = null,

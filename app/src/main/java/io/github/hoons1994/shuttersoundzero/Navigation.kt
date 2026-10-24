@@ -18,7 +18,7 @@ import io.github.hoons1994.shuttersoundzero.ui.settings.SettingsScreen
 @Composable
 fun MainNavigation() {
   val backStack = rememberNavBackStack(Main)
-  var pairingRecoveryRequested by rememberSaveable { mutableStateOf(false) }
+  var pairingRecoveryTarget by rememberSaveable { mutableStateOf<Boolean?>(null) }
 
   NavDisplay(
     backStack = backStack,
@@ -29,16 +29,16 @@ fun MainNavigation() {
           MainScreen(
             onItemClick = { navKey -> backStack.add(navKey) },
             modifier = Modifier.safeDrawingPadding(),
-            pairingRecoveryRequested = pairingRecoveryRequested,
-            onPairingRecoveryHandled = { pairingRecoveryRequested = false }
+            pairingRecoveryTarget = pairingRecoveryTarget,
+            onPairingRecoveryHandled = { pairingRecoveryTarget = null }
           )
         }
         entry<Settings> {
           SettingsScreen(
             onBackClick = { backStack.removeLastOrNull() },
             modifier = Modifier.safeDrawingPadding(),
-            onPairingRecoveryRequested = {
-              pairingRecoveryRequested = true
+            onPairingRecoveryRequested = { targetMuted ->
+              pairingRecoveryTarget = targetMuted
               backStack.removeLastOrNull()
             }
           )

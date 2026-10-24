@@ -324,7 +324,8 @@ object PairingNotificationHelper {
 
     fun showSuccessNotification(
         context: Context,
-        wirelessDebuggingDisabled: Boolean = false
+        wirelessDebuggingDisabled: Boolean = false,
+        targetMuted: Boolean = true
     ) {
         createNotificationChannel(context)
 
@@ -345,7 +346,11 @@ object PairingNotificationHelper {
                 )
             )
             .setContentText(
-                if (wirelessDebuggingDisabled) {
+                if (!targetMuted && wirelessDebuggingDisabled) {
+                    context.getString(R.string.pairing_restore_success_wireless_disabled)
+                } else if (!targetMuted) {
+                    context.getString(R.string.pairing_restore_success_disable_wireless_manually)
+                } else if (wirelessDebuggingDisabled) {
                     context.getString(R.string.pairing_success_wireless_disabled)
                 } else {
                     context.getString(R.string.pairing_success_disable_wireless_manually)

@@ -191,7 +191,8 @@ class MainScreenViewModel internal constructor(
         false
     }
 
-    fun startNotificationPairing(context: Context) {
+    fun startNotificationPairing(context: Context, targetMuted: Boolean = prefs.pendingPairingTarget ?: true) {
+        prefs.pendingPairingTarget = targetMuted
         val resumeApply = prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY
         val devOptionsOff = !DeveloperOptionsManager.isDeveloperOptionsEnabled(context)
         if (!handleSettingsLaunch(SetupSettingsNavigator.openPairingSetupScreen(context))) return
@@ -209,7 +210,7 @@ class MainScreenViewModel internal constructor(
                 showWirelessDebuggingCleanupHelp = false
             )
         }
-        PairingForegroundService.start(context, devOptionsOff, resumeApply)
+        PairingForegroundService.start(context, devOptionsOff, resumeApply, targetMuted)
         _uiState.update {
             it.copy(
                 infoMessage = context.getString(if (resumeApply) R.string.pairing_help_connection_retry
@@ -323,6 +324,7 @@ class MainScreenViewModel internal constructor(
                         } else it.copy(
                             showSwitchFailureHelp = false,
                             cameraMuteFailure = failure,
+                            pendingCameraMuteTarget = enableMute,
                             errorMessage = null,
                             infoMessage = null
                         )

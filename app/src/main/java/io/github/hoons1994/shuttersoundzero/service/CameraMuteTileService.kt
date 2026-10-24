@@ -15,6 +15,7 @@ import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
@@ -29,15 +30,31 @@ class CameraMuteTileService : TileService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var actionInProgress = false
+    private val cscObserver by lazy { TileCscObserver(contentResolver, ::updateTileState) }
+    private var refreshJob: Job? = null
 
     override fun onDestroy() {
+        cscObserver.stop()
+        refreshJob?.cancel()
         super.onDestroy()
         serviceScope.cancel()
     }
 
     override fun onStartListening() {
         super.onStartListening()
-        updateTileState()
+        cscObserver.start()
+        if (refreshJob == null) {
+            refreshJob = serviceScope.launch {
+                CameraMuteTileAction.refreshRequests.collect { updateTileState() }
+            }
+        }
+    }
+
+    override fun onStopListening() {
+        cscObserver.stop()
+        refreshJob?.cancel()
+        refreshJob = null
+        super.onStopListening()
     }
 
     override fun onClick() {

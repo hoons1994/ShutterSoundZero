@@ -25,7 +25,8 @@ internal sealed interface PairingEvent {
 internal class PairingWorkflow(
     private val discoveredPort: () -> Int?,
     private val pair: suspend (Int, String) -> Result<Unit>,
-    private val applyCameraMute: suspend () -> Result<Unit>
+    private val applyCameraMute: suspend (Boolean) -> Result<Unit>,
+    private val targetMuted: Boolean = true
 ) {
     companion object {
         // Initial setup also includes code authentication (up to 12s) before connection retries.
@@ -92,13 +93,13 @@ internal class PairingWorkflow(
     }
 
     private suspend fun applyWithRetry(onEvent: (PairingEvent) -> Unit) {
-        var applied = applyCameraMute()
+        var applied = applyCameraMute(targetMuted)
         currentCoroutineContext().ensureActive()
         if (applied.exceptionOrNull().let { it is AdbServiceNotFoundException || it is AdbConnectionFailedException }) {
             onEvent(PairingEvent.ApplyRetrying)
             delay(500)
             currentCoroutineContext().ensureActive()
-            applied = applyCameraMute()
+            applied = applyCameraMute(targetMuted)
         }
         currentCoroutineContext().ensureActive()
         onEvent(if (applied.isSuccess) PairingEvent.ApplySucceeded

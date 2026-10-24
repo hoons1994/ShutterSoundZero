@@ -53,12 +53,14 @@ class PairingForegroundService : Service() {
         private const val EXTRA_DEV_OPTIONS_OFF = "dev_options_off"
         private const val EXTRA_PAIRING_CODE = "pairing_code"
         private const val EXTRA_RESUME_APPLY = "resume_apply"
+        private const val EXTRA_TARGET_MUTED = "target_muted"
 
-        fun start(context: Context, isDevOptionsOff: Boolean, resumeApply: Boolean = false) {
+        fun start(context: Context, isDevOptionsOff: Boolean, resumeApply: Boolean = false, targetMuted: Boolean = true) {
             val intent = Intent(context, PairingForegroundService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_DEV_OPTIONS_OFF, isDevOptionsOff)
                 putExtra(EXTRA_RESUME_APPLY, resumeApply)
+                putExtra(EXTRA_TARGET_MUTED, targetMuted)
             }
             ContextCompat.startForegroundService(context, intent)
         }
@@ -115,10 +117,15 @@ class PairingForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> when {
-                session.isActive && session.hasPaired -> retryApply()
-                intent.getBooleanExtra(EXTRA_RESUME_APPLY, false) -> startApplyRecovery()
-                else -> startPairing()
+            ACTION_START -> {
+                val targetMuted = intent.getBooleanExtra(EXTRA_TARGET_MUTED, true)
+                prefs.pendingPairingTarget = targetMuted
+                when {
+                    session.isActive && session.hasPaired && session.targetMuted == targetMuted -> retryApply()
+                    (session.isActive && session.hasPaired) || intent.getBooleanExtra(EXTRA_RESUME_APPLY, false) ->
+                        startApplyRecovery(targetMuted)
+                    else -> startPairing(targetMuted)
+                }
             }
             ACTION_SUBMIT_CODE -> {
                 val accepted = session.dispatchCode(
@@ -145,14 +152,14 @@ class PairingForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startPairing() {
+    private fun startPairing(targetMuted: Boolean) {
         // 새 1회 설정 시작은 이전 코드 제출 작업의 완료보다 우선한다.
         pairingGeneration.invalidate()
         pairingJob?.cancel()
         pairingJob = null
         stopPairingDiscovery()
         adbManager.clearDiscoveredPorts()
-        session.begin()
+        session.begin(targetMuted = targetMuted)
         isPairingCompleting = false
         val setupState = readPairingSetupState()
         notificationRefresh.reset(setupState)
@@ -185,12 +192,12 @@ class PairingForegroundService : Service() {
         refreshPairingSetupNotification()
     }
 
-    private fun startApplyRecovery() {
+    private fun startApplyRecovery(targetMuted: Boolean) {
         pairingGeneration.invalidate()
         pairingJob?.cancel()
         pairingJob = null
         stopPairingDiscovery()
-        session.begin(paired = true)
+        session.begin(paired = true, targetMuted = targetMuted)
         isPairingCompleting = false
         notificationRefresh.reset(readPairingSetupState())
         retryApply()
@@ -330,6 +337,7 @@ class PairingForegroundService : Service() {
         )
 
         val generation = pairingGeneration.next()
+        val targetMuted = session.targetMuted
         val job = serviceScope.launch(start = CoroutineStart.LAZY) {
             try {
                 val feedback = PairingWorkflowFeedback(
@@ -344,7 +352,10 @@ class PairingForegroundService : Service() {
                 val workflow = PairingWorkflow(
                     discoveredPort = { adbManager.lastDiscoveredPairingPort },
                     pair = adbManager::pairLocal,
-                    applyCameraMute = { AppDependencies.cameraSettings(this@PairingForegroundService).applyCameraMuteViaAdb() }
+                    applyCameraMute = { target ->
+                        AppDependencies.cameraSettings(this@PairingForegroundService).applyCameraMuteViaAdb(targetMuted = target)
+                    },
+                    targetMuted = targetMuted
                 )
                 val handleEvent: (PairingEvent) -> Unit = { event ->
                     commitPairingSideEffect(generation) {
@@ -406,7 +417,11 @@ class PairingForegroundService : Service() {
             val accepted = pairingGeneration.runIfCurrent(generation) {
                 Toast.makeText(
                     this,
-                    if (wirelessDebuggingDisabled) {
+                    if (!session.targetMuted && wirelessDebuggingDisabled) {
+                        getString(R.string.pairing_restore_success_wireless_disabled)
+                    } else if (!session.targetMuted) {
+                        getString(R.string.pairing_restore_success_disable_wireless_manually)
+                    } else if (wirelessDebuggingDisabled) {
                         getString(R.string.foreground_pairing_success_wireless_disabled)
                     } else {
                         getString(R.string.foreground_pairing_success_disable_wireless_manually)
@@ -443,6 +458,8 @@ class PairingForegroundService : Service() {
         if (!showSuccess && session.hasPaired && prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY) {
             prefs.lastSetupIssue = null
         }
+        val targetMuted = session.targetMuted
+        prefs.pendingPairingTarget = null
         session.end()
         unregisterSetupObserver()
         pairingGeneration.invalidate()
@@ -453,7 +470,8 @@ class PairingForegroundService : Service() {
         if (showSuccess) {
             PairingNotificationHelper.showSuccessNotification(
                 this,
-                wirelessDebuggingDisabled = wirelessDebuggingDisabled
+                wirelessDebuggingDisabled = wirelessDebuggingDisabled,
+                targetMuted = targetMuted
             )
         }
         stopSelf()

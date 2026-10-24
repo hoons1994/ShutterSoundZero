@@ -10,9 +10,13 @@ internal class PairingSessionState {
     var hasPaired = false
         private set
 
-    fun begin(paired: Boolean = false): String {
+    var targetMuted: Boolean = true
+        private set
+
+    fun begin(paired: Boolean = false, targetMuted: Boolean = true): String {
         id = UUID.randomUUID().toString()
         hasPaired = paired
+        this.targetMuted = targetMuted
         return requireNotNull(id)
     }
 
