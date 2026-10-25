@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.os.SystemClock
 import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import io.github.hoons1994.shuttersoundzero.camera.CameraSettingsRepository
 import io.github.hoons1994.shuttersoundzero.camera.ChangeCameraMute
@@ -22,6 +23,7 @@ import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import io.github.hoons1994.shuttersoundzero.service.PairingForegroundService
+import io.github.hoons1994.shuttersoundzero.security.AppLockSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,10 +36,12 @@ class MainScreenViewModel internal constructor(
     private val cameraSettings: CameraSettingsRepository,
     private val isSamsungDevice: () -> Boolean = CscMuteManager::isSamsungDevice,
     private val localNetworkGranted: (Context) -> Boolean = LocalNetworkAccess::isGranted,
-    private val wirelessDebuggingState: (Context) -> Boolean? = DeveloperOptionsManager::readWirelessDebuggingEnabled
+    private val wirelessDebuggingState: (Context) -> Boolean? = DeveloperOptionsManager::readWirelessDebuggingEnabled,
+    private val savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
-    constructor(application: Application) : this(
-        application, AppDependencies.changeCameraMute(application), AppDependencies.cameraSettings(application)
+    constructor(application: Application, savedStateHandle: SavedStateHandle) : this(
+        application, AppDependencies.changeCameraMute(application), AppDependencies.cameraSettings(application),
+        savedStateHandle = savedStateHandle
     )
     private val prefs = PreferencesRepository.getInstance(application)
     private val adbManager = StandaloneAdbManager.getInstance(application)
@@ -239,6 +243,7 @@ class MainScreenViewModel internal constructor(
 
     fun toggleCscMute(enableMute: Boolean) {
         if (_uiState.value.isCscChangeInProgress) return
+        cancelCameraMuteAfterWirelessSettings()
         val app = getApplication<Application>()
         _uiState.update { it.copy(pendingCameraMuteTarget = null) }
 
@@ -347,6 +352,28 @@ class MainScreenViewModel internal constructor(
 
     fun dismissSwitchFailureHelp() {
         _uiState.update { it.copy(showSwitchFailureHelp = false, pendingCameraMuteTarget = null) }
+    }
+
+    fun prepareCameraMuteAfterWirelessSettings(targetMuted: Boolean?) {
+        savedStateHandle[WIRELESS_SETTINGS_TARGET] = targetMuted
+        dismissSwitchFailureHelp()
+    }
+
+    fun cancelCameraMuteAfterWirelessSettings() {
+        savedStateHandle.remove<Boolean>(WIRELESS_SETTINGS_TARGET)
+    }
+
+    fun resumeCameraMuteAfterWirelessSettings() {
+        // ON_RESUME can arrive before the old home composition is removed by app lock.
+        // Keep the request pending until authentication, independently of that composition.
+        if (prefs.isAppLockEnabled && !AppLockSession.isUnlocked) return
+        if (_uiState.value.isCscChangeInProgress) return
+        val targetMuted = savedStateHandle.remove<Boolean>(WIRELESS_SETTINGS_TARGET) ?: return
+        toggleCscMute(targetMuted)
+    }
+
+    private companion object {
+        const val WIRELESS_SETTINGS_TARGET = "cameraMuteAfterWirelessSettings"
     }
 
     fun dismissWirelessDebuggingCleanupHelp() {

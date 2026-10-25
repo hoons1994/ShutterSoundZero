@@ -352,6 +352,10 @@ jobs:
                 adb -s "$SERIAL" shell settings put global window_animation_scale 0
                 adb -s "$SERIAL" shell settings put global transition_animation_scale 0
                 adb -s "$SERIAL" shell settings put global animator_duration_scale 0
+                # The real Settings/app-lock round trip needs the developer page.
+                # Keep this enabled until the disposable AVD is destroyed: changing
+                # it back while Settings is alive can disable the CI ADB transport.
+                adb -s "$SERIAL" shell settings put global development_settings_enabled 1
                 exit 0
               fi
             fi
@@ -362,6 +366,33 @@ jobs:
           echo "API $API_LEVEL emulator did not finish booting within 5 minutes."
           adb devices -l || true
           cat "$RUNNER_TEMP/emulator-api-$API_LEVEL.log" || true
+          exit 1
+
+      - name: Prepare the real developer Settings page
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+          test -n "$SERIAL"
+          # This regression covers a phone's full-screen Settings -> ON_STOP path.
+          # The API 32 image's two-pane deep-link trampoline immediately returns
+          # without stopping the caller, so explicitly select full-screen Settings.
+          if [[ "$API_LEVEL" == '32' ]]; then
+            adb -s "$SERIAL" shell settings put global settings_support_large_screen false
+          fi
+          # API 30-34 Settings updates the developer Activity's enabled state on
+          # resume. The global setting alone does not make its intent resolvable.
+          adb -s "$SERIAL" shell am start -W -a android.settings.SOUND_SETTINGS
+          for _ in $(seq 1 20); do
+            if adb -s "$SERIAL" shell cmd package resolve-activity --brief \
+                -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS -p com.android.settings \
+                | tr -d '\r' | grep -q '^com.android.settings/'; then
+              adb -s "$SERIAL" shell input keyevent KEYCODE_HOME
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'The developer Settings Activity is not available on this test AVD.' >&2
           exit 1
 
       - name: Run the full instrumented test suite
