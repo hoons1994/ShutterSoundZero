@@ -156,6 +156,9 @@ jobs:
           fi
           echo "Verified release APK: $RELEASE_APK"
 
+      - name: Verify native entropy failures and JNI ownership on Linux
+        run: bash .github/scripts/verify-spake2-native.sh
+
       - name: Remove temporary test release keystore
         if: always()
         shell: bash
@@ -364,6 +367,10 @@ jobs:
       - name: Run the full instrumented test suite
         run: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
 
+      - name: Repeat API 35 authentication and network regressions
+        if: matrix.api == 35
+        run: bash .github/scripts/verify-api35-stability.sh "$RUNNER_TEMP"
+
       - name: Collect emulator logs and stop emulator
         if: always()
         shell: bash
@@ -391,6 +398,7 @@ jobs:
             app/build/outputs/androidTest-results/connected/**
             ${{ runner.temp }}/emulator-api-${{ matrix.api }}.log
             ${{ runner.temp }}/logcat-api-${{ matrix.api }}.log
+            ${{ runner.temp }}/api35-stability-*.log
           if-no-files-found: warn
           retention-days: 14
 

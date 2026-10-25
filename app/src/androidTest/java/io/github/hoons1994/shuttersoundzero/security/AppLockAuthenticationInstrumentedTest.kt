@@ -145,15 +145,26 @@ class AppLockAuthenticationInstrumentedTest {
             val keys = TEST_PIN.map { "KEYCODE_$it" }.joinToString(" ")
             shell("input keyevent --delay 100 $keys KEYCODE_ENTER")
         } else {
-            if (!inputControl.isFocused) {
-                assertTrue("System PIN field could not receive focus",
-                    inputControl.performAction(AccessibilityNodeInfo.ACTION_FOCUS))
+            // Accessibility nodes are snapshots. The credential transition may replace the
+            // original node, and ACTION_FOCUS can return false for an already-focused field.
+            // Re-query the actual editable system field and wait for observed keyboard focus.
+            awaitCondition("System PIN field could not receive focus") {
+                val current = credentialInput()?.takeUnless(::isPinPad)
+                if (current != null && !current.isFocused) {
+                    current.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                    current.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }
+                credentialInput()?.let { !isPinPad(it) && it.isFocused } == true
             }
             val input = Bundle().apply {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, TEST_PIN)
             }
-            assertTrue("System PIN field did not accept input",
-                inputControl.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, input))
+            awaitCondition("System PIN field did not accept input") {
+                credentialInput()?.let {
+                    !isPinPad(it) && it.isFocused &&
+                        it.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, input)
+                } == true
+            }
             shell("input keyevent KEYCODE_ENTER")
         }
     }
@@ -228,8 +239,9 @@ class AppLockAuthenticationInstrumentedTest {
                 val isSystemCredential = node.packageName?.toString() in
                     setOf("com.android.systemui", "com.android.settings")
                 isSystemCredential && node.isEnabled && node.isVisibleToUser &&
-                    (node.isPassword || node.viewIdResourceName?.endsWith("/lockPassword") == true ||
-                        isPinPad(node))
+                    (isPinPad(node) ||
+                        ((node.isEditable || node.className?.toString() == "android.widget.EditText") &&
+                            (node.isPassword || node.viewIdResourceName?.endsWith("/lockPassword") == true)))
             }
         }
     }

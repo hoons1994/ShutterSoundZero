@@ -20,6 +20,7 @@ concurrency:
 
 jobs:
   analyze:
+    # Preserve the required check name; both compiled languages must succeed in this job.
     name: CodeQL Java/Kotlin
     # Scorecard requires SAST coverage for every commit, including documentation changes.
     runs-on: ubuntu-latest
@@ -76,7 +77,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
-          languages: java-kotlin
+          languages: java-kotlin,c-cpp
           build-mode: manual
           queries: security-extended
 
@@ -88,4 +89,4 @@ jobs:
       - name: Analyze with CodeQL
         uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
-          category: /language:java-kotlin
+          category: /languages:java-kotlin-c-cpp
