@@ -188,8 +188,9 @@ PIN 테스트는 새 접근성 노드에서 실제 키보드 포커스를 기다
 비기본 경로와 실제 시스템 조회를 각각 확인하고, 물리적 보조 Wi-Fi 연결을 요구하지
 않습니다. 물리 기기의 실제 비기본 Wi-Fi 연결은 별도 확인 범위입니다.
 
-CodeQL의 기존 필수 검사 이름은 유지하며, 같은 수동 빌드에서 Java/Kotlin과 C/C++를
-모두 추출·분석합니다. 캐시를 끄고 다시 빌드해 NDK 컴파일이 실제 분석 대상에 포함되도록 합니다.
+CodeQL은 Java/Kotlin과 C/C++를 각각 캐시 없는 수동 빌드로 추출·분석합니다.
+기존 Java/Kotlin 분석 식별자를 유지하고, 두 언어 분석이 모두 성공해야 기존 필수
+`CodeQL Java/Kotlin` 검사가 통과합니다. NDK 컴파일도 실제 분석 대상에 포함됩니다.
 
 ## 테스트 추가 원칙
 
@@ -250,7 +251,7 @@ Android 프레임워크와 분리 가능한 로직은 가능한 한 순수 Kotli
   - Android Lint
   - Debug APK Artifact 업로드
 - **CodeQL Java/Kotlin**
-  - Java/Kotlin 보안 정적 분석
+  - Java/Kotlin 및 C/C++ 보안 정적 분석의 성공을 함께 확인
 - **Dependency Review**
   - 변경된 의존성의 알려진 높은 위험도 취약점 검사
 - **Dependency Submission**
