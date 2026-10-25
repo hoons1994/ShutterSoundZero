@@ -374,6 +374,12 @@ jobs:
           set -euo pipefail
           SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
           test -n "$SERIAL"
+          # This regression covers a phone's full-screen Settings -> ON_STOP path.
+          # The API 32 image's two-pane deep-link trampoline immediately returns
+          # without stopping the caller, so explicitly select full-screen Settings.
+          if [[ "$API_LEVEL" == '32' ]]; then
+            adb -s "$SERIAL" shell settings put global settings_support_large_screen false
+          fi
           # API 30-34 Settings updates the developer Activity's enabled state on
           # resume. The global setting alone does not make its intent resolvable.
           adb -s "$SERIAL" shell am start -W -a android.settings.SOUND_SETTINGS
