@@ -368,6 +368,27 @@ jobs:
           cat "$RUNNER_TEMP/emulator-api-$API_LEVEL.log" || true
           exit 1
 
+      - name: Prepare the real developer Settings page
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+          test -n "$SERIAL"
+          # API 30-34 Settings updates the developer Activity's enabled state on
+          # resume. The global setting alone does not make its intent resolvable.
+          adb -s "$SERIAL" shell am start -W -a android.settings.SOUND_SETTINGS
+          for _ in $(seq 1 20); do
+            if adb -s "$SERIAL" shell cmd package resolve-activity --brief \
+                -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS -p com.android.settings \
+                | tr -d '\r' | grep -q '^com.android.settings/'; then
+              adb -s "$SERIAL" shell input keyevent KEYCODE_HOME
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'The developer Settings Activity is not available on this test AVD.' >&2
+          exit 1
+
       - name: Run the full instrumented test suite
         run: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
 

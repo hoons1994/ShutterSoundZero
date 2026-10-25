@@ -192,7 +192,8 @@ PIN 테스트는 새 접근성 노드에서 실제 키보드 포커스를 기다
 앱 잠금 인증이 끝난 뒤 한 번만 소비합니다. AppLockAuthenticationInstrumentedTest는 실제
 MainActivity와 시스템 설정 왕복, ON_STOP, 실제 PIN 인증을 거쳐 무음·복원 목표를 각각 확인합니다.
 Galaxy 전용 설정 적용은 제어된 테스트 의존성으로 기록하며, 실기기 촬영음 검증을 대신하지 않습니다.
-CI의 일회성 AVD는 계측 실행 전에 개발자 옵션을 켭니다. 실제 Settings 화면이 살아 있는 동안
+CI의 일회성 AVD는 계측 실행 전에 개발자 옵션을 켜고 Settings를 열어 해당 Activity 활성화를 확인합니다.
+구형 Settings는 재개될 때 메뉴 컴포넌트 상태를 갱신합니다. 실제 Settings 화면이 살아 있는 동안
 이를 끄면 ADB 연결도 종료될 수 있으므로, 개별 테스트는 이 전송 환경 설정을 바꾸지 않습니다.
 
 CodeQL은 Java/Kotlin과 C/C++를 각각 캐시 없는 수동 빌드로 추출·분석합니다.

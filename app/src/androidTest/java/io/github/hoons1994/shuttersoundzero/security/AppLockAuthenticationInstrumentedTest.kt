@@ -155,6 +155,9 @@ class AppLockAuthenticationInstrumentedTest {
         // real Settings page is alive can also shut down the CI's ADB transport.
         assertEquals("Enable developer options on the test AVD before instrumentation",
             1, Settings.Global.getInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0))
+        assertTrue("Open Settings once to activate its developer Activity on the test AVD",
+            Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).setPackage("com.android.settings")
+                .resolveActivity(context.packageManager) != null)
         val hadWritePermission = CscMuteManager.hasWritePermission(context)
         val appliedTargets = CopyOnWriteArrayList<Boolean>()
         val cleanupCalls = AtomicInteger()
