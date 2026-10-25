@@ -401,6 +401,31 @@ jobs:
           echo 'The developer Settings Activity is not available on this test AVD.' >&2
           exit 1
 
+      - name: Connect the disposable emulator Wi-Fi
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+          test -n "$SERIAL"
+          wait_for_wifi() {
+            local pattern="$1"
+            for _ in $(seq 1 60); do
+              if adb -s "$SERIAL" shell cmd wifi status | tr -d '\r' \
+                  | grep -E "$pattern" >/dev/null; then
+                return 0
+              fi
+              sleep 1
+            done
+            adb -s "$SERIAL" shell cmd wifi status
+            return 1
+          }
+          adb -s "$SERIAL" shell svc wifi enable
+          wait_for_wifi '^Wifi is enabled$'
+          # AndroidWifi is the emulator's simulated open access point, not a host
+          # or user network. Radio enable alone does not guarantee association.
+          adb -s "$SERIAL" shell cmd wifi connect-network AndroidWifi open
+          wait_for_wifi '^Wifi is connected to '
+
       - name: Run the full instrumented test suite
         run: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
 
