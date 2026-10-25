@@ -17,6 +17,7 @@
 
 #include <spake2/sha512.h>
 #include <spake2/spake2.h>
+#include <spake2/secure_random.h>
 
 #include "ed25519.h"
 
@@ -926,6 +927,7 @@ void SPAKE2_CTX_free(struct spake2_ctx_st *ctx) {
 int SPAKE2_generate_msg(struct spake2_ctx_st *ctx, uint8_t *out, size_t *out_len,
                          size_t max_out_len, const uint8_t *password,
                          size_t password_len) {
+  *out_len = 0;
   if (ctx->state != spake2_state_init) {
     return 0;
   }
@@ -935,9 +937,7 @@ int SPAKE2_generate_msg(struct spake2_ctx_st *ctx, uint8_t *out, size_t *out_len
   }
 
   uint8_t private_tmp[64];
-  for (int i = 0; i < 64; ++i) {
-      private_tmp[i] = rand();
-  }
+  if (!spake2_secure_random(private_tmp, sizeof(private_tmp))) return 0;
 
   x25519_sc_reduce(private_tmp);
   // Multiply by the cofactor (eight) so that we'll clear it when operating on

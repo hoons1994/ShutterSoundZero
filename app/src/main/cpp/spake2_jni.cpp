@@ -10,6 +10,7 @@
 #include <jni.h>
 
 #include <spake2/spake2.h>
+#include <spake2/secure_random.h>
 
 #ifndef nullptr
 #define nullptr NULL
@@ -70,6 +71,9 @@ static jbyteArray Spake2Context_ProcessMessage(JNIEnv *env, jclass clazz, jlong 
 
 static void Spake2Context_Destroy(JNIEnv *env, jclass clazz, jlong ctxPtr) {
     struct spake2_ctx_st *ctx = (struct spake2_ctx_st *) ctxPtr;
+#ifdef SPAKE2_RANDOM_TESTING
+    spake2_test_on_destroy();
+#endif
     SPAKE2_CTX_free(ctx);
 }
 

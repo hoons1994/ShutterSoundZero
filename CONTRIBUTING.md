@@ -176,6 +176,22 @@ Windows x64에서는 JDK 17과 Zig C/C++ 컴파일러로 같은 Java/JNI 소스�
 호스트 호환 헤더와 실행 코드는 `app/src/nativeTest/`, 재생성 가능한 출력은
 `build/native-spake2-host/`에 있습니다. 실행 확인에는 Zig 0.17.0을 사용했습니다.
 
+난수는 Android/Linux의 `getrandom()`으로 전체 버퍼를 채우고, 실패하면 메시지를
+만들지 않습니다. 호스트 회귀 검사에서는 짧은 읽기·중단·부분 획득 후 실패·빈 응답을
+주입해 메시지 미생성과 단일 해제를 확인합니다. Windows 호스트는 `BCryptGenRandom`을
+사용하며, Linux CI는 `.github/scripts/verify-spake2-native.sh`로 실제 `getrandom()`
+경로도 실행합니다. 실패 주입 훅은 Android 산출물에 포함하지 않습니다.
+
+API 35 CI는 전체 계측 검사 뒤 인증·네트워크 검사를 두 번 더 실행합니다.
+PIN 테스트는 새 접근성 노드에서 실제 키보드 포커스를 기다리며, 인증 성공에는 계속
+실제 Keystore 서명 검증이 필요합니다. Wi-Fi 검사는 통제된 Android NetworkRequest transport fixture의
+비기본 경로와 실제 시스템 조회를 각각 확인하고, 물리적 보조 Wi-Fi 연결을 요구하지
+않습니다. 물리 기기의 실제 비기본 Wi-Fi 연결은 별도 확인 범위입니다.
+
+CodeQL은 Java/Kotlin과 C/C++를 각각 캐시 없는 수동 빌드로 추출·분석합니다.
+기존 Java/Kotlin 분석 식별자를 유지하고, 두 언어 분석이 모두 성공해야 기존 필수
+`CodeQL Java/Kotlin` 검사가 통과합니다. NDK 컴파일도 실제 분석 대상에 포함됩니다.
+
 ## 테스트 추가 원칙
 
 버그를 수정하거나 핵심 로직을 변경할 때는 재현 가능한 경우 단위 테스트를 함께 추가해 주세요.
@@ -235,7 +251,7 @@ Android 프레임워크와 분리 가능한 로직은 가능한 한 순수 Kotli
   - Android Lint
   - Debug APK Artifact 업로드
 - **CodeQL Java/Kotlin**
-  - Java/Kotlin 보안 정적 분석
+  - Java/Kotlin 및 C/C++ 보안 정적 분석의 성공을 함께 확인
 - **Dependency Review**
   - 변경된 의존성의 알려진 높은 위험도 취약점 검사
 - **Dependency Submission**

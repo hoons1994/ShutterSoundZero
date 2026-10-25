@@ -20,10 +20,14 @@ concurrency:
 
 jobs:
   analyze:
-    name: CodeQL Java/Kotlin
+    name: Analyze ${{ matrix.language }}
     # Scorecard requires SAST coverage for every commit, including documentation changes.
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [java-kotlin, c-cpp]
     permissions:
       actions: read
       contents: read
@@ -76,7 +80,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
-          languages: java-kotlin
+          languages: ${{ matrix.language }}
           build-mode: manual
           queries: security-extended
 
@@ -88,4 +92,17 @@ jobs:
       - name: Analyze with CodeQL
         uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
-          category: /language:java-kotlin
+          # Keep the Java/Kotlin category already required by code scanning on main.
+          category: /language:${{ matrix.language }}
+
+  verify:
+    # Preserve the required check name and require both language analyses.
+    name: CodeQL Java/Kotlin
+    needs: analyze
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both CodeQL language analyses
+        env:
+          ANALYZE_RESULT: ${{ needs.analyze.result }}
+        run: test "$ANALYZE_RESULT" = 'success'
