@@ -124,16 +124,29 @@ class SettingsWirelessDebuggingTest {
         }
         try {
             shell("svc wifi enable")
+            var connectedSince: Long? = null
             awaitCondition("The disposable emulator did not connect to Wi-Fi") {
-                WifiConnectionStatus.isWifiConnected(instrumentation.targetContext)
+                val now = SystemClock.elapsedRealtime()
+                connectedSince = if (WifiConnectionStatus.isWifiConnected(instrumentation.targetContext)) {
+                    connectedSince ?: now
+                } else null
+                connectedSince?.let { now - it >= 1_000 } == true
             }
             // Force an actual off -> on transition rather than accepting a stale
             // enabled value left by an earlier real Settings Activity.
             shell("settings put global adb_wifi_enabled 0")
+            var disabledSince: Long? = null
             awaitCondition("Wireless debugging did not reset before approval") {
-                DeveloperOptionsManager.readWirelessDebuggingEnabled(instrumentation.targetContext) == false
+                val now = SystemClock.elapsedRealtime()
+                disabledSince = if (DeveloperOptionsManager.readWirelessDebuggingEnabled(instrumentation.targetContext) == false) {
+                    disabledSince ?: now
+                } else null
+                disabledSince?.let { now - it >= 1_000 } == true
             }
             shell("settings put global adb_wifi_enabled 1")
+            var enableAttempts = 1
+            var lastEnableAt = SystemClock.elapsedRealtime()
+            var resetSince: Long? = null
             var readySince: Long? = null
             var approvalState = "waiting"
             awaitCondition("The emulator Wi-Fi debugging approval did not complete", { "; $approvalState" }) {
@@ -143,7 +156,20 @@ class SettingsWirelessDebuggingTest {
                 val wirelessEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(instrumentation.targetContext)
                 val activePackage = automation.rootInActiveWindow?.packageName?.toString()
                 approvalState = "approval=${if (wifiApprovalActive) "visible" else "absent"}; " +
-                    "wireless=$wirelessEnabled; activePackage=$activePackage"
+                    "wireless=$wirelessEnabled; activePackage=$activePackage; enableAttempts=$enableAttempts"
+                val now = SystemClock.elapsedRealtime()
+                // The OS can reset the first enable while Wi-Fi/adbd is still starting.
+                // Retry only that observed reset, at most three times in the same setup
+                // deadline. Never retry or relax the observer assertions below.
+                resetSince = if (!wifiApprovalActive && wirelessEnabled == false &&
+                    WifiConnectionStatus.isWifiConnected(instrumentation.targetContext)) resetSince ?: now else null
+                if (enableAttempts < 3 && now - lastEnableAt >= 2_000 &&
+                    resetSince?.let { now - it >= 1_000 } == true) {
+                    shell("settings put global adb_wifi_enabled 1")
+                    enableAttempts++
+                    lastEnableAt = SystemClock.elapsedRealtime()
+                    resetSince = null
+                }
                 if (wifiApprovalActive) {
                     // On API 32 the active accessibility root can still belong to the
                     // previous window when the SystemUI Activity is already resumed.
@@ -172,7 +198,6 @@ class SettingsWirelessDebuggingTest {
                 // restricted even for shell and are not a readiness signal for this UI test.
                 val ready = !wifiApprovalActive &&
                     wirelessEnabled == true && activePackage == targetPackage
-                val now = SystemClock.elapsedRealtime()
                 readySince = if (ready) readySince ?: now else null
                 readySince?.let { now - it >= 1_000 } == true
             }
