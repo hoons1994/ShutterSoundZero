@@ -374,6 +374,12 @@ jobs:
           set -euo pipefail
           SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
           test -n "$SERIAL"
+          # Real Settings refuses the developer page before initial setup is
+          # complete. Do not rely on a fresh image provisioning itself in time.
+          adb -s "$SERIAL" shell settings put global device_provisioned 1
+          adb -s "$SERIAL" shell settings put secure user_setup_complete 1
+          test "$(adb -s "$SERIAL" shell settings get global device_provisioned | tr -d '\r')" = '1'
+          test "$(adb -s "$SERIAL" shell settings get secure user_setup_complete | tr -d '\r')" = '1'
           # This regression covers a phone's full-screen Settings -> ON_STOP path.
           # The API 32 image's two-pane deep-link trampoline immediately returns
           # without stopping the caller, so explicitly select full-screen Settings.
@@ -394,6 +400,49 @@ jobs:
           done
           echo 'The developer Settings Activity is not available on this test AVD.' >&2
           exit 1
+
+      - name: Connect the disposable emulator Wi-Fi
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+          test -n "$SERIAL"
+          wait_for_wifi() {
+            local pattern="$1"
+            for _ in $(seq 1 60); do
+              if adb -s "$SERIAL" shell cmd wifi status | tr -d '\r' \
+                  | grep -E "$pattern" >/dev/null; then
+                return 0
+              fi
+              sleep 1
+            done
+            adb -s "$SERIAL" shell cmd wifi status
+            return 1
+          }
+          adb -s "$SERIAL" shell svc wifi enable
+          wait_for_wifi '^Wifi is enabled$'
+          # AndroidWifi is the emulator's simulated open access point, not a host
+          # or user network. Radio enable alone does not guarantee association.
+          if ! adb -s "$SERIAL" shell cmd wifi status | tr -d '\r' \
+              | grep -E '^Wifi is connected to ' >/dev/null; then
+            if ! adb -s "$SERIAL" shell cmd wifi connect-network AndroidWifi open; then
+              # Some Google APIs images restrict connect-network to root. Use it
+              # only for AVD preparation, and restore shell UID before tests.
+              restore_shell() {
+                adb -s "$SERIAL" unroot
+                adb -s "$SERIAL" wait-for-device
+              }
+              trap restore_shell EXIT
+              adb -s "$SERIAL" root
+              adb -s "$SERIAL" wait-for-device
+              test "$(adb -s "$SERIAL" shell id -u | tr -d '\r')" = 0
+              adb -s "$SERIAL" shell cmd wifi connect-network AndroidWifi open
+              restore_shell
+              trap - EXIT
+            fi
+          fi
+          test "$(adb -s "$SERIAL" shell id -u | tr -d '\r')" = 2000
+          wait_for_wifi '^Wifi is connected to '
 
       - name: Run the full instrumented test suite
         run: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace

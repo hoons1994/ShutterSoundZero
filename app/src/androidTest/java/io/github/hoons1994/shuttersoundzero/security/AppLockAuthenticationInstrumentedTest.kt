@@ -197,7 +197,11 @@ class AppLockAuthenticationInstrumentedTest {
                 lastSetupIssue = SetupIssue.CAMERA_APPLY
             }
             AppLockSession.lock()
-            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            // Try to inject the opposite operation through this exported launcher.
+            // Only the later in-app request may create a pending resume command.
+            val launchIntent = Intent(context, MainActivity::class.java)
+                .putExtra("cameraMuteAfterWirelessSettings", !targetMuted)
+            ActivityScenario.launch<MainActivity>(launchIntent).use { scenario ->
                 lateinit var viewModel: MainScreenViewModel
                 scenario.onActivity { activity ->
                     val factory = object : ViewModelProvider.Factory {
@@ -226,6 +230,12 @@ class AppLockAuthenticationInstrumentedTest {
                 enterSystemPin(awaitCredentialPrompt())
                 awaitCondition("Initial authentication did not unlock MainActivity") { AppLockSession.isUnlocked }
                 composeTestRule.waitForIdle()
+                scenario.onActivity {
+                    assertFalse("External Intent extras created a pending camera operation",
+                        viewModel.uiState.value.showSwitchFailureHelp)
+                    assertEquals(null, viewModel.uiState.value.pendingCameraMuteTarget)
+                    assertTrue(appliedTargets.isEmpty())
+                }
                 if (targetMuted) {
                     composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
                 } else {
