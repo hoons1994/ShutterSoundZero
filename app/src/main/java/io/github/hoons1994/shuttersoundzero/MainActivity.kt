@@ -21,6 +21,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.DEFAULT_ARGS_KEY
+import androidx.lifecycle.SavedStateViewModelFactory
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.viewmodel.MutableCreationExtras
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
@@ -34,6 +39,16 @@ import io.github.hoons1994.shuttersoundzero.ui.main.MainScreenViewModel
 class MainActivity : ComponentActivity() {
 
     private val mainScreenViewModel: MainScreenViewModel by viewModels()
+
+    // This exported launcher accepts no ViewModel defaults from external Intents.
+    // Keep framework-restored saved state while excluding caller-supplied extras.
+    private val activityViewModelFactory by lazy { SavedStateViewModelFactory(application, this, null) }
+    override val defaultViewModelProviderFactory: ViewModelProvider.Factory
+        get() = activityViewModelFactory
+    override val defaultViewModelCreationExtras: CreationExtras
+        get() = MutableCreationExtras(super.defaultViewModelCreationExtras).apply {
+            this[DEFAULT_ARGS_KEY] = Bundle.EMPTY
+        }
 
     private lateinit var prefs: PreferencesRepository
     private var appLockPreferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null

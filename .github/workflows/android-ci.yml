@@ -374,6 +374,12 @@ jobs:
           set -euo pipefail
           SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
           test -n "$SERIAL"
+          # Real Settings refuses the developer page before initial setup is
+          # complete. Do not rely on a fresh image provisioning itself in time.
+          adb -s "$SERIAL" shell settings put global device_provisioned 1
+          adb -s "$SERIAL" shell settings put secure user_setup_complete 1
+          test "$(adb -s "$SERIAL" shell settings get global device_provisioned | tr -d '\r')" = '1'
+          test "$(adb -s "$SERIAL" shell settings get secure user_setup_complete | tr -d '\r')" = '1'
           # This regression covers a phone's full-screen Settings -> ON_STOP path.
           # The API 32 image's two-pane deep-link trampoline immediately returns
           # without stopping the caller, so explicitly select full-screen Settings.

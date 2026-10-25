@@ -189,10 +189,15 @@ PIN 테스트는 새 접근성 노드에서 실제 키보드 포커스를 기다
 않습니다. 물리 기기의 실제 비기본 Wi-Fi 연결은 별도 확인 범위입니다.
 
 홈의 무선 디버깅 설정 복귀 목표는 Activity 범위 ViewModel의 SavedStateHandle에 보관하고,
-앱 잠금 인증이 끝난 뒤 한 번만 소비합니다. AppLockAuthenticationInstrumentedTest는 실제
+앱 잠금 인증이 끝난 뒤 한 번만 소비합니다.
+`android:exported=true`인 MainActivity는 Intent extras를 ViewModel 기본값으로 사용하지 않습니다. 회귀 검사는
+외부 Intent에 반대 목표를 넣어도 대기 작업이 만들어지지 않고, 이후 앱 안의 요청만 이어지는지 확인합니다.
+AppLockAuthenticationInstrumentedTest는 실제
 MainActivity와 시스템 설정 왕복, ON_STOP, 실제 PIN 인증을 거쳐 무음·복원 목표를 각각 확인합니다.
 Galaxy 전용 설정 적용은 제어된 테스트 의존성으로 기록하며, 실기기 촬영음 검증을 대신하지 않습니다.
-CI의 일회성 AVD는 계측 실행 전에 개발자 옵션을 켜고 Settings를 열어 해당 Activity 활성화를 확인합니다.
+CI의 일회성 AVD는 기기·사용자 초기 설정 완료 상태를 명시적으로 준비·확인한 뒤,
+개발자 옵션을 켜고 Settings를 열어 해당 Activity 활성화를 확인합니다. 초기 설정 미완료 상태에서는
+Settings가 개발자 화면을 즉시 닫으므로 이미지 초기화가 우연히 끝나기를 기다리지 않습니다.
 구형 Settings는 재개될 때 메뉴 컴포넌트 상태를 갱신합니다. 실제 Settings 화면이 살아 있는 동안
 이를 끄면 ADB 연결도 종료될 수 있으므로, 개별 테스트는 이 전송 환경 설정을 바꾸지 않습니다.
 API 32 AVD는 Settings의 대형 화면 딥링크 대신 전체 화면 모드로 검사하여 실제 ON_STOP을 거칩니다.
