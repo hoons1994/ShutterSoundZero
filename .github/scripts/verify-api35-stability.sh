@@ -7,6 +7,16 @@ test -n "$SERIAL"
 test "$(adb -s "$SERIAL" shell getprop ro.kernel.qemu | tr -d '\r')" = '1'
 test "$(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')" = '35'
 mkdir -p "$REPORT_DIR"
+# connectedDebugAndroidTest removes its packages after the managed test run.
+# Reinstall the exact APKs it built before invoking the runner directly.
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+APP_APKS=("$ROOT"/app/build/outputs/apk/debug/*.apk)
+TEST_APK="$ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+test "${#APP_APKS[@]}" -eq 1
+test -s "${APP_APKS[0]}"
+test -s "$TEST_APK"
+adb -s "$SERIAL" install -r -t "${APP_APKS[0]}"
+adb -s "$SERIAL" install -r -t "$TEST_APK"
 CLASSES='io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticationInstrumentedTest,io.github.hoons1994.shuttersoundzero.core.WifiConnectionStatusInstrumentedTest'
 RUNNER='io.github.hoons1994.shuttersoundzero.test/androidx.test.runner.AndroidJUnitRunner'
 for attempt in 1 2; do
