@@ -188,6 +188,11 @@ PIN 테스트는 새 접근성 노드에서 실제 키보드 포커스를 기다
 비기본 경로와 실제 시스템 조회를 각각 확인하고, 물리적 보조 Wi-Fi 연결을 요구하지
 않습니다. 물리 기기의 실제 비기본 Wi-Fi 연결은 별도 확인 범위입니다.
 
+홈의 무선 디버깅 설정 복귀 목표는 Activity 범위 ViewModel의 SavedStateHandle에 보관하고,
+앱 잠금 인증이 끝난 뒤 한 번만 소비합니다. AppLockAuthenticationInstrumentedTest는 실제
+MainActivity와 시스템 설정 왕복, ON_STOP, 실제 PIN 인증을 거쳐 무음·복원 목표를 각각 확인합니다.
+Galaxy 전용 설정 적용은 제어된 테스트 의존성으로 기록하며, 실기기 촬영음 검증을 대신하지 않습니다.
+
 CodeQL은 Java/Kotlin과 C/C++를 각각 캐시 없는 수동 빌드로 추출·분석합니다.
 기존 Java/Kotlin 분석 식별자를 유지하고, 두 언어 분석이 모두 성공해야 기존 필수
 `CodeQL Java/Kotlin` 검사가 통과합니다. NDK 컴파일도 실제 분석 대상에 포함됩니다.

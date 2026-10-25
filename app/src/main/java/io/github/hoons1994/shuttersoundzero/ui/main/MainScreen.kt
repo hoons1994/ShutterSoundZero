@@ -86,7 +86,6 @@ fun MainScreen(
 
     var resumePairingAfterPermissionSettings by rememberSaveable { mutableStateOf(false) }
     var cameraMuteAfterPermissionSettings by rememberSaveable { mutableStateOf<Boolean?>(null) }
-    var cameraMuteAfterWirelessSettings by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val permissionSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val cameraMuteTarget = cameraMuteAfterPermissionSettings
         cameraMuteAfterPermissionSettings = null
@@ -171,9 +170,7 @@ fun MainScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshState()
-                val cameraMuteTarget = cameraMuteAfterWirelessSettings
-                cameraMuteAfterWirelessSettings = null
-                if (cameraMuteTarget != null) viewModel.toggleCscMute(cameraMuteTarget)
+                viewModel.resumeCameraMuteAfterWirelessSettings()
             }
         }
         val volumeObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -293,7 +290,7 @@ fun MainScreen(
             },
             onOpenAppSettings = {
                 cameraMuteAfterPermissionSettings = null
-                cameraMuteAfterWirelessSettings = null
+                viewModel.cancelCameraMuteAfterWirelessSettings()
                 resumePairingAfterPermissionSettings = uiState.setupIssue == SetupIssue.LOCAL_NETWORK_PERMISSION
                 try {
                     permissionSettingsLauncher.launch(SetupSettingsNavigator.appPermissionSettingsIntent(context))
@@ -339,7 +336,7 @@ fun MainScreen(
             onOpenSettings = {
                 if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
                     resumePairingAfterPermissionSettings = false
-                    cameraMuteAfterWirelessSettings = null
+                    viewModel.cancelCameraMuteAfterWirelessSettings()
                     cameraMuteAfterPermissionSettings = cameraMuteTarget
                     try {
                         permissionSettingsLauncher.launch(SetupSettingsNavigator.appPermissionSettingsIntent(context))
@@ -377,10 +374,9 @@ fun MainScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.dismissSwitchFailureHelp()
-                        cameraMuteAfterWirelessSettings = cameraMuteTarget
+                        viewModel.prepareCameraMuteAfterWirelessSettings(cameraMuteTarget)
                         if (!viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))) {
-                            cameraMuteAfterWirelessSettings = null
+                            viewModel.cancelCameraMuteAfterWirelessSettings()
                         }
                     },
                     shape = RoundedCornerShape(12.dp)

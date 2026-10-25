@@ -23,6 +23,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.core.app.ActivityOptionsCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.hoons1994.shuttersoundzero.camera.CameraSettingsRepository
@@ -83,7 +84,8 @@ class MainPermissionRecoveryInstrumentedTest {
                 CameraSettingsRepository(application) { _, _ -> error("Must not start a new ADB/pairing flow") },
                 isSamsungDevice = { true },
                 localNetworkGranted = { permissionGranted },
-                wirelessDebuggingState = { wirelessEnabled }
+                wirelessDebuggingState = { wirelessEnabled },
+                savedStateHandle = SavedStateHandle()
             )
         }
         val owner = object : ActivityResultRegistryOwner {
@@ -191,6 +193,35 @@ class MainPermissionRecoveryInstrumentedTest {
         composeTestRule.runOnIdle { assertEquals(listOf(false), appliedTargets) }
     }
 
+    @Test fun unavailableWirelessSettingsDoesNotLeaveAnAutomaticApplyQueued() {
+        permissionGranted = true
+        wirelessEnabled = false
+        composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
+        context.failSettingsLaunch = true
+        composeTestRule.onNodeWithText("무선 디버깅 켜기").performClick()
+        wirelessEnabled = true
+        composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        composeTestRule.runOnIdle { assertTrue(appliedTargets.isEmpty()) }
+    }
+
+    @Test fun returningWithWirelessStillOffCanRetryTheSameGoalOnce() {
+        permissionGranted = true
+        wirelessEnabled = false
+        composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("무선 디버깅 켜기").performClick()
+        composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        composeTestRule.runOnIdle { assertTrue(appliedTargets.isEmpty()) }
+        composeTestRule.onNodeWithText("무선 디버깅 켜기").performClick()
+        wirelessEnabled = true
+        composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        composeTestRule.runOnIdle { assertEquals(listOf(true), appliedTargets) }
+    }
+
     private fun beginRestore() {
         shell("settings put system ${CscMuteManager.CSC_KEY} 0")
         composeTestRule.runOnIdle {
@@ -235,7 +266,11 @@ class MainPermissionRecoveryInstrumentedTest {
     private class RecordingContext(base: Context) : ContextWrapper(base) {
         val settingsIntents = mutableListOf<Intent>()
         var serviceStarts = 0
-        override fun startActivity(intent: Intent) { settingsIntents += intent }
+        var failSettingsLaunch = false
+        override fun startActivity(intent: Intent) {
+            settingsIntents += intent
+            if (failSettingsLaunch) throw ActivityNotFoundException("Injected settings launch failure")
+        }
         override fun startForegroundService(intent: Intent): ComponentName? {
             serviceStarts++
             return intent.component

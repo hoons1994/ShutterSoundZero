@@ -26,7 +26,7 @@ class SetupSettingsNavigatorInstrumentedTest {
             val savedPort = prefs.lastConnectPort
             val savedIssue = prefs.lastSetupIssue
             try {
-                val viewModel = MainScreenViewModel(application)
+                val viewModel = MainScreenViewModel(application, androidx.lifecycle.SavedStateHandle())
                 prefs.lastConnectPort = 43210
                 prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
                 val context = RecordingContext(application, 0)
@@ -93,7 +93,7 @@ class SetupSettingsNavigatorInstrumentedTest {
             val savedIssue = prefs.lastSetupIssue
             try {
                 val context = RecordingContext(application, failures)
-                val viewModel = MainScreenViewModel(application)
+                val viewModel = MainScreenViewModel(application, androidx.lifecycle.SavedStateHandle())
                 prefs.lastConnectPort = 43210
                 prefs.lastSetupIssue = SetupIssue.PAIRING_DISCOVERY
                 viewModel.startNotificationPairing(context)

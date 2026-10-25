@@ -9,6 +9,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,8 +29,11 @@ import io.github.hoons1994.shuttersoundzero.security.AppLockSession
 import io.github.hoons1994.shuttersoundzero.ui.AppTheme
 import io.github.hoons1994.shuttersoundzero.ui.lock.AppLockScreen
 import io.github.hoons1994.shuttersoundzero.ui.onboarding.FirstRunNoticeDialog
+import io.github.hoons1994.shuttersoundzero.ui.main.MainScreenViewModel
 
 class MainActivity : ComponentActivity() {
+
+    private val mainScreenViewModel: MainScreenViewModel by viewModels()
 
     private lateinit var prefs: PreferencesRepository
     private var appLockPreferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
@@ -106,7 +110,7 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         Box(modifier = Modifier.fillMaxSize()) {
-                            MainNavigation()
+                            MainNavigation(mainScreenViewModel)
                             if (showInitialNotice) {
                                 FirstRunNoticeDialog(
                                     onConfirm = {
@@ -157,6 +161,7 @@ class MainActivity : ComponentActivity() {
             !authenticationInProgress &&
             !AppLockAuthenticator.isAuthenticating(this)
         ) {
+            mainScreenViewModel.resumeCameraMuteAfterWirelessSettings()
             requestLocalNetworkPermissionForExistingLinkageIfNeeded()
         }
     }
@@ -221,6 +226,7 @@ class MainActivity : ComponentActivity() {
                 unlockErrorMessage = null
                 AppLockSession.unlock()
                 isAppUnlocked = true
+                mainScreenViewModel.resumeCameraMuteAfterWirelessSettings()
                 if (!showInitialNotice) {
                     requestRuntimePermissionsIfNeeded()
                 }

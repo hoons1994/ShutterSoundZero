@@ -1,19 +1,37 @@
 package io.github.hoons1994.shuttersoundzero.security
 
 import android.app.KeyguardManager
+import android.app.Application
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
+import android.provider.Settings
 import android.view.accessibility.AccessibilityNodeInfo
 import android.accessibilityservice.AccessibilityServiceInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.CreationExtras
 import io.github.hoons1994.shuttersoundzero.MainActivity
+import io.github.hoons1994.shuttersoundzero.camera.CameraSettingsRepository
+import io.github.hoons1994.shuttersoundzero.camera.ChangeCameraMute
+import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
+import io.github.hoons1994.shuttersoundzero.data.SetupIssue
+import io.github.hoons1994.shuttersoundzero.ui.main.MainScreenViewModel
 import java.security.GeneralSecurityException
 import java.security.KeyFactory
 import java.security.KeyStore
@@ -23,6 +41,8 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.CopyOnWriteArrayList
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -32,11 +52,13 @@ import org.junit.Assume.assumeFalse
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.Rule
 import org.junit.runner.RunWith
 
 /** Changes screen-lock settings only on a fresh emulator, never on a user's phone. */
 @RunWith(AndroidJUnit4::class)
 class AppLockAuthenticationInstrumentedTest {
+    @get:Rule val composeTestRule = createEmptyComposeRule()
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
     private val keyguard = context.getSystemService(KeyguardManager::class.java)
@@ -113,6 +135,126 @@ class AppLockAuthenticationInstrumentedTest {
     @Test
     fun devicePinCompletesActualCryptoAuthenticationOnce() {
         completeActualPinAuthentication()
+    }
+
+    @Test
+    fun wirelessSettingsReapplyWaitsForActualUnlockAndRunsOnce() {
+        wirelessSettingsRecoveryRunsOnce(true)
+    }
+
+    @Test
+    fun wirelessSettingsRestoreWaitsForActualUnlockAndRunsOnce() {
+        wirelessSettingsRecoveryRunsOnce(false)
+    }
+
+    private fun wirelessSettingsRecoveryRunsOnce(targetMuted: Boolean) {
+        // setUp has already restricted credential changes to a fresh emulator.
+        val originalCsc = Settings.System.getString(context.contentResolver, CscMuteManager.CSC_KEY)
+        require(originalCsc == null || originalCsc.toIntOrNull() != null)
+        val originalDevOptions = Settings.Global.getString(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED)
+        val hadWritePermission = CscMuteManager.hasWritePermission(context)
+        val appliedTargets = CopyOnWriteArrayList<Boolean>()
+        val cleanupCalls = AtomicInteger()
+        val wirelessEnabled = AtomicBoolean(false)
+        val application = context.applicationContext as Application
+        // Network capability is supplied by the VM fixture below. Suppress only the
+        // unrelated API 37 permission prompt, without granting LNP and invalidating
+        // the separate fresh-install permission test. Authentication stays real.
+        val permissionPromptFixture = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, state: Bundle?) {
+                if (activity is MainActivity && Build.VERSION.SDK_INT >= 37) {
+                    MainActivity::class.java.getDeclaredField("localNetworkPermissionDeniedThisSession").apply {
+                        isAccessible = true
+                        setBoolean(activity, true)
+                    }
+                }
+            }
+            override fun onActivityStarted(activity: Activity) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivityStopped(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        }
+        application.registerActivityLifecycleCallbacks(permissionPromptFixture)
+        try {
+            shell("pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+            // As with GrantPermissionRule, grants last for this disposable AVD; revoking a
+            // dangerous permission inside instrumentation would kill its own process.
+            if (Build.VERSION.SDK_INT >= 33) shell("pm grant ${context.packageName} android.permission.POST_NOTIFICATIONS")
+            shell("settings put system ${CscMuteManager.CSC_KEY} 1")
+            shell("settings put global development_settings_enabled 1")
+            PreferencesRepository.getInstance(context).apply {
+                hasSeenInitialNotice = true
+                isAppLockEnabled = true
+                isPermissionRevokedByUser = false
+                lastConnectPort = 43210
+                lastSetupIssue = SetupIssue.CAMERA_APPLY
+            }
+            AppLockSession.lock()
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                lateinit var viewModel: MainScreenViewModel
+                scenario.onActivity { activity ->
+                    val factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
+                            MainScreenViewModel(
+                                context.applicationContext as Application,
+                                ChangeCameraMute(
+                                    apply = { appliedTargets += it; Result.success(Unit) },
+                                    verify = { true },
+                                    disableWirelessDebugging = {
+                                        cleanupCalls.incrementAndGet()
+                                        wirelessEnabled.set(false)
+                                        Result.success(Unit)
+                                    }
+                                ),
+                                CameraSettingsRepository(context) { _, _ -> error("No new ADB or pairing flow expected") },
+                                isSamsungDevice = { true },
+                                localNetworkGranted = { true },
+                                wirelessDebuggingState = { wirelessEnabled.get() },
+                                savedStateHandle = extras.createSavedStateHandle()
+                            ) as T
+                    }
+                    viewModel = ViewModelProvider(activity, factory)[MainScreenViewModel::class.java]
+                }
+                enterSystemPin(awaitCredentialPrompt())
+                awaitCondition("Initial authentication did not unlock MainActivity") { AppLockSession.isUnlocked }
+                composeTestRule.waitForIdle()
+                if (targetMuted) {
+                    composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
+                } else {
+                    scenario.onActivity { viewModel.toggleCscMute(false) }
+                }
+                composeTestRule.onNodeWithText("무선 디버깅 켜기").performClick()
+                awaitCondition("Settings did not stop MainActivity") { scenario.state == Lifecycle.State.CREATED }
+                instrumentation.waitForIdleSync()
+                assertFalse(AppLockSession.isUnlocked)
+                assertTrue(appliedTargets.isEmpty())
+                wirelessEnabled.set(true)
+                context.startActivity(Intent(context, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+                val credential = awaitCredentialPrompt()
+                assertFalse(AppLockSession.isUnlocked)
+                assertTrue("A settings return must not apply before authentication", appliedTargets.isEmpty())
+                enterSystemPin(credential)
+                awaitCondition("Original camera request was lost across app lock") { appliedTargets.size == 1 }
+                composeTestRule.waitForIdle()
+                scenario.moveToState(Lifecycle.State.STARTED)
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                scenario.recreate()
+                composeTestRule.waitForIdle()
+                assertEquals(listOf(targetMuted), appliedTargets.toList())
+                assertEquals(1, cleanupCalls.get())
+            }
+        } finally {
+            application.unregisterActivityLifecycleCallbacks(permissionPromptFixture)
+            if (originalCsc == null) shell("settings delete system ${CscMuteManager.CSC_KEY}")
+            else shell("settings put system ${CscMuteManager.CSC_KEY} ${originalCsc.toInt()}")
+            if (originalDevOptions == null) shell("settings delete global development_settings_enabled")
+            else shell("settings put global development_settings_enabled ${originalDevOptions.toInt()}")
+            if (!hadWritePermission) shell("pm revoke ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+        }
     }
 
     private fun completeActualPinAuthentication() {

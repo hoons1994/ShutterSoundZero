@@ -13,10 +13,11 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import io.github.hoons1994.shuttersoundzero.ui.main.MainScreen
+import io.github.hoons1994.shuttersoundzero.ui.main.MainScreenViewModel
 import io.github.hoons1994.shuttersoundzero.ui.settings.SettingsScreen
 
 @Composable
-fun MainNavigation() {
+fun MainNavigation(mainScreenViewModel: MainScreenViewModel) {
   val backStack = rememberNavBackStack(Main)
   var pairingRecoveryTarget by rememberSaveable { mutableStateOf<Boolean?>(null) }
 
@@ -27,6 +28,7 @@ fun MainNavigation() {
       entryProvider {
         entry<Main> {
           MainScreen(
+            viewModel = mainScreenViewModel,
             onItemClick = { navKey -> backStack.add(navKey) },
             modifier = Modifier.safeDrawingPadding(),
             pairingRecoveryTarget = pairingRecoveryTarget,
