@@ -151,7 +151,10 @@ class AppLockAuthenticationInstrumentedTest {
         // setUp has already restricted credential changes to a fresh emulator.
         val originalCsc = Settings.System.getString(context.contentResolver, CscMuteManager.CSC_KEY)
         require(originalCsc == null || originalCsc.toIntOrNull() != null)
-        val originalDevOptions = Settings.Global.getString(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED)
+        // Provision this once with the disposable AVD. Turning it off while the
+        // real Settings page is alive can also shut down the CI's ADB transport.
+        assertEquals("Enable developer options on the test AVD before instrumentation",
+            1, Settings.Global.getInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0))
         val hadWritePermission = CscMuteManager.hasWritePermission(context)
         val appliedTargets = CopyOnWriteArrayList<Boolean>()
         val cleanupCalls = AtomicInteger()
@@ -183,7 +186,6 @@ class AppLockAuthenticationInstrumentedTest {
             // dangerous permission inside instrumentation would kill its own process.
             if (Build.VERSION.SDK_INT >= 33) shell("pm grant ${context.packageName} android.permission.POST_NOTIFICATIONS")
             shell("settings put system ${CscMuteManager.CSC_KEY} 1")
-            shell("settings put global development_settings_enabled 1")
             PreferencesRepository.getInstance(context).apply {
                 hasSeenInitialNotice = true
                 isAppLockEnabled = true
@@ -251,8 +253,6 @@ class AppLockAuthenticationInstrumentedTest {
             application.unregisterActivityLifecycleCallbacks(permissionPromptFixture)
             if (originalCsc == null) shell("settings delete system ${CscMuteManager.CSC_KEY}")
             else shell("settings put system ${CscMuteManager.CSC_KEY} ${originalCsc.toInt()}")
-            if (originalDevOptions == null) shell("settings delete global development_settings_enabled")
-            else shell("settings put global development_settings_enabled ${originalDevOptions.toInt()}")
             if (!hadWritePermission) shell("pm revoke ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
         }
     }

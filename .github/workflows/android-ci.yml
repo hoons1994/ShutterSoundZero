@@ -352,6 +352,10 @@ jobs:
                 adb -s "$SERIAL" shell settings put global window_animation_scale 0
                 adb -s "$SERIAL" shell settings put global transition_animation_scale 0
                 adb -s "$SERIAL" shell settings put global animator_duration_scale 0
+                # The real Settings/app-lock round trip needs the developer page.
+                # Keep this enabled until the disposable AVD is destroyed: changing
+                # it back while Settings is alive can disable the CI ADB transport.
+                adb -s "$SERIAL" shell settings put global development_settings_enabled 1
                 exit 0
               fi
             fi
