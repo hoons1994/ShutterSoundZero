@@ -1,7 +1,6 @@
 package io.github.hoons1994.shuttersoundzero.core.adb
 
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.awaitCancellation
@@ -9,6 +8,8 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.IOException
@@ -16,6 +17,16 @@ import javax.net.ssl.SSLHandshakeException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AdbConnectionResolverTest {
+    @Test fun advertisedListenerBecomingReadySixSecondsLaterReusesExistingIdentity() = runTest {
+        val port = AdbConnectionResolver.resolve(
+            candidatePorts = listOf(40000),
+            connect = { if (currentTime < 6_000L) throw java.net.ConnectException("listener starting") else true },
+            discover = { 41000 }
+        )
+        assertEquals(41000, port)
+        assertEquals(6_000L, currentTime)
+    }
+
     @Test fun newlyEnabledWirelessServiceCanBecomeDiscoverableBeforePairingRecovery() = runTest {
         var discoveries = 0
         val port = AdbConnectionResolver.resolve(
@@ -56,7 +67,7 @@ class AdbConnectionResolverTest {
         assertEquals(listOf(40000, 41000, 42000), attempted)
     }
 
-    @Test fun persistentConnectionFailureStopsAfterBoundedReadinessAttempts() = runTest {
+    @Test fun rejectedCertificateStopsWithoutWaitingForStartup() = runTest {
         var connections = 0
         var discoveries = 0
         val cause = SSLHandshakeException("peer rejected identity")
@@ -66,20 +77,63 @@ class AdbConnectionResolverTest {
                 discover = { discoveries++; 41000 })
             error("Must not accept an unauthenticated peer")
         } catch (error: AdbConnectionFailedException) { error }
-        assertSame(cause, failure.cause)
-        assertEquals(3, connections)
-        assertEquals(3, discoveries)
-        assertEquals(1_000L, currentTime)
+        assertCausePreserved(cause, failure)
+        assertEquals(1, connections)
+        assertEquals(1, discoveries)
+        assertEquals(0L, currentTime)
     }
 
-    @Test fun missingServiceStopsAfterBoundedReadinessAttempts() = runTest {
+    @Test fun missingServiceStopsAfterStartupDeadline() = runTest {
         var discoveries = 0
         try {
             AdbConnectionResolver.resolve(emptyList(), { error("No endpoint") }, { discoveries++; null })
             fail("Missing service must still be reported")
         } catch (_: AdbServiceNotFoundException) { }
-        assertEquals(3, discoveries)
+        assertTrue(discoveries > 3)
+        assertEquals(15_000L, currentTime)
+    }
+
+    @Test fun persistentRefusalStopsAfterStartupDeadlineWithOriginalCause() = runTest {
+        val cause = java.net.ConnectException("listener never started")
+        var connections = 0
+        val failure = try {
+            AdbConnectionResolver.resolve(emptyList(), { connections++; throw cause }, { 41000 })
+            error("Must not wait indefinitely")
+        } catch (error: AdbConnectionFailedException) { error }
+        assertSame(cause, failure.cause)
+        assertTrue(connections > 3)
+        assertEquals(15_000L, currentTime)
+    }
+
+    @Test fun startupDeadlineCancelsAHangingConnectionAndKeepsConnectionCategory() = runTest {
+        var cleanedUp = false
+        try {
+            AdbConnectionResolver.resolve(emptyList(),
+                connect = { try { awaitCancellation() } finally { cleanedUp = true } },
+                discover = { 41000 })
+            fail("Hanging connection must time out")
+        } catch (_: AdbConnectionFailedException) { }
+        assertTrue(cleanedUp)
+        assertEquals(15_000L, currentTime)
+    }
+
+    @Test fun enclosingOperationTimeoutRemainsCancellation() = runTest {
+        try {
+            withTimeout(1_000L) { AdbConnectionResolver.resolve(emptyList(), { false }, { 41000 }) }
+            fail("Caller timeout must not become a pairing error")
+        } catch (_: TimeoutCancellationException) { }
         assertEquals(1_000L, currentTime)
+    }
+
+    @Test fun rejectedPeerIdentityDoesNotRetry() = runTest {
+        val cause = SecurityException("peer identity rejected")
+        var attempts = 0
+        try {
+            AdbConnectionResolver.resolve(emptyList(), { attempts++; throw cause }, { 41000 })
+            fail("Untrusted peer must fail")
+        } catch (error: AdbConnectionFailedException) { assertCausePreserved(cause, error) }
+        assertEquals(1, attempts)
+        assertEquals(0L, currentTime)
     }
 
     @Test fun permissionLossOrBusyWorkerDuringStartupStopsImmediately() = runTest {
@@ -90,7 +144,7 @@ class AdbConnectionResolverTest {
                     connect = { if (discoveries > 1) throw terminal else false },
                     discover = { discoveries++; 41000 })
                 fail("Terminal failure must not be retried")
-            } catch (error: IOException) { assertSame(terminal, error) }
+            } catch (error: IOException) { assertCausePreserved(terminal, error) }
             assertEquals(2, discoveries)
         }
     }
@@ -118,7 +172,7 @@ class AdbConnectionResolverTest {
         assertTrue(job.isCancelled)
     }
 
-    @Test fun staleSavedPortFallsBackToNewDiscoveredPort() = runBlocking {
+    @Test fun staleSavedPortFallsBackToNewDiscoveredPort() = runTest {
         val attempted = mutableListOf<Int>()
         val port = AdbConnectionResolver.resolve(
             candidatePorts = listOf(-1, 40000, 40000, 70000),
@@ -133,7 +187,7 @@ class AdbConnectionResolverTest {
         assertEquals(listOf(40000, 41000), attempted)
     }
 
-    @Test fun usableSavedPortDoesNotRequireDiscovery() = runBlocking {
+    @Test fun usableSavedPortDoesNotRequireDiscovery() = runTest {
         val port = AdbConnectionResolver.resolve(
             candidatePorts = listOf(40000),
             connect = { true },
@@ -144,7 +198,7 @@ class AdbConnectionResolverTest {
 
     @Test fun absentServiceIsNotMisreportedAsAuthenticationFailure() {
         val failure = assertThrows(AdbServiceNotFoundException::class.java) {
-            runBlocking {
+            runTest {
                 AdbConnectionResolver.resolve(listOf(40000), { false }, { null })
             }
         }
@@ -154,7 +208,7 @@ class AdbConnectionResolverTest {
     @Test fun discoveryErrorRetainsCauseAndDiscoveryCategory() {
         val cause = IOException("discovery failed")
         val failure = assertThrows(AdbServiceNotFoundException::class.java) {
-            runBlocking {
+            runTest {
                 AdbConnectionResolver.resolve(emptyList(), { true }, { throw cause })
             }
         }
@@ -165,18 +219,18 @@ class AdbConnectionResolverTest {
     @Test fun discoveredEndpointHandshakeFailureOffersReconnection() {
         val cause = SSLHandshakeException("peer rejected identity")
         val failure = assertThrows(AdbConnectionFailedException::class.java) {
-            runBlocking {
+            runTest {
                 AdbConnectionResolver.resolve(emptyList(), { throw cause }, { 41000 })
             }
         }
-        assertSame(cause, failure.cause)
+        assertCausePreserved(cause, failure)
         assertEquals(CameraMuteFailure.CONNECTION, CameraMuteFailure.from(failure))
         assertTrue(CameraMuteFailure.from(failure).canReconnect)
     }
 
     @Test fun discoveredEndpointReturningFalseIsStillConnectionFailure() {
         assertThrows(AdbConnectionFailedException::class.java) {
-            runBlocking {
+            runTest {
                 AdbConnectionResolver.resolve(emptyList(), { false }, { 41000 })
             }
         }
@@ -186,7 +240,7 @@ class AdbConnectionResolverTest {
         val cancellation = CancellationException("cancel")
         for (stage in 0..2) {
             val thrown = assertThrows(CancellationException::class.java) {
-                runBlocking {
+                runTest {
                     AdbConnectionResolver.resolve(
                         candidatePorts = if (stage == 0) listOf(40000) else emptyList(),
                         connect = { throw cancellation },
@@ -194,14 +248,14 @@ class AdbConnectionResolverTest {
                     )
                 }
             }
-            assertSame(cancellation, thrown)
+            assertCausePreserved(cancellation, thrown)
         }
     }
 
     @Test fun missingPermissionNeverFallsBackToAnotherConnectionAttempt() {
         val cause = LocalNetworkPermissionRequiredException()
         val failure = assertThrows(LocalNetworkPermissionRequiredException::class.java) {
-            runBlocking {
+            runTest {
                 AdbConnectionResolver.resolve(
                     listOf(40000, 41000), { throw cause }, { error("should not discover") }
                 )
@@ -214,7 +268,7 @@ class AdbConnectionResolverTest {
     @Test fun busyWorkerDoesNotStartDiscoveryOrSuggestLostPairing() {
         val cause = BlockingOperationBusyException()
         val failure = assertThrows(BlockingOperationBusyException::class.java) {
-            runBlocking {
+            runTest {
                 AdbConnectionResolver.resolve(listOf(40000), { throw cause }, { error("should not discover") })
             }
         }
@@ -226,5 +280,10 @@ class AdbConnectionResolverTest {
         val failure = CameraMuteFailure.from(IOException("settings command failed"))
         assertEquals(CameraMuteFailure.APPLY, failure)
         assertFalse(failure.canReconnect)
+    }
+
+    private fun assertCausePreserved(expected: Throwable, actual: Throwable) {
+        // Coroutine stack-trace recovery may copy an exception, retaining the original as a cause.
+        assertTrue("Original failure must be preserved", generateSequence(actual) { it.cause }.any { it === expected })
     }
 }

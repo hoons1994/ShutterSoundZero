@@ -2,11 +2,13 @@ package io.github.hoons1994.shuttersoundzero.core.adb
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
+import javax.net.ssl.SSLHandshakeException
 
 /** Retries stale ports through discovery without confusing discovery with connection failure. */
 internal object AdbConnectionResolver {
-    private const val DISCOVERY_ATTEMPTS = 3
+    private const val STARTUP_TIMEOUT_MS = 15_000L
     private const val RETRY_DELAY_MS = 500L
 
     suspend fun resolve(
@@ -29,19 +31,34 @@ internal object AdbConnectionResolver {
         }
 
         // The settings switch and mDNS advertisement can precede a usable ADB listener.
-        // Reuse the paired identity and rediscover after a short wait before offering pairing.
-        var failure: IOException? = null
-        repeat(DISCOVERY_ATTEMPTS) { attempt ->
-            try {
-                return discoverAndConnect(connect, discover)
-            } catch (error: AdbServiceNotFoundException) {
-                failure = error
-            } catch (error: AdbConnectionFailedException) {
-                failure = error
+        // Fast refusals must not exhaust a fixed retry count before that listener is ready.
+        var failure: IOException = AdbServiceNotFoundException()
+        val port = withTimeoutOrNull(STARTUP_TIMEOUT_MS) {
+            var resolved: Int? = null
+            while (resolved == null) {
+                try {
+                    resolved = discoverAndConnect(
+                        connect = { candidate ->
+                            failure = AdbConnectionFailedException()
+                            connect(candidate)
+                        },
+                        discover = {
+                            failure = AdbServiceNotFoundException()
+                            discover()
+                        }
+                    )
+                } catch (error: AdbServiceNotFoundException) {
+                    failure = error
+                } catch (error: AdbConnectionFailedException) {
+                    // Waiting for startup cannot repair a rejected certificate or peer identity.
+                    if (error.cause is SSLHandshakeException || error.cause is SecurityException) throw error
+                    failure = error
+                }
+                if (resolved == null) delay(RETRY_DELAY_MS)
             }
-            if (attempt < DISCOVERY_ATTEMPTS - 1) delay(RETRY_DELAY_MS)
+            requireNotNull(resolved)
         }
-        throw checkNotNull(failure)
+        return port ?: throw failure
     }
 
     private suspend fun discoverAndConnect(
