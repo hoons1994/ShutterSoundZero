@@ -1,10 +1,8 @@
 package io.github.hoons1994.shuttersoundzero.core.adb
 
 import android.os.Build
-import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
@@ -23,13 +21,8 @@ class AdbStartupReadinessInstrumentedTest {
             Build.FINGERPRINT.startsWith("generic") || Build.FINGERPRINT.startsWith("google/sdk_gphone") ||
                 Build.MODEL.contains("sdk_gphone"))
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        if (!LocalNetworkAccess.isGranted(context)) {
-            val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
-                "pm grant ${context.packageName} ${LocalNetworkAccess.PERMISSION}"
-            )
-            ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }
-            assertTrue("Emulator local-network permission preparation failed", LocalNetworkAccess.isGranted(context))
-        }
+        // This loopback fixture must leave the fresh-install runtime permission test untouched.
+        val permissionBefore = LocalNetworkAccess.isGranted(context)
         val loopback = InetAddress.getByName("127.0.0.1")
         val port = ServerSocket(0, 1, loopback).use { it.localPort }
         val server = AtomicReference<ServerSocket?>()
@@ -75,6 +68,8 @@ class AdbStartupReadinessInstrumentedTest {
             listener.join(1_500L)
             assertFalse("Fixture listener did not stop", listener.isAlive)
             serverFailure.get()?.let { throw AssertionError("Fixture listener failed", it) }
+            assertEquals("Network fixture must not change runtime permission grants",
+                permissionBefore, LocalNetworkAccess.isGranted(context))
         }
     }
 }
