@@ -118,6 +118,8 @@ Update README
 
 ## 로컬 검증
 
+소스·빌드 출력·과거 검증 자료의 위치와 보존 기준은 [작업 폴더 안내](docs/WORKSPACE_LAYOUT.md)를 참고해 주세요.
+
 PR을 만들기 전에 최소한 아래 명령이 성공하는지 확인해 주세요.
 
 ### Debug APK 빌드
