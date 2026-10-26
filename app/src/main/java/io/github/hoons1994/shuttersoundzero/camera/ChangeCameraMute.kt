@@ -10,7 +10,8 @@ internal data class CameraMuteChange(val wirelessCleanup: Result<Unit>)
 internal class ChangeCameraMute(
     private val apply: suspend (Boolean) -> Result<Unit>,
     private val verify: suspend (Boolean) -> Boolean,
-    private val disableWirelessDebugging: () -> Result<Unit>
+    private val disableWirelessDebugging: () -> Result<Unit>,
+    private val onApplied: (Boolean) -> Unit = {}
 ) {
     suspend operator fun invoke(muted: Boolean): Result<CameraMuteChange> {
         val applied = apply(muted)
@@ -21,6 +22,8 @@ internal class ChangeCameraMute(
         }
         currentCoroutineContext().ensureActive()
         // Cleanup failure must not turn a successfully applied camera setting into failure.
-        return Result.success(CameraMuteChange(disableWirelessDebugging()))
+        val cleanup = disableWirelessDebugging()
+        onApplied(muted)
+        return Result.success(CameraMuteChange(cleanup))
     }
 }

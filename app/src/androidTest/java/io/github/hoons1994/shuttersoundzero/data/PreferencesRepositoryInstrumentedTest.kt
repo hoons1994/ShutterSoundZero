@@ -14,6 +14,46 @@ import io.github.hoons1994.shuttersoundzero.data.model.AppThemeMode
 
 @RunWith(AndroidJUnit4::class)
 class PreferencesRepositoryInstrumentedTest {
+    @Test fun donationInvitationRequiresVerifiedMuteAndIsClaimedOnlyOnceAcrossRecreation() {
+        val repository = PreferencesRepository(context)
+        assertFalse(repository.claimDonationPrompt())
+        repository.recordCameraMuteSuccess(false)
+        assertFalse(repository.claimDonationPrompt())
+        repository.recordCameraMuteSuccess(true)
+        assertTrue(PreferencesRepository(context).claimDonationPrompt())
+        repository.recordCameraMuteSuccess(true)
+        repository.recordCameraMuteSuccess(false)
+        repository.recordCameraMuteSuccess(true)
+        assertFalse(PreferencesRepository(context).claimDonationPrompt())
+    }
+
+    @Test fun restoringBeforeInvitationIsShownClearsOnlyThePendingInvitation() {
+        val repository = PreferencesRepository(context)
+        repository.shouldMuteOnBoot = true
+        repository.lastConnectPort = 43210
+        repository.lastSetupIssue = SetupIssue.CAMERA_APPLY
+        repository.recordCameraMuteSuccess(true)
+        repository.recordCameraMuteSuccess(false)
+        val reloaded = PreferencesRepository(context)
+        assertFalse(reloaded.claimDonationPrompt())
+        assertTrue(reloaded.shouldMuteOnBoot)
+        assertEquals(43210, reloaded.lastConnectPort)
+        assertEquals(SetupIssue.CAMERA_APPLY, reloaded.lastSetupIssue)
+        reloaded.recordCameraMuteSuccess(true)
+        assertTrue(reloaded.claimDonationPrompt())
+    }
+
+    @Test fun simultaneousRepositoryClaimsCannotRepeatTheInvitation() {
+        PreferencesRepository(context).recordCameraMuteSuccess(true)
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val claims = (1..2).map {
+                executor.submit<Boolean> { PreferencesRepository(context).claimDonationPrompt() }
+            }.map { it.get(5, java.util.concurrent.TimeUnit.SECONDS) }
+            assertEquals(1, claims.count { it })
+        } finally { executor.shutdownNow() }
+    }
+
     @Test fun pendingRestoreTargetSurvivesRepositoryRecreationAndCanBeCleared() {
         val repository = PreferencesRepository(context)
         assertEquals(null, repository.pendingPairingTarget)

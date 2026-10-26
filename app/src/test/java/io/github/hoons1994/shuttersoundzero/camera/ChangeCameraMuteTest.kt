@@ -13,6 +13,56 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChangeCameraMuteTest {
+    @Test fun verifiedCompletionNotifiesWithExactTargetAfterCleanup() = runTest {
+        for (muted in listOf(true, false)) {
+            val events = mutableListOf<String>()
+            val change = ChangeCameraMute(
+                apply = { events += "apply:$it"; Result.success(Unit) },
+                verify = { events += "verify:$it"; true },
+                disableWirelessDebugging = { events += "cleanup"; Result.success(Unit) },
+                onApplied = { events += "completed:$it" }
+            )
+            assertTrue(change(muted).isSuccess)
+            assertEquals(listOf("apply:$muted", "verify:$muted", "cleanup", "completed:$muted"), events)
+        }
+    }
+
+    @Test fun failedOrUnverifiedChangeCannotQueueAnInvitation() = runTest {
+        for (applySucceeds in listOf(true, false)) {
+            val completed = mutableListOf<Boolean>()
+            val change = ChangeCameraMute(
+                apply = { if (applySucceeds) Result.success(Unit) else Result.failure(IOException()) },
+                verify = { false },
+                disableWirelessDebugging = { error("Must not clean up") },
+                onApplied = { completed += it }
+            )
+            assertTrue(change(true).isFailure)
+            assertTrue(completed.isEmpty())
+        }
+    }
+
+    @Test fun cleanupFailureStillNotifiesVerifiedMuteCompletion() = runTest {
+        val completed = mutableListOf<Boolean>()
+        val change = ChangeCameraMute(
+            { Result.success(Unit) }, { true }, { Result.failure(IOException("cleanup failed")) },
+            onApplied = { completed += it }
+        )
+        assertTrue(change(true).isSuccess)
+        assertEquals(listOf(true), completed)
+    }
+
+    @Test fun cancellingVerificationCannotQueueAnInvitation() = runTest {
+        val completed = mutableListOf<Boolean>()
+        val change = ChangeCameraMute(
+            { Result.success(Unit) }, { awaitCancellation() }, { error("Must not clean up") },
+            onApplied = { completed += it }
+        )
+        val job = launch { change(true) }
+        runCurrent()
+        job.cancelAndJoin()
+        assertTrue(completed.isEmpty())
+    }
+
     @Test fun bothMuteAndRestoreConfirmBeforeCleanup() = runTest {
         for (muted in listOf(true, false)) {
             val calls = mutableListOf<String>()

@@ -60,6 +60,7 @@ import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.ui.components.CameraMuteFailureDialog
+import io.github.hoons1994.shuttersoundzero.ui.components.DeveloperDonationPromptHost
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
 
 private const val AccessLocalNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
@@ -269,6 +270,13 @@ fun MainScreen(
             startSetup(pairingRecoveryTarget)
         }
     }
+
+    DeveloperDonationPromptHost(
+        prefs = prefs,
+        enabled = !uiState.isCscChangeInProgress && uiState.infoMessage == null && uiState.errorMessage == null &&
+            !uiState.showWirelessDebuggingCleanupHelp && !uiState.showSwitchFailureHelp &&
+            uiState.cameraMuteFailure == null && !showWifiRequiredDialog
+    )
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
