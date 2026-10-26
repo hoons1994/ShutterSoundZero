@@ -59,6 +59,7 @@ import io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
 import io.github.hoons1994.shuttersoundzero.ui.components.CameraMuteFailureDialog
+import io.github.hoons1994.shuttersoundzero.ui.components.DeveloperDonationPromptHost
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
 import io.github.hoons1994.shuttersoundzero.security.AppLockSession
@@ -191,6 +192,15 @@ fun SettingsScreen(
         pendingLocalNetworkAction = action
         localNetworkPermissionLauncher.launch(LocalNetworkAccess.PERMISSION)
     }
+
+    DeveloperDonationPromptHost(
+        prefs = prefs,
+        enabled = !operationState.isReapplyInProgress && !operationState.isRestoreInProgress &&
+            operationState.resultMessage == null && restoreResultMessage == null && cameraMuteFailure == null &&
+            !showRestoreConfirm && !showReapplyWirelessDebuggingHelp && !showRestoreWirelessDebuggingHelp &&
+            !showDeveloperOptionsConfirm && !showDeveloperOptionsFallback && developerOptionsResultMessage == null &&
+            !showLicenseDialog && !isLockSetupInProgress && lockErrorMessage == null
+    )
 
     Scaffold(
         topBar = {

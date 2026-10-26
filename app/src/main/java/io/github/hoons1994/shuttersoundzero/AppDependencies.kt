@@ -7,6 +7,7 @@ import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.CscStateVerifier
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
+import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.update.AppUpdateRepository
 import io.github.hoons1994.shuttersoundzero.update.GitHubReleaseClient
 
@@ -22,7 +23,8 @@ internal object AppDependencies {
         return ChangeCameraMute(
             apply = cameraSettings(app)::setCameraMute,
             verify = { muted -> CscStateVerifier.waitFor(muted) { CscMuteManager.readCscMutedState(app) } },
-            disableWirelessDebugging = { DeveloperOptionsManager.disableWirelessDebugging(app) }
+            disableWirelessDebugging = { DeveloperOptionsManager.disableWirelessDebugging(app) },
+            onApplied = PreferencesRepository.getInstance(app)::recordCameraMuteSuccess
         )
     }
 }

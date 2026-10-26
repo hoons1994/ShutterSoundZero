@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticReportBuilder
+import io.github.hoons1994.shuttersoundzero.ui.components.openDeveloperDonation
 
 private data class HelpQuestion(val id: String, val question: String, val answer: String)
 
@@ -355,20 +356,6 @@ private fun DeveloperDonationRow(onClick: () -> Unit) {
         )
     }
 }
-
-private fun openDeveloperDonation(context: Context) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DEVELOPER_DONATION_URL)))
-    } catch (_: ActivityNotFoundException) {
-        Toast.makeText(
-            context,
-            "후원 링크를 열 수 있는 앱을 찾지 못했습니다.",
-            Toast.LENGTH_LONG
-        ).show()
-    }
-}
-
-private const val DEVELOPER_DONATION_URL = "https://qr.kakaopay.com/Ej7i4dwyE"
 
 @Composable
 private fun SupportRow(onClick: () -> Unit) {

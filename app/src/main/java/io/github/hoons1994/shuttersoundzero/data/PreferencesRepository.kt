@@ -1,5 +1,6 @@
 package io.github.hoons1994.shuttersoundzero.data
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
@@ -51,6 +52,36 @@ class PreferencesRepository(context: Context) {
     var shouldMuteOnBoot: Boolean
         get() = prefs.getBoolean(KEY_SHOULD_MUTE_ON_BOOT, false)
         set(value) = prefs.edit { putBoolean(KEY_SHOULD_MUTE_ON_BOOT, value) }
+
+    /** Only a verified operation can queue this optional, once-per-installation invitation. */
+    internal fun recordCameraMuteSuccess(muted: Boolean) = synchronized(DONATION_PROMPT_LOCK) {
+        val state = prefs.getString(KEY_DONATION_PROMPT_STATE, null)
+        if (state != DONATION_PROMPT_SHOWN) {
+            prefs.edit {
+                if (muted) putString(KEY_DONATION_PROMPT_STATE, DONATION_PROMPT_PENDING)
+                else remove(KEY_DONATION_PROMPT_STATE)
+            }
+        }
+    }
+
+    // Persist the claim before displaying it, so a new Activity/process cannot claim it again.
+    @SuppressLint("ApplySharedPref")
+    internal fun claimDonationPrompt(): Boolean = synchronized(DONATION_PROMPT_LOCK) {
+        if (prefs.getString(KEY_DONATION_PROMPT_STATE, null) != DONATION_PROMPT_PENDING) false
+        else prefs.edit().putString(KEY_DONATION_PROMPT_STATE, DONATION_PROMPT_SHOWN).commit()
+    }
+
+    internal fun registerDonationPromptListener(onChanged: () -> Unit): SharedPreferences.OnSharedPreferenceChangeListener {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_DONATION_PROMPT_STATE || key == KEY_INITIAL_NOTICE_SEEN || key == null) onChanged()
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        return listener
+    }
+
+    internal fun unregisterDonationPromptListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+    }
 
     /**
      * 사용자 화면에서는 "소프트웨어 업데이트 후 상태 확인"으로 노출한다.
@@ -168,6 +199,10 @@ class PreferencesRepository(context: Context) {
         private const val PREF_NAME = "galaxy_camera_mute_prefs"
         private const val KEY_SHOULD_MUTE_ON_BOOT = "should_mute_on_boot"
         private const val KEY_INITIAL_NOTICE_SEEN = "initial_notice_seen"
+        private const val KEY_DONATION_PROMPT_STATE = "donation_prompt_state"
+        private const val DONATION_PROMPT_PENDING = "pending"
+        private const val DONATION_PROMPT_SHOWN = "shown"
+        private val DONATION_PROMPT_LOCK = Any()
 
         // Legacy key strings intentionally kept for migration compatibility.
         private const val KEY_SOFTWARE_UPDATE_CHECK = "firmware_update_check"

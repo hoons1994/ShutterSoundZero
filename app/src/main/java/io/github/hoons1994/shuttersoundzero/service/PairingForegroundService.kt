@@ -415,6 +415,7 @@ class PairingForegroundService : Service() {
     private fun postSuccessfulCompletion(generation: Long, wirelessDebuggingDisabled: Boolean) {
         mainHandler.post {
             val accepted = pairingGeneration.runIfCurrent(generation) {
+                prefs.recordCameraMuteSuccess(session.targetMuted)
                 Toast.makeText(
                     this,
                     if (!session.targetMuted && wirelessDebuggingDisabled) {
