@@ -196,6 +196,7 @@ class MainScreenViewModel internal constructor(
     }
 
     fun startNotificationPairing(context: Context, targetMuted: Boolean = prefs.pendingPairingTarget ?: true) {
+        cancelAfterPermissionSettings()
         prefs.pendingPairingTarget = targetMuted
         val resumeApply = prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY
         val devOptionsOff = !DeveloperOptionsManager.isDeveloperOptionsEnabled(context)
@@ -243,6 +244,7 @@ class MainScreenViewModel internal constructor(
 
     fun toggleCscMute(enableMute: Boolean) {
         if (_uiState.value.isCscChangeInProgress) return
+        cancelAfterPermissionSettings()
         cancelCameraMuteAfterWirelessSettings()
         val app = getApplication<Application>()
         _uiState.update { it.copy(pendingCameraMuteTarget = null) }
@@ -355,6 +357,7 @@ class MainScreenViewModel internal constructor(
     }
 
     fun prepareCameraMuteAfterWirelessSettings(targetMuted: Boolean?) {
+        cancelAfterPermissionSettings()
         savedStateHandle[WIRELESS_SETTINGS_TARGET] = targetMuted
         dismissSwitchFailureHelp()
     }
@@ -372,8 +375,42 @@ class MainScreenViewModel internal constructor(
         toggleCscMute(targetMuted)
     }
 
+    fun prepareAfterPermissionSettings(cameraTarget: Boolean? = null, resumePairing: Boolean = false) {
+        cancelCameraMuteAfterWirelessSettings()
+        savedStateHandle[PERMISSION_SETTINGS_REQUEST] = when {
+            cameraTarget == true -> PERMISSION_MUTE
+            cameraTarget == false -> PERMISSION_RESTORE
+            resumePairing && prefs.pendingPairingTarget == false -> PERMISSION_PAIR_RESTORE
+            resumePairing -> PERMISSION_PAIR_MUTE
+            else -> null
+        }
+    }
+
+    fun cancelAfterPermissionSettings() {
+        savedStateHandle.remove<String>(PERMISSION_SETTINGS_REQUEST)
+    }
+
+    fun resumeAfterPermissionSettings(context: Context) {
+        if (prefs.isAppLockEnabled && !AppLockSession.isUnlocked) return
+        if (_uiState.value.isCscChangeInProgress) return
+        val request = savedStateHandle.remove<String>(PERMISSION_SETTINGS_REQUEST) ?: return
+        when (request) {
+            PERMISSION_MUTE -> toggleCscMute(true)
+            PERMISSION_RESTORE -> toggleCscMute(false)
+            PERMISSION_PAIR_MUTE, PERMISSION_PAIR_RESTORE -> {
+                if (localNetworkGranted(context)) startNotificationPairing(context, request == PERMISSION_PAIR_MUTE)
+                else reportLocalNetworkPermissionDenied()
+            }
+        }
+    }
+
     private companion object {
         const val WIRELESS_SETTINGS_TARGET = "cameraMuteAfterWirelessSettings"
+        const val PERMISSION_SETTINGS_REQUEST = "permissionSettingsRequest"
+        const val PERMISSION_MUTE = "mute"
+        const val PERMISSION_RESTORE = "restore"
+        const val PERMISSION_PAIR_MUTE = "pair_mute"
+        const val PERMISSION_PAIR_RESTORE = "pair_restore"
     }
 
     fun dismissWirelessDebuggingCleanupHelp() {

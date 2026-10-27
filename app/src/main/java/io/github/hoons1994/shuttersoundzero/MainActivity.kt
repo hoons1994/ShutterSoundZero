@@ -177,6 +177,7 @@ class MainActivity : ComponentActivity() {
             !AppLockAuthenticator.isAuthenticating(this)
         ) {
             mainScreenViewModel.resumeCameraMuteAfterWirelessSettings()
+            mainScreenViewModel.resumeAfterPermissionSettings(this)
             requestLocalNetworkPermissionForExistingLinkageIfNeeded()
         }
     }
@@ -242,6 +243,7 @@ class MainActivity : ComponentActivity() {
                 AppLockSession.unlock()
                 isAppUnlocked = true
                 mainScreenViewModel.resumeCameraMuteAfterWirelessSettings()
+                mainScreenViewModel.resumeAfterPermissionSettings(this)
                 if (!showInitialNotice) {
                     requestRuntimePermissionsIfNeeded()
                 }

@@ -147,7 +147,17 @@ class AppLockAuthenticationInstrumentedTest {
         wirelessSettingsRecoveryRunsOnce(false)
     }
 
-    private fun wirelessSettingsRecoveryRunsOnce(targetMuted: Boolean) {
+    @Test
+    fun appPermissionSettingsReapplyWaitsForActualUnlockAndRunsOnce() {
+        wirelessSettingsRecoveryRunsOnce(true, permissionSettings = true)
+    }
+
+    @Test
+    fun appPermissionSettingsRestoreWaitsForActualUnlockAndRunsOnce() {
+        wirelessSettingsRecoveryRunsOnce(false, permissionSettings = true)
+    }
+
+    private fun wirelessSettingsRecoveryRunsOnce(targetMuted: Boolean, permissionSettings: Boolean = false) {
         // setUp has already restricted credential changes to a fresh emulator.
         val originalCsc = Settings.System.getString(context.contentResolver, CscMuteManager.CSC_KEY)
         require(originalCsc == null || originalCsc.toIntOrNull() != null)
@@ -161,7 +171,8 @@ class AppLockAuthenticationInstrumentedTest {
         val hadWritePermission = CscMuteManager.hasWritePermission(context)
         val appliedTargets = CopyOnWriteArrayList<Boolean>()
         val cleanupCalls = AtomicInteger()
-        val wirelessEnabled = AtomicBoolean(false)
+        val wirelessEnabled = AtomicBoolean(permissionSettings)
+        val permissionGranted = AtomicBoolean(!permissionSettings)
         val application = context.applicationContext as Application
         // Network capability is supplied by the VM fixture below. Suppress only the
         // unrelated API 37 permission prompt, without granting LNP and invalidating
@@ -201,6 +212,7 @@ class AppLockAuthenticationInstrumentedTest {
             // Only the later in-app request may create a pending resume command.
             val launchIntent = Intent(context, MainActivity::class.java)
                 .putExtra("cameraMuteAfterWirelessSettings", !targetMuted)
+                .putExtra("permissionSettingsRequest", if (targetMuted) "restore" else "mute")
             ActivityScenario.launch<MainActivity>(launchIntent).use { scenario ->
                 lateinit var viewModel: MainScreenViewModel
                 scenario.onActivity { activity ->
@@ -220,7 +232,7 @@ class AppLockAuthenticationInstrumentedTest {
                                 ),
                                 CameraSettingsRepository(context) { _, _ -> error("No new ADB or pairing flow expected") },
                                 isSamsungDevice = { true },
-                                localNetworkGranted = { true },
+                                localNetworkGranted = { permissionGranted.get() },
                                 wirelessDebuggingState = { wirelessEnabled.get() },
                                 savedStateHandle = extras.createSavedStateHandle()
                             ) as T
@@ -241,12 +253,13 @@ class AppLockAuthenticationInstrumentedTest {
                 } else {
                     scenario.onActivity { viewModel.toggleCscMute(false) }
                 }
-                composeTestRule.onNodeWithText("무선 디버깅 켜기").performClick()
+                composeTestRule.onNodeWithText(if (permissionSettings) "앱 권한 설정" else "무선 디버깅 켜기").performClick()
                 awaitCondition("Settings did not stop MainActivity") { scenario.state == Lifecycle.State.CREATED }
                 instrumentation.waitForIdleSync()
                 assertFalse(AppLockSession.isUnlocked)
                 assertTrue(appliedTargets.isEmpty())
                 wirelessEnabled.set(true)
+                permissionGranted.set(true)
                 context.startActivity(Intent(context, MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
                 val credential = awaitCredentialPrompt()

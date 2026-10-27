@@ -36,7 +36,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -85,19 +84,9 @@ fun MainScreen(
         viewModel.startNotificationPairing(context, prefs.pendingPairingTarget ?: true)
     }
 
-    var resumePairingAfterPermissionSettings by rememberSaveable { mutableStateOf(false) }
-    var cameraMuteAfterPermissionSettings by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val permissionSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        val cameraMuteTarget = cameraMuteAfterPermissionSettings
-        cameraMuteAfterPermissionSettings = null
-        val resume = resumePairingAfterPermissionSettings
-        resumePairingAfterPermissionSettings = false
-        if (cameraMuteTarget != null) {
-            // Recheck current permission and wireless state; never replace a restore with pairing.
-            viewModel.toggleCscMute(cameraMuteTarget)
-        } else if (resume) {
-            if (LocalNetworkAccess.isGranted(context)) startPairing()
-            else viewModel.reportLocalNetworkPermissionDenied()
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            viewModel.resumeAfterPermissionSettings(context)
         }
     }
 
@@ -172,6 +161,7 @@ fun MainScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshState()
                 viewModel.resumeCameraMuteAfterWirelessSettings()
+                viewModel.resumeAfterPermissionSettings(context)
             }
         }
         val volumeObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -250,6 +240,7 @@ fun MainScreen(
         viewModel.toggleCscMute(true)
     }
     val startSetup: (Boolean) -> Unit = { targetMuted ->
+        viewModel.cancelAfterPermissionSettings()
         if (!CscMuteManager.isSamsungDevice()) {
             Toast.makeText(
                 context,
@@ -297,13 +288,13 @@ fun MainScreen(
                 viewModel.handleSettingsLaunch(SetupSettingsNavigator.openSoftwareInfoSettings(context))
             },
             onOpenAppSettings = {
-                cameraMuteAfterPermissionSettings = null
-                viewModel.cancelCameraMuteAfterWirelessSettings()
-                resumePairingAfterPermissionSettings = uiState.setupIssue == SetupIssue.LOCAL_NETWORK_PERMISSION
+                viewModel.prepareAfterPermissionSettings(
+                    resumePairing = uiState.setupIssue == SetupIssue.LOCAL_NETWORK_PERMISSION
+                )
                 try {
                     permissionSettingsLauncher.launch(SetupSettingsNavigator.appPermissionSettingsIntent(context))
                 } catch (_: Exception) {
-                    resumePairingAfterPermissionSettings = false
+                    viewModel.cancelAfterPermissionSettings()
                     viewModel.handleSettingsLaunch(Result.failure(IllegalStateException()))
                 }
             },
@@ -343,13 +334,11 @@ fun MainScreen(
             onReconnect = { startSetup(cameraMuteTarget ?: true) },
             onOpenSettings = {
                 if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
-                    resumePairingAfterPermissionSettings = false
-                    viewModel.cancelCameraMuteAfterWirelessSettings()
-                    cameraMuteAfterPermissionSettings = cameraMuteTarget
+                    viewModel.prepareAfterPermissionSettings(cameraTarget = cameraMuteTarget)
                     try {
                         permissionSettingsLauncher.launch(SetupSettingsNavigator.appPermissionSettingsIntent(context))
                     } catch (error: Exception) {
-                        cameraMuteAfterPermissionSettings = null
+                        viewModel.cancelAfterPermissionSettings()
                         cameraMuteTarget?.let(viewModel::reportCameraMutePermissionRequired)
                         viewModel.handleSettingsLaunch(Result.failure(error))
                     }
