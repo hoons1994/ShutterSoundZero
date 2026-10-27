@@ -50,6 +50,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.ViewModelProvider
 import io.github.hoons1994.shuttersoundzero.R
@@ -65,8 +67,6 @@ import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
 import io.github.hoons1994.shuttersoundzero.security.AppLockSession
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
 
-private enum class CameraAction { REAPPLY, RESTORE }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -75,6 +75,7 @@ fun SettingsScreen(
     onPairingRecoveryRequested: (Boolean) -> Unit = { onBackClick() }
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val settingsLaunchFailureMessage = stringResource(R.string.settings_launch_failed)
     fun handleSettingsLaunch(result: Result<Unit>): Boolean {
         if (result.isFailure) {
@@ -93,6 +94,7 @@ fun SettingsScreen(
         ViewModelProvider(viewModelStoreOwner).get(CameraSettingsOperationViewModel::class.java)
     }
     val operationState by cameraSettingsViewModel.uiState.collectAsState()
+    val permissionRecovery by cameraSettingsViewModel.permissionRecovery.collectAsState()
 
     var isSoftwareUpdateCheck by remember {
         mutableStateOf(prefs.isSoftwareUpdateCheckEnabled)
@@ -119,8 +121,8 @@ fun SettingsScreen(
     var restoreResultMessage by remember { mutableStateOf<String?>(null) }
     var cameraMuteFailure by remember { mutableStateOf<CameraMuteFailure?>(null) }
     var failedCameraMuteTarget by rememberSaveable { mutableStateOf(true) }
-    var pendingLocalNetworkAction by rememberSaveable { mutableStateOf<CameraAction?>(null) }
     var deniedLocalNetworkAction by rememberSaveable { mutableStateOf<CameraAction?>(null) }
+    val recoveryRestoreConfirm = permissionRecovery == SettingsPermissionRecovery.CONFIRM_RESTORE
 
     LaunchedEffect(cameraState.wirelessDebuggingEnabled) {
         if (cameraState.wirelessDebuggingEnabled == true) {
@@ -146,9 +148,9 @@ fun SettingsScreen(
         if (!operationState.isReapplyInProgress) {
             if (!CscMuteManager.hasWritePermission(context)) {
                 restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-            } else if (DeveloperOptionsManager.readWirelessDebuggingEnabled(context) != true) {
+            } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) != true) {
                 showReapplyWirelessDebuggingHelp = true
-            } else if (!LocalNetworkAccess.isGranted(context)) {
+            } else if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
                 deniedLocalNetworkAction = CameraAction.REAPPLY
             } else {
                 cameraSettingsViewModel.setCameraMute(true)
@@ -160,44 +162,53 @@ fun SettingsScreen(
         cameraState.refresh()
         if (!CscMuteManager.hasWritePermission(context)) {
             restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-        } else if (cameraState.wirelessDebuggingEnabled != true) {
+        } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) != true) {
             if (action == CameraAction.REAPPLY) showReapplyWirelessDebuggingHelp = true
             else showRestoreWirelessDebuggingHelp = true
-        } else if (!LocalNetworkAccess.isGranted(context)) {
+        } else if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
             deniedLocalNetworkAction = action
         } else when (action) {
             CameraAction.REAPPLY -> runReapply()
-            CameraAction.RESTORE -> showRestoreConfirm = true
+            CameraAction.RESTORE -> cameraSettingsViewModel.requireRestoreConfirmation()
         }
+    }
+
+    LaunchedEffect(permissionRecovery) {
+        cameraSettingsViewModel.takeReadyPermissionAction()?.let(resumeCameraAction)
     }
 
     val permissionSettingsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
-        val action = pendingLocalNetworkAction
-        pendingLocalNetworkAction = null
-        if (action != null) resumeCameraAction(action)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            cameraSettingsViewModel.resumePermissionRecovery()
+        }
     }
 
     val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ ->
-        val action = pendingLocalNetworkAction
-        pendingLocalNetworkAction = null
-        // The current OS permission is authoritative, including after an OTA or settings return.
-        if (action != null) resumeCameraAction(action)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            cameraSettingsViewModel.resumePermissionRecovery()
+        }
     }
 
     val requestLocalNetworkPermission: (CameraAction) -> Unit = { action ->
-        pendingLocalNetworkAction = action
-        localNetworkPermissionLauncher.launch(LocalNetworkAccess.PERMISSION)
+        cameraSettingsViewModel.preparePermissionRecovery(action)
+        try {
+            localNetworkPermissionLauncher.launch(LocalNetworkAccess.PERMISSION)
+        } catch (_: Exception) {
+            cameraSettingsViewModel.cancelPermissionRecovery()
+            Toast.makeText(context, settingsLaunchFailureMessage, Toast.LENGTH_LONG).show()
+        }
     }
 
     DeveloperDonationPromptHost(
         prefs = prefs,
         enabled = !operationState.isReapplyInProgress && !operationState.isRestoreInProgress &&
             operationState.resultMessage == null && restoreResultMessage == null && cameraMuteFailure == null &&
-            !showRestoreConfirm && !showReapplyWirelessDebuggingHelp && !showRestoreWirelessDebuggingHelp &&
+            permissionRecovery == null && deniedLocalNetworkAction == null &&
+            !showRestoreConfirm && !recoveryRestoreConfirm && !showReapplyWirelessDebuggingHelp && !showRestoreWirelessDebuggingHelp &&
             !showDeveloperOptionsConfirm && !showDeveloperOptionsFallback && developerOptionsResultMessage == null &&
             !showLicenseDialog && !isLockSetupInProgress && lockErrorMessage == null
     )
@@ -252,13 +263,14 @@ fun SettingsScreen(
                         title = "카메라 셔터음 원래대로 복원",
                         subtitle = "현재 셔터음 강제 해제 설정값 적용됨",
                         onClick = {
+                            cameraSettingsViewModel.cancelPermissionRecovery()
                             cameraState.refresh()
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
                                     "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-                            } else if (cameraState.wirelessDebuggingEnabled != true) {
+                            } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) != true) {
                                 showRestoreWirelessDebuggingHelp = true
-                            } else if (!LocalNetworkAccess.isGranted(context)) {
+                            } else if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
                                 requestLocalNetworkPermission(CameraAction.RESTORE)
                             } else {
                                 showRestoreConfirm = true
@@ -270,14 +282,15 @@ fun SettingsScreen(
                         title = if (operationState.isReapplyInProgress) "카메라 무음 다시 적용 중…" else "카메라 무음 다시 적용",
                         subtitle = "카메라 설정이 기본 상태로 돌아온 경우 사용",
                         onClick = {
+                            cameraSettingsViewModel.cancelPermissionRecovery()
                             cameraState.refresh()
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
                                     "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-                            } else if (cameraState.wirelessDebuggingEnabled != true) {
+                            } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) != true) {
                                 showReapplyWirelessDebuggingHelp = true
                             } else if (!operationState.isReapplyInProgress) {
-                                if (!LocalNetworkAccess.isGranted(context)) {
+                                if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
                                     requestLocalNetworkPermission(CameraAction.REAPPLY)
                                 } else {
                                     runReapply()
@@ -492,9 +505,14 @@ fun SettingsScreen(
             )
         }
 
-        if (showRestoreConfirm) {
+        if (showRestoreConfirm || recoveryRestoreConfirm) {
             AlertDialog(
-                onDismissRequest = { if (!operationState.isRestoreInProgress) showRestoreConfirm = false },
+                onDismissRequest = {
+                    if (!operationState.isRestoreInProgress) {
+                        showRestoreConfirm = false
+                        cameraSettingsViewModel.cancelPermissionRecovery()
+                    }
+                },
                 title = { Text("카메라 셔터음을 원래대로 복원할까요?") },
                 text = {
                     Text(
@@ -506,11 +524,13 @@ fun SettingsScreen(
                         enabled = !operationState.isRestoreInProgress,
                         onClick = {
                             if (operationState.isRestoreInProgress) return@TextButton
-                            if (!LocalNetworkAccess.isGranted(context)) {
+                            if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
                                 showRestoreConfirm = false
                                 requestLocalNetworkPermission(CameraAction.RESTORE)
                                 return@TextButton
                             }
+                            showRestoreConfirm = true
+                            cameraSettingsViewModel.cancelPermissionRecovery()
                             cameraSettingsViewModel.setCameraMute(false)
                         }
                     ) {
@@ -520,7 +540,10 @@ fun SettingsScreen(
                 dismissButton = {
                     TextButton(
                         enabled = !operationState.isRestoreInProgress,
-                        onClick = { showRestoreConfirm = false }
+                        onClick = {
+                            showRestoreConfirm = false
+                            cameraSettingsViewModel.cancelPermissionRecovery()
+                        }
                     ) {
                         Text("취소")
                     }
@@ -551,11 +574,11 @@ fun SettingsScreen(
                 onDismiss = { deniedLocalNetworkAction = null },
                 onReconnect = {},
                 onOpenSettings = {
-                    pendingLocalNetworkAction = action
+                    cameraSettingsViewModel.preparePermissionRecovery(action)
                     try {
                         permissionSettingsLauncher.launch(SetupSettingsNavigator.appPermissionSettingsIntent(context))
                     } catch (_: Exception) {
-                        pendingLocalNetworkAction = null
+                        cameraSettingsViewModel.cancelPermissionRecovery()
                         Toast.makeText(context, settingsLaunchFailureMessage, Toast.LENGTH_LONG).show()
                     }
                 }

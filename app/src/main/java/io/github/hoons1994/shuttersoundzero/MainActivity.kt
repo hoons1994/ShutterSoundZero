@@ -35,10 +35,12 @@ import io.github.hoons1994.shuttersoundzero.ui.AppTheme
 import io.github.hoons1994.shuttersoundzero.ui.lock.AppLockScreen
 import io.github.hoons1994.shuttersoundzero.ui.onboarding.FirstRunNoticeDialog
 import io.github.hoons1994.shuttersoundzero.ui.main.MainScreenViewModel
+import io.github.hoons1994.shuttersoundzero.ui.settings.CameraSettingsOperationViewModel
 
 class MainActivity : ComponentActivity() {
 
     private val mainScreenViewModel: MainScreenViewModel by viewModels()
+    private val cameraSettingsViewModel: CameraSettingsOperationViewModel by viewModels()
 
     // This exported launcher accepts no ViewModel defaults from external Intents.
     // Keep framework-restored saved state while excluding caller-supplied extras.
@@ -125,7 +127,7 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         Box(modifier = Modifier.fillMaxSize()) {
-                            MainNavigation(mainScreenViewModel)
+                            MainNavigation(mainScreenViewModel, cameraSettingsViewModel)
                             if (showInitialNotice) {
                                 FirstRunNoticeDialog(
                                     onConfirm = {
@@ -178,6 +180,7 @@ class MainActivity : ComponentActivity() {
         ) {
             mainScreenViewModel.resumeCameraMuteAfterWirelessSettings()
             mainScreenViewModel.resumeAfterPermissionSettings(this)
+            cameraSettingsViewModel.resumePermissionRecovery()
             requestLocalNetworkPermissionForExistingLinkageIfNeeded()
         }
     }
@@ -244,6 +247,7 @@ class MainActivity : ComponentActivity() {
                 isAppUnlocked = true
                 mainScreenViewModel.resumeCameraMuteAfterWirelessSettings()
                 mainScreenViewModel.resumeAfterPermissionSettings(this)
+                cameraSettingsViewModel.resumePermissionRecovery()
                 if (!showInitialNotice) {
                     requestRuntimePermissionsIfNeeded()
                 }
