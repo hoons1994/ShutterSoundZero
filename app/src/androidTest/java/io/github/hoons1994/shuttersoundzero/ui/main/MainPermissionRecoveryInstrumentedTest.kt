@@ -193,6 +193,42 @@ class MainPermissionRecoveryInstrumentedTest {
         composeTestRule.runOnIdle { assertEquals(listOf(false), appliedTargets) }
     }
 
+    @Test fun newManualRequestCancelsTheOlderPermissionSettingsRequest() {
+        composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
+        openPermissionSettings()
+        permissionGranted = true
+        composeTestRule.runOnIdle { viewModel.toggleCscMute(false) }
+        returnFromPermissionSettings()
+        composeTestRule.runOnIdle { assertEquals(listOf(false), appliedTargets) }
+    }
+
+    @Test fun pairingPermissionReturnKeepsItsOriginalRestoreTargetAndRunsOnce() {
+        composeTestRule.runOnIdle {
+            prefs.pendingPairingTarget = false
+            viewModel.prepareAfterPermissionSettings(resumePairing = true)
+            prefs.pendingPairingTarget = true
+            permissionGranted = true
+            viewModel.resumeAfterPermissionSettings(context)
+            viewModel.resumeAfterPermissionSettings(context)
+            assertEquals(false, prefs.pendingPairingTarget)
+            assertEquals(1, context.serviceStarts)
+            assertEquals(1, context.settingsIntents.size)
+        }
+    }
+
+    @Test fun pairingPermissionDenialConsumesTheRequestWithoutStartingPairing() {
+        composeTestRule.runOnIdle {
+            prefs.pendingPairingTarget = false
+            viewModel.prepareAfterPermissionSettings(resumePairing = true)
+            viewModel.resumeAfterPermissionSettings(context)
+            assertEquals(SetupIssue.LOCAL_NETWORK_PERMISSION, viewModel.uiState.value.setupIssue)
+            permissionGranted = true
+            viewModel.resumeAfterPermissionSettings(context)
+            assertEquals(0, context.serviceStarts)
+            assertEquals(false, prefs.pendingPairingTarget)
+        }
+    }
+
     @Test fun unavailableWirelessSettingsDoesNotLeaveAnAutomaticApplyQueued() {
         permissionGranted = true
         wirelessEnabled = false
