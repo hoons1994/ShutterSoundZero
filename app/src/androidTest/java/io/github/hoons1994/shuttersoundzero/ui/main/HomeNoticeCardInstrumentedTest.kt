@@ -26,6 +26,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import io.github.hoons1994.shuttersoundzero.theme.ShutterSoundZeroTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -43,7 +44,7 @@ class HomeNoticeCardInstrumentedTest {
 
     @Test
     fun narrowCardKeepsControlsInsideAndHeightStableAtDoubleFontSize() =
-        checkStableHeight(fontScale = 2f, width = 280)
+        checkStableHeight(fontScale = 2f, width = 280, darkTheme = true)
 
     @Test
     fun swipeAndRestorationPreserveManuallySelectedNotice() {
@@ -82,11 +83,16 @@ class HomeNoticeCardInstrumentedTest {
     fun readyHomeOffersOnlyTheHeroCameraAction() {
         var cameraCalls = 0
         rule.setContent {
-            MaterialTheme {
-                HomeContent(
-                    uiState = MainUiState(isCscMuted = true, hasCscPermission = true),
-                    onOpenCamera = { cameraCalls++ }
-                )
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density, 2f)) {
+                ShutterSoundZeroTheme(darkTheme = true) {
+                    Box(Modifier.width(280.dp)) {
+                        HomeContent(
+                            uiState = MainUiState(isCscMuted = true, hasCscPermission = true),
+                            onOpenCamera = { cameraCalls++ }
+                        )
+                    }
+                }
             }
         }
         rule.onNodeWithText("카메라 열기").assertDoesNotExist()
@@ -119,11 +125,11 @@ class HomeNoticeCardInstrumentedTest {
         rule.onNodeWithText("3 / 3").assertIsDisplayed()
     }
 
-    private fun checkStableHeight(fontScale: Float, width: Int = 320) {
+    private fun checkStableHeight(fontScale: Float, width: Int = 320, darkTheme: Boolean = false) {
         rule.setContent {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
-                MaterialTheme {
+                ShutterSoundZeroTheme(darkTheme = darkTheme) {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         Box(Modifier.width(width.dp).testTag("notice-container")) {
                             HomeNoticeCard()

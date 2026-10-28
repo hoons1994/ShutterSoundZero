@@ -108,7 +108,7 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("설정값 확인됨").fetchSemanticsNode()
         composeTestRule.onNodeWithText("카메라 설정값 적용 완료").fetchSemanticsNode()
         composeTestRule.onNodeWithText("카메라 열어보기").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("셔터음 강제 설정값이 해제되어 있습니다. [카메라 열어보기]로 실제 촬영음을 확인해 주세요.").assertExists()
+        composeTestRule.onNodeWithText("셔터음 강제 설정값이 해제되어 있습니다. 실제 촬영음은 카메라에서 확인해 주세요.").assertExists()
         assertTrue(
             composeTestRule.onAllNodesWithText("다시 적용하기").fetchSemanticsNodes().isEmpty()
         )
