@@ -3,6 +3,7 @@ package io.github.hoons1994.shuttersoundzero.ui.main
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +18,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,7 +40,11 @@ import io.github.hoons1994.shuttersoundzero.R
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun HomeNoticeCard(status: HomeStatus = HomeStatus.SETUP_REQUIRED) {
+internal fun HomeNoticeCard(
+    status: HomeStatus = HomeStatus.SETUP_REQUIRED,
+    onOpenCamera: () -> Unit = {},
+    onOpenCameraSettings: () -> Unit = {}
+) {
     val firstNotice = rememberSaveable { preferredHomeNotice(status) }
     val notices = remember(firstNotice) {
         listOf(firstNotice) + HomeNotice.entries.filter { it != firstNotice }
@@ -90,22 +96,45 @@ internal fun HomeNoticeCard(status: HomeStatus = HomeStatus.SETUP_REQUIRED) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         lineHeight = 21.sp
                     )
+                    when (notices[page]) {
+                        HomeNotice.CHECK_CAMERA -> TextButton(onClick = onOpenCamera) {
+                            Text(stringResource(R.string.home_notice_open_camera))
+                        }
+                        HomeNotice.REAPPLY -> TextButton(onClick = onOpenCameraSettings) {
+                            Text(stringResource(R.string.home_notice_open_camera_settings))
+                        }
+                        HomeNotice.WIRELESS_DEBUGGING -> Unit
+                    }
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                val narrow = maxWidth < 240.dp
                 val previousLabel = stringResource(R.string.home_notice_previous)
                 val nextLabel = stringResource(R.string.home_notice_next)
-                IconButton(
-                    onClick = { selectPage((pagerState.currentPage - 1 + notices.size) % notices.size) },
-                    modifier = Modifier.semantics { contentDescription = previousLabel }
-                ) {
-                    Text("‹", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineSmall)
+                val previous: @Composable () -> Unit = {
+                    IconButton(
+                        onClick = { selectPage((pagerState.currentPage - 1 + notices.size) % notices.size) },
+                        modifier = Modifier.semantics { contentDescription = previousLabel }
+                    ) {
+                        Text("‹", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineSmall)
+                    }
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val next: @Composable () -> Unit = {
+                    IconButton(
+                        onClick = { selectPage((pagerState.currentPage + 1) % notices.size) },
+                        modifier = Modifier.semantics { contentDescription = nextLabel }
+                    ) {
+                        Text("›", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineSmall)
+                    }
+                }
+                val position: @Composable () -> Unit = {
+                    Text(
+                        text = stringResource(R.string.home_notice_position, pagerState.currentPage + 1, notices.size),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                val indicators: @Composable () -> Unit = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         notices.forEachIndexed { index, notice ->
                             val label = stringResource(noticeResources(notice).first)
@@ -127,17 +156,25 @@ internal fun HomeNoticeCard(status: HomeStatus = HomeStatus.SETUP_REQUIRED) {
                             }
                         }
                     }
-                    Text(
-                        text = stringResource(R.string.home_notice_position, pagerState.currentPage + 1, notices.size),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
                 }
-                IconButton(
-                    onClick = { selectPage((pagerState.currentPage + 1) % notices.size) },
-                    modifier = Modifier.semantics { contentDescription = nextLabel }
-                ) {
-                    Text("›", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineSmall)
+                if (narrow) {
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        indicators()
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            previous()
+                            position()
+                            next()
+                        }
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        previous()
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            indicators()
+                            position()
+                        }
+                        next()
+                    }
                 }
             }
         }
