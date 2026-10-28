@@ -78,7 +78,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           languages: ${{ matrix.language }}
           build-mode: manual
@@ -90,7 +90,7 @@ jobs:
           ./gradlew clean assembleDebug --rerun-tasks --no-build-cache --no-configuration-cache --no-daemon --stacktrace
 
       - name: Analyze with CodeQL
-        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           # Keep the Java/Kotlin category already required by code scanning on main.
           category: /language:${{ matrix.language }}
