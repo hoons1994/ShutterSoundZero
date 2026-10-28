@@ -6,15 +6,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,7 +48,6 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun HomeNoticeCard(
     status: HomeStatus = HomeStatus.SETUP_REQUIRED,
-    onOpenCamera: () -> Unit = {},
     onOpenCameraSettings: () -> Unit = {}
 ) {
     val firstNotice = rememberSaveable { preferredHomeNotice(status) }
@@ -67,9 +72,20 @@ internal fun HomeNoticeCard(
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenPadding),
         shape = RoundedCornerShape(CardRadius),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                Text(
+                    text = stringResource(R.string.home_notice_heading),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+            Spacer(Modifier.height(16.dp))
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxWidth(),
@@ -78,28 +94,21 @@ internal fun HomeNoticeCard(
                 beyondViewportPageCount = pagerState.pageCount - 1,
                 verticalAlignment = Alignment.Top
             ) { page ->
-                val (label, title, body) = noticeResources(notices[page])
+                val (_, title, body) = noticeResources(notices[page])
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = stringResource(label),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
                     Text(
                         text = stringResource(title),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = stringResource(body),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onSurface,
                         lineHeight = 21.sp
                     )
                     when (notices[page]) {
-                        HomeNotice.CHECK_CAMERA -> TextButton(onClick = onOpenCamera) {
-                            Text(stringResource(R.string.home_notice_open_camera))
-                        }
+                        HomeNotice.CHECK_CAMERA -> Unit
                         HomeNotice.REAPPLY -> TextButton(onClick = onOpenCameraSettings) {
                             Text(stringResource(R.string.home_notice_open_camera_settings))
                         }
@@ -116,7 +125,7 @@ internal fun HomeNoticeCard(
                         onClick = { selectPage((pagerState.currentPage - 1 + notices.size) % notices.size) },
                         modifier = Modifier.semantics { contentDescription = previousLabel }
                     ) {
-                        Text("‹", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineSmall)
+                        Text("‹", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.headlineSmall)
                     }
                 }
                 val next: @Composable () -> Unit = {
@@ -124,14 +133,14 @@ internal fun HomeNoticeCard(
                         onClick = { selectPage((pagerState.currentPage + 1) % notices.size) },
                         modifier = Modifier.semantics { contentDescription = nextLabel }
                     ) {
-                        Text("›", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineSmall)
+                        Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.headlineSmall)
                     }
                 }
                 val position: @Composable () -> Unit = {
                     Text(
                         text = stringResource(R.string.home_notice_position, pagerState.currentPage + 1, notices.size),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 val indicators: @Composable () -> Unit = {
@@ -146,10 +155,10 @@ internal fun HomeNoticeCard(
                                 }
                             ) {
                                 androidx.compose.foundation.layout.Box(
-                                    modifier = Modifier.size(if (pagerState.currentPage == index) 8.dp else 6.dp)
+                                    modifier = Modifier.size(width = if (pagerState.currentPage == index) 16.dp else 6.dp, height = 6.dp)
                                         .background(
                                             if (pagerState.currentPage == index) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                                             CircleShape
                                         )
                                 )

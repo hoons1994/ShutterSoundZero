@@ -74,7 +74,7 @@ internal fun HomeContent(
         )
 
         Spacer(modifier = Modifier.height(20.dp))
-        HomeNoticeCard(status = homeStatus, onOpenCamera = onOpenCamera, onOpenCameraSettings = onSettingsClick)
+        HomeNoticeCard(status = homeStatus, onOpenCameraSettings = onSettingsClick)
 
         if (homeStatus == HomeStatus.SETUP_REQUIRED) {
             Spacer(modifier = Modifier.height(20.dp))
