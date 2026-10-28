@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
@@ -41,7 +40,14 @@ internal fun HomeNoticeCard() {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth()) { page ->
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxWidth(),
+                // Measure both notices so switching pages keeps the tallest content's height.
+                // The height still adapts to screen width and the user's font size.
+                beyondViewportPageCount = pagerState.pageCount - 1,
+                verticalAlignment = Alignment.Top
+            ) { page ->
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = if (page == 0) "무선 디버깅 안내" else "사용 안내",
