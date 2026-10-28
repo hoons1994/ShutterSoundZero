@@ -74,7 +74,7 @@ internal fun HomeContent(
         )
 
         Spacer(modifier = Modifier.height(20.dp))
-        HomeNoticeCard()
+        HomeNoticeCard(status = homeStatus)
 
         if (homeStatus == HomeStatus.SETUP_REQUIRED) {
             Spacer(modifier = Modifier.height(20.dp))
