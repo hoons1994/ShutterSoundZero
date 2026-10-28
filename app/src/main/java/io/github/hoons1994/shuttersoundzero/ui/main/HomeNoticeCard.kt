@@ -42,7 +42,6 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun HomeNoticeCard(
     status: HomeStatus = HomeStatus.SETUP_REQUIRED,
-    onOpenCamera: () -> Unit = {},
     onOpenCameraSettings: () -> Unit = {}
 ) {
     val firstNotice = rememberSaveable { preferredHomeNotice(status) }
@@ -97,9 +96,7 @@ internal fun HomeNoticeCard(
                         lineHeight = 21.sp
                     )
                     when (notices[page]) {
-                        HomeNotice.CHECK_CAMERA -> TextButton(onClick = onOpenCamera) {
-                            Text(stringResource(R.string.home_notice_open_camera))
-                        }
+                        HomeNotice.CHECK_CAMERA -> Unit
                         HomeNotice.REAPPLY -> TextButton(onClick = onOpenCameraSettings) {
                             Text(stringResource(R.string.home_notice_open_camera_settings))
                         }

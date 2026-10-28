@@ -61,22 +61,37 @@ class HomeNoticeCardInstrumentedTest {
     }
 
     @Test
-    fun actionButtonsCallTheirOwnDestinationOnly() {
-        var cameraCalls = 0
+    fun noticeOffersSettingsActionWithoutDuplicatingCameraAction() {
         var settingsCalls = 0
         rule.setContent {
             MaterialTheme {
-                HomeNoticeCard(onOpenCamera = { cameraCalls++ }, onOpenCameraSettings = { settingsCalls++ })
+                HomeNoticeCard(onOpenCameraSettings = { settingsCalls++ })
             }
         }
         rule.onNodeWithContentDescription("업데이트 후 안내").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("카메라 설정 열기").performClick()
-        rule.runOnIdle { assertEquals(1, settingsCalls); assertEquals(0, cameraCalls) }
+        rule.onNodeWithText("앱 설정으로 이동").performClick()
+        rule.runOnIdle { assertEquals(1, settingsCalls) }
         rule.onNodeWithContentDescription("촬영음 확인 안내").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("카메라 열기").performClick()
-        rule.runOnIdle { assertEquals(1, settingsCalls); assertEquals(1, cameraCalls) }
+        rule.onNodeWithText("카메라 열기").assertDoesNotExist()
+        rule.runOnIdle { assertEquals(1, settingsCalls) }
+    }
+
+    @Test
+    fun readyHomeOffersOnlyTheHeroCameraAction() {
+        var cameraCalls = 0
+        rule.setContent {
+            MaterialTheme {
+                HomeContent(
+                    uiState = MainUiState(isCscMuted = true, hasCscPermission = true),
+                    onOpenCamera = { cameraCalls++ }
+                )
+            }
+        }
+        rule.onNodeWithText("카메라 열기").assertDoesNotExist()
+        rule.onNodeWithText("카메라 열어보기").performScrollTo().performClick()
+        rule.runOnIdle { assertEquals(1, cameraCalls) }
     }
 
     @Test
