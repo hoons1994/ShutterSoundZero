@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.5.16-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.5.17-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터사운드 제로 안내 인포그래픽" width="720" />
@@ -19,7 +19,7 @@
 
 접근성 서비스를 이용해 화면이나 카메라 실행을 상시 감시하지 않습니다. 최초 1회 로컬 무선 ADB로 `WRITE_SECURE_SETTINGS` 권한을 연동한 뒤, 필요할 때만 무선 디버깅을 켜서 실제 CSC 값을 변경합니다.
 
-현재 앱 버전은 **v1.5.16**입니다. 무선 디버깅을 켠 직후 빠르게 다시 적용할 때의 연결 대기와 앱 잠금 인증 후 작업 재개를 보완했습니다. 기기 연동·촬영음 복원·빠른 설정 타일의 안정성도 개선했습니다. 자세한 변경 사항은 [v1.5.16 릴리즈 노트](.github/release-notes/v1.5.16.md)를 확인해 주세요.
+현재 앱 버전은 **v1.5.17**입니다. 앱 잠금 인증 후 권한 설정에서 돌아올 때 무음 적용·복원 요청이 이어지도록 보완하고, 홈 화면에 무선 디버깅 차단과 촬영음 확인 안내를 추가했습니다. 자세한 변경 사항은 [v1.5.17 릴리즈 노트](.github/release-notes/v1.5.17.md)를 확인해 주세요.
 
 ## 📱 다운로드
 
