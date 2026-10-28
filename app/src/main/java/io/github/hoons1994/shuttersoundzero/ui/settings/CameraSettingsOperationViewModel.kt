@@ -1,16 +1,28 @@
 package io.github.hoons1994.shuttersoundzero.ui.settings
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import io.github.hoons1994.shuttersoundzero.AppDependencies
 import io.github.hoons1994.shuttersoundzero.camera.ChangeCameraMute
+import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
+import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
+import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
+import io.github.hoons1994.shuttersoundzero.security.AppLockSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+internal enum class CameraAction { REAPPLY, RESTORE }
+
+internal enum class SettingsPermissionRecovery {
+    WAITING_REAPPLY, WAITING_RESTORE, READY_REAPPLY, READY_RESTORE, CONFIRM_RESTORE
+}
 
 internal data class CameraSettingsOperationUiState(
     val isReapplyInProgress: Boolean = false,
@@ -25,11 +37,60 @@ internal data class CameraSettingsOperationUiState(
 /** Keeps user-started CSC changes alive while the settings destination leaves composition. */
 internal class CameraSettingsOperationViewModel(
     application: Application,
-    private val changeCameraMute: ChangeCameraMute
+    private val changeCameraMute: ChangeCameraMute,
+    private val savedStateHandle: SavedStateHandle,
+    private val localNetworkGranted: (Context) -> Boolean = LocalNetworkAccess::isGranted,
+    private val wirelessDebuggingState: (Context) -> Boolean? = DeveloperOptionsManager::readWirelessDebuggingEnabled
 ) : AndroidViewModel(application) {
-    constructor(application: Application) : this(application, AppDependencies.changeCameraMute(application))
+    constructor(application: Application, savedStateHandle: SavedStateHandle) :
+        this(application, AppDependencies.changeCameraMute(application), savedStateHandle)
+
+    private val prefs = PreferencesRepository.getInstance(application)
     private val _uiState = MutableStateFlow(CameraSettingsOperationUiState())
     val uiState = _uiState.asStateFlow()
+    val permissionRecovery = savedStateHandle.getStateFlow<SettingsPermissionRecovery?>(PERMISSION_RECOVERY, null)
+
+    fun isLocalNetworkGranted(context: Context) = localNetworkGranted(context)
+
+    fun isWirelessDebuggingEnabled(context: Context) = wirelessDebuggingState(context)
+
+    fun preparePermissionRecovery(action: CameraAction) {
+        savedStateHandle[PERMISSION_RECOVERY] = when (action) {
+            CameraAction.REAPPLY -> SettingsPermissionRecovery.WAITING_REAPPLY
+            CameraAction.RESTORE -> SettingsPermissionRecovery.WAITING_RESTORE
+        }
+    }
+
+    fun resumePermissionRecovery() {
+        if (prefs.isAppLockEnabled && !AppLockSession.isUnlocked) return
+        val ready = when (permissionRecovery.value) {
+            SettingsPermissionRecovery.WAITING_REAPPLY -> SettingsPermissionRecovery.READY_REAPPLY
+            SettingsPermissionRecovery.WAITING_RESTORE -> SettingsPermissionRecovery.READY_RESTORE
+            else -> return
+        }
+        savedStateHandle[PERMISSION_RECOVERY] = ready
+    }
+
+    fun takeReadyPermissionAction(): CameraAction? {
+        if (prefs.isAppLockEnabled && !AppLockSession.isUnlocked) return null
+        val action = when (permissionRecovery.value) {
+            SettingsPermissionRecovery.READY_REAPPLY -> CameraAction.REAPPLY
+            SettingsPermissionRecovery.READY_RESTORE -> CameraAction.RESTORE
+            else -> return null
+        }
+        // Consume before starting an operation so multiple resume callbacks cannot repeat it.
+        cancelPermissionRecovery()
+        return action
+    }
+
+    fun requireRestoreConfirmation() {
+        savedStateHandle[PERMISSION_RECOVERY] = SettingsPermissionRecovery.CONFIRM_RESTORE
+    }
+
+    fun cancelPermissionRecovery() {
+        // Assign null rather than removing the key: existing StateFlow collectors stay attached.
+        savedStateHandle[PERMISSION_RECOVERY] = null
+    }
 
     fun setCameraMute(mute: Boolean) {
         synchronized(this) {
@@ -92,4 +153,7 @@ internal class CameraSettingsOperationViewModel(
         }
     }
 
+    private companion object {
+        const val PERMISSION_RECOVERY = "settingsPermissionRecovery"
+    }
 }

@@ -17,6 +17,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -32,6 +34,8 @@ import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import io.github.hoons1994.shuttersoundzero.ui.main.MainScreenViewModel
+import io.github.hoons1994.shuttersoundzero.ui.settings.CameraSettingsOperationViewModel
+import io.github.hoons1994.shuttersoundzero.ui.settings.SettingsPermissionRecovery
 import java.security.GeneralSecurityException
 import java.security.KeyFactory
 import java.security.KeyStore
@@ -155,6 +159,190 @@ class AppLockAuthenticationInstrumentedTest {
     @Test
     fun appPermissionSettingsRestoreWaitsForActualUnlockAndRunsOnce() {
         wirelessSettingsRecoveryRunsOnce(false, permissionSettings = true)
+    }
+
+    @Test
+    fun settingsReapplyAfterPermissionSettingsWaitsForUnlockAndRunsOnce() {
+        settingsPermissionRecoveryRunsOnce(targetMuted = true)
+    }
+
+    @Test
+    fun settingsRestoreAfterPermissionSettingsWaitsForUnlockAndConfirmation() {
+        settingsPermissionRecoveryRunsOnce(targetMuted = false)
+    }
+
+    @Test
+    fun settingsPermissionStillDeniedAfterUnlockDoesNotRunTheAction() {
+        settingsPermissionRecoveryRunsOnce(targetMuted = true, grantOnReturn = false)
+    }
+
+    private fun settingsPermissionRecoveryRunsOnce(targetMuted: Boolean, grantOnReturn: Boolean = true) {
+        val originalCsc = Settings.System.getString(context.contentResolver, CscMuteManager.CSC_KEY)
+        require(originalCsc == null || originalCsc.toIntOrNull() != null)
+        val hadWritePermission = CscMuteManager.hasWritePermission(context)
+        val permissionFlags = if (Build.VERSION.SDK_INT >= 37) {
+            shell("dumpsys package ${context.packageName}").lineSequence().firstOrNull {
+                it.contains("android.permission.ACCESS_LOCAL_NETWORK:") && it.contains("granted=")
+            } ?: error("Cannot preserve the original local-network permission flags")
+        } else ""
+        val hadUserSet = permissionFlags.contains("USER_SET")
+        val hadUserFixed = permissionFlags.contains("USER_FIXED")
+        val appliedTargets = CopyOnWriteArrayList<Boolean>()
+        val cleanupCalls = AtomicInteger()
+        val permissionGranted = AtomicBoolean(false)
+        val application = context.applicationContext as Application
+        val suppressAutomaticPermissionPrompt = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, state: Bundle?) {
+                if (activity is MainActivity && Build.VERSION.SDK_INT >= 37) {
+                    MainActivity::class.java.getDeclaredField("localNetworkPermissionDeniedThisSession").apply {
+                        isAccessible = true
+                        setBoolean(activity, true)
+                    }
+                }
+            }
+            override fun onActivityStarted(activity: Activity) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivityStopped(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        }
+        application.registerActivityLifecycleCallbacks(suppressAutomaticPermissionPrompt)
+        try {
+            shell("pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+            shell("settings put system ${CscMuteManager.CSC_KEY} ${if (targetMuted) 1 else 0}")
+            PreferencesRepository.getInstance(context).apply {
+                // Suppress the unrelated notification permission request without changing its grant.
+                hasSeenInitialNotice = false
+                isAppLockEnabled = true
+                isPermissionRevokedByUser = false
+            }
+            AppLockSession.lock()
+            val launchIntent = Intent(context, MainActivity::class.java)
+                .putExtra("settingsPermissionRecovery", "READY_REAPPLY")
+            ActivityScenario.launch<MainActivity>(launchIntent).use { scenario ->
+                lateinit var settingsViewModel: CameraSettingsOperationViewModel
+                scenario.onActivity { activity ->
+                    val factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
+                            CameraSettingsOperationViewModel(
+                                application,
+                                ChangeCameraMute(
+                                    apply = { appliedTargets += it; Result.success(Unit) },
+                                    verify = { true },
+                                    disableWirelessDebugging = { cleanupCalls.incrementAndGet(); Result.success(Unit) }
+                                ),
+                                extras.createSavedStateHandle(),
+                                localNetworkGranted = { permissionGranted.get() },
+                                wirelessDebuggingState = { true }
+                            ) as T
+                    }
+                    settingsViewModel = ViewModelProvider(activity, factory)[CameraSettingsOperationViewModel::class.java]
+                }
+                enterSystemPin(awaitCredentialPrompt())
+                awaitCondition("Initial authentication did not unlock MainActivity") { AppLockSession.isUnlocked }
+                scenario.onActivity { activity ->
+                    assertEquals("External Intent must not create a settings operation", null, settingsViewModel.permissionRecovery.value)
+                    setInitialNoticeVisible(activity, false)
+                    PreferencesRepository.getInstance(context).hasSeenInitialNotice = true
+                }
+                composeTestRule.onNodeWithContentDescription("설정").performClick()
+                composeTestRule.onNodeWithText(
+                    if (targetMuted) "카메라 무음 다시 적용" else "카메라 셔터음 원래대로 복원"
+                ).performClick()
+                awaitSettingsPermissionDenial()
+                composeTestRule.onNodeWithText("앱 권한 설정").performClick()
+                awaitCondition("App permission settings did not stop MainActivity") { scenario.state == Lifecycle.State.CREATED }
+                instrumentation.waitForIdleSync()
+                assertFalse(AppLockSession.isUnlocked)
+                assertEquals(
+                    if (targetMuted) SettingsPermissionRecovery.WAITING_REAPPLY else SettingsPermissionRecovery.WAITING_RESTORE,
+                    settingsViewModel.permissionRecovery.value
+                )
+                assertTrue(appliedTargets.isEmpty())
+                permissionGranted.set(grantOnReturn)
+                context.startActivity(Intent(context, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+                val credential = awaitCredentialPrompt()
+                assertFalse(AppLockSession.isUnlocked)
+                assertTrue("A settings request must not run before authentication", appliedTargets.isEmpty())
+                // Keep the unrelated notification permission prompt out of this test without
+                // granting or denying it. Restore the visible notice immediately after unlock.
+                scenario.onActivity { activity -> setInitialNoticeVisible(activity, true) }
+                enterSystemPin(credential)
+                awaitCondition("Authentication did not unlock the settings request") { AppLockSession.isUnlocked }
+                scenario.onActivity { activity -> setInitialNoticeVisible(activity, false) }
+                // The settings destination resumes the request from a Compose effect;
+                // let the test clock advance before waiting for its asynchronous operation.
+                composeTestRule.waitForIdle()
+                if (!grantOnReturn) {
+                    awaitSettingsPermissionDenial()
+                    assertTrue(appliedTargets.isEmpty())
+                } else if (!targetMuted) {
+                    awaitCondition("Restoration confirmation did not return after authentication") {
+                        composeTestRule.onAllNodesWithText("카메라 셔터음을 원래대로 복원할까요?")
+                            .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+                    }
+                    composeTestRule.onNodeWithText("카메라 셔터음을 원래대로 복원할까요?").assertExists()
+                    assertTrue("Restoration needs explicit confirmation", appliedTargets.isEmpty())
+                    scenario.recreate()
+                    composeTestRule.onNodeWithText("카메라 셔터음을 원래대로 복원할까요?").assertExists()
+                    assertTrue(appliedTargets.isEmpty())
+                    composeTestRule.onNodeWithText("원래대로 복원").performClick()
+                }
+                if (grantOnReturn) {
+                    try {
+                        awaitCondition("Original settings request was not applied") { appliedTargets.size == 1 }
+                    } catch (error: AssertionError) {
+                        throw AssertionError(
+                            "Recovery=${settingsViewModel.permissionRecovery.value}, " +
+                                "operation=${settingsViewModel.uiState.value}, " +
+                                "permission=${permissionGranted.get()}, unlocked=${AppLockSession.isUnlocked}",
+                            error
+                        )
+                    }
+                }
+                composeTestRule.waitForIdle()
+                scenario.moveToState(Lifecycle.State.STARTED)
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                scenario.recreate()
+                composeTestRule.waitForIdle()
+                assertEquals(if (grantOnReturn) listOf(targetMuted) else emptyList(), appliedTargets.toList())
+                assertEquals(if (grantOnReturn) 1 else 0, cleanupCalls.get())
+            }
+        } finally {
+            application.unregisterActivityLifecycleCallbacks(suppressAutomaticPermissionPrompt)
+            if (originalCsc == null) shell("settings delete system ${CscMuteManager.CSC_KEY}")
+            else shell("settings put system ${CscMuteManager.CSC_KEY} ${originalCsc.toInt()}")
+            if (!hadWritePermission) shell("pm revoke ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
+            if (Build.VERSION.SDK_INT >= 37) {
+                if (!hadUserSet) shell("pm clear-permission-flags ${context.packageName} android.permission.ACCESS_LOCAL_NETWORK user-set")
+                if (!hadUserFixed) shell("pm clear-permission-flags ${context.packageName} android.permission.ACCESS_LOCAL_NETWORK user-fixed")
+            }
+        }
+    }
+
+    private fun awaitSettingsPermissionDenial() {
+        awaitCondition("Settings permission recovery dialog did not appear") {
+            val automation = instrumentation.uiAutomation
+            val roots = listOfNotNull(automation.rootInActiveWindow) + automation.windows.mapNotNull { it.root }
+            roots.firstNotNullOfOrNull { root ->
+                findNode(root) { node ->
+                    node.viewIdResourceName?.contains("permission_deny_button") == true &&
+                        node.isEnabled && node.isVisibleToUser
+                }
+            }?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            composeTestRule.onAllNodesWithText("앱 권한 설정")
+                .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+        }
+    }
+
+    private fun setInitialNoticeVisible(activity: MainActivity, visible: Boolean) {
+        MainActivity::class.java.getDeclaredMethod("setShowInitialNotice", Boolean::class.javaPrimitiveType).apply {
+            isAccessible = true
+            invoke(activity, visible)
+        }
     }
 
     private fun wirelessSettingsRecoveryRunsOnce(targetMuted: Boolean, permissionSettings: Boolean = false) {
@@ -308,8 +496,11 @@ class AppLockAuthenticationInstrumentedTest {
             // Android 17 replaces the password EditText with a Compose system PIN pad.
             // Its buttons don't expose digit labels. Use normal keyboard input,
             // delivered to the focused system control, without changing the PIN check.
-            assertTrue("System PIN pad has no keyboard focus",
-                findNode(inputControl) { it.isFocused } != null)
+            awaitCondition("System PIN pad has no keyboard focus") {
+                credentialInput()?.let { current ->
+                    isPinPad(current) && findNode(current) { it.isFocused } != null
+                } == true
+            }
             val keys = TEST_PIN.map { "KEYCODE_$it" }.joinToString(" ")
             shell("input keyevent --delay 100 $keys KEYCODE_ENTER")
         } else {

@@ -25,11 +25,6 @@ fun FirstRunNoticeDialog(onConfirm: () -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "• 서명키 보안 교체로 이전 앱과 별개의 새 앱입니다. 이전 앱을 삭제하고 이 앱에서 기기 연동을 다시 진행해 주세요.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    lineHeight = 20.sp
-                )
-                Text(
                     text = "ShutterSoundZero는 삼성 갤럭시의 카메라 셔터음 강제 설정을 변경합니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 20.sp
