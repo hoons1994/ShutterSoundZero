@@ -51,7 +51,9 @@ class SettingsHelpSectionInstrumentedTest {
         composeTestRule.onNodeWithText("진단 정보를 불러오는 중입니다.").assertExists()
         composeTestRule.onNodeWithText("사용 문의").performScrollTo().assertIsEnabled()
         composeTestRule.runOnIdle { assertEquals(1, builds) }
-        report.complete(DiagnosticReportBuilder.Report("제목", "합성 진단 정보"))
+        composeTestRule.runOnIdle {
+            report.complete(DiagnosticReportBuilder.Report("제목", "합성 진단 정보"))
+        }
         waitForText("합성 진단 정보")
         composeTestRule.onNodeWithText("이메일로 보내기").assertIsEnabled()
     }
@@ -84,7 +86,7 @@ class SettingsHelpSectionInstrumentedTest {
         composeTestRule.onNodeWithText("이메일로 보내기").assertIsNotEnabled()
         composeTestRule.onNodeWithText("닫기").assertIsEnabled()
 
-        clearMayFinish.complete(Unit)
+        composeTestRule.runOnIdle { clearMayFinish.complete(Unit) }
         waitForText("새 진단 정보")
         composeTestRule.onNode(hasSetTextAction()).assertTextContains("설명을 보존합니다")
         composeTestRule.onNodeWithText("이메일로 보내기").assertIsEnabled()
@@ -112,7 +114,7 @@ class SettingsHelpSectionInstrumentedTest {
         composeTestRule.waitUntil(timeoutMillis = 10000) { clearStarted.isCompleted }
         composeTestRule.onNodeWithText("닫기").performClick()
         composeTestRule.onNodeWithText("오류 신고").assertDoesNotExist()
-        clearMayFinish.complete(Unit)
+        composeTestRule.runOnIdle { clearMayFinish.complete(Unit) }
         composeTestRule.waitUntil(timeoutMillis = 10000) {
             composeTestRule.onAllNodesWithText("문제가 해결되지 않나요?").fetchSemanticsNodes()
                 .any { !it.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Disabled) }
