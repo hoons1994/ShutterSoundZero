@@ -167,13 +167,13 @@ object DiagnosticLogger {
         }
     }
 
-    suspend fun read(context: Context): List<String> = try {
+    suspend fun read(context: Context): Result<List<String>> = try {
         val appContext = context.applicationContext
         store.read { logFile(appContext) }
     } catch (error: CancellationException) {
         throw error
-    } catch (_: Exception) {
-        emptyList()
+    } catch (error: Exception) {
+        Result.failure(error)
     }
 
     /** true: deleted; false: already absent. An uncertain or failed deletion is a failure. */
