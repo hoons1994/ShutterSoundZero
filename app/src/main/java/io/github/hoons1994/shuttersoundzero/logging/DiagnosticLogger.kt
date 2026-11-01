@@ -4,8 +4,10 @@ import android.content.Context
 import io.github.muntashirakon.adb.PairingFailureException
 import io.github.hoons1994.shuttersoundzero.core.adb.AdbServiceNotFoundException
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -144,12 +146,29 @@ object DiagnosticLogger {
                 val file = logFile(context)
                 val existing = if (file.exists()) file.readLines(Charsets.UTF_8) else emptyList()
                 val bounded = trimForStorage(update(existing))
-                file.parentFile?.mkdirs()
-                file.writeText(
-                    bounded.joinToString(separator = "\n", postfix = if (bounded.isEmpty()) "" else "\n"),
-                    Charsets.UTF_8
-                )
+                writeLog(file, bounded)
             }
+        }
+    }
+
+    internal fun writeLog(
+        file: File,
+        lines: List<String>,
+        write: (File, String) -> Unit = { target, content ->
+            FileOutputStream(target).use { stream ->
+                stream.write(content.toByteArray(Charsets.UTF_8))
+                stream.fd.sync()
+            }
+        }
+    ) {
+        file.parentFile?.mkdirs()
+        val staged = File(file.parentFile, "${file.name}.tmp")
+        try {
+            write(staged, lines.joinToString(separator = "\n", postfix = if (lines.isEmpty()) "" else "\n"))
+            // No copy/delete fallback: a failed replacement must preserve committed events.
+            Files.move(staged.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            staged.delete()
         }
     }
 

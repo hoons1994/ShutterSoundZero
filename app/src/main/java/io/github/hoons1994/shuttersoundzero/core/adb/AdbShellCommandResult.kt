@@ -7,7 +7,8 @@ internal data class AdbShellCommandResult(
 
 internal object AdbShellCommandResultParser {
     fun parseOrNull(rawOutput: String, marker: String): AdbShellCommandResult? {
-        val markerPattern = Regex("(?m)^${Regex.escape(marker)}:(\\d+)\\r?$")
+        // A payload can end in the middle of an exit code or CRLF. Wait for the full line.
+        val markerPattern = Regex("(?m)^${Regex.escape(marker)}:(\\d+)\\r?\\n")
         val match = markerPattern.findAll(rawOutput).lastOrNull() ?: return null
         val exitCode = match.groupValues[1].toIntOrNull() ?: return null
         return AdbShellCommandResult(

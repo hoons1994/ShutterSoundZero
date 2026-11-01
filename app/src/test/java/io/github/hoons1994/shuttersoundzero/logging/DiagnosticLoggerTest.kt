@@ -8,6 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -84,6 +85,34 @@ class DiagnosticLoggerTest {
     }
 
     @get:Rule val temporaryFolder = TemporaryFolder()
+
+    @Test fun interruptedLogWritePreservesCommittedEventsAndCanRetry() {
+        val file = temporaryFolder.newFile("events.log").apply { writeText("previous failure\n") }
+        val failure = IOException("injected partial write")
+        val reported = assertThrows(IOException::class.java) {
+            DiagnosticLogger.writeLog(file, listOf("previous failure", "new event")) { target, _ ->
+                target.writeText("partial")
+                throw failure
+            }
+        }
+        assertSame(failure, reported)
+        assertEquals("previous failure\n", file.readText())
+        assertFalse(File(file.parentFile, "events.log.tmp").exists())
+        DiagnosticLogger.writeLog(file, listOf("previous failure", "new event"))
+        assertEquals("previous failure\nnew event\n", file.readText())
+    }
+
+    @Test fun failedFirstLogWriteDoesNotPublishPartialData() {
+        val file = File(temporaryFolder.root, "new.log")
+        assertThrows(IOException::class.java) {
+            DiagnosticLogger.writeLog(file, listOf("new event")) { target, _ ->
+                target.writeText("partial")
+                throw IOException("injected partial write")
+            }
+        }
+        assertFalse(file.exists())
+        assertFalse(File(file.parentFile, "new.log.tmp").exists())
+    }
 
     @Test
     fun clearDeletesExistingLogAndIsIdempotent() {

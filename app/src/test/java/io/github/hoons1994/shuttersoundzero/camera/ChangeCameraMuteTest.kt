@@ -13,6 +13,34 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChangeCameraMuteTest {
+    @Test fun thrownCleanupFailureRetainsVerifiedResultAndExactTarget() = runTest {
+        for (muted in listOf(true, false)) {
+            val failure = SecurityException("permission check unavailable")
+            val completed = mutableListOf<Boolean>()
+            val change = ChangeCameraMute(
+                { Result.success(Unit) }, { true }, { throw failure },
+                onApplied = { completed += it }
+            )
+            val result = change(muted).getOrThrow()
+            assertSame(failure, result.wirelessCleanup.exceptionOrNull())
+            assertEquals(listOf(muted), completed)
+        }
+    }
+
+    @Test fun cleanupCancellationRemainsCancellation() = runTest {
+        val cancellation = CancellationException("cleanup cancelled")
+        val change = ChangeCameraMute(
+            { Result.success(Unit) }, { true }, { throw cancellation },
+            onApplied = { error("Cancelled operation must not publish completion") }
+        )
+        try {
+            change(true)
+            fail("Expected cancellation")
+        } catch (actual: CancellationException) {
+            assertSame(cancellation, actual)
+        }
+    }
+
     @Test fun verifiedCompletionNotifiesWithExactTargetAfterCleanup() = runTest {
         for (muted in listOf(true, false)) {
             val events = mutableListOf<String>()

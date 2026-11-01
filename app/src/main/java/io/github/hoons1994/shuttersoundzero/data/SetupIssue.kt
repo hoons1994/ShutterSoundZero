@@ -16,3 +16,10 @@ enum class SetupIssue {
     PAIRING_TIMEOUT,
     CAMERA_APPLY
 }
+
+/** A pending restore must be checked against its own target, including after a restart. */
+internal fun isSetupTargetApplied(
+    hasPermission: Boolean,
+    mutedState: Boolean?,
+    pendingTarget: Boolean?
+): Boolean = hasPermission && mutedState == (pendingTarget ?: true)
