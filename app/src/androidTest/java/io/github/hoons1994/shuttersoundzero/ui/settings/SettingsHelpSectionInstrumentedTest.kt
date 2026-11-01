@@ -26,6 +26,51 @@ import org.junit.Test
 class SettingsHelpSectionInstrumentedTest {
     @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun actualReportAndPrivacyNoticeAreReviewedBeforeOpeningUnchangedEmailDraft() {
+        val opened = mutableListOf<android.content.Intent>()
+        var builds = 0
+        val capturingContext = object : android.content.ContextWrapper(composeTestRule.activity) {
+            override fun startActivity(intent: android.content.Intent) { opened += intent }
+        }
+        composeTestRule.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalContext provides capturingContext
+            ) {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    SettingsHelpSection(buildDiagnosticReport = {
+                        builds++
+                        DiagnosticReportBuilder.build(it, { Result.failure(IOException("private error")) }, {
+                            java.time.ZonedDateTime.parse("2026-11-01T21:30:15+09:00[Asia/Seoul]")
+                        })
+                    })
+                }
+            }
+        }
+        openReport()
+        composeTestRule.waitUntil(timeoutMillis = 10000) {
+            composeTestRule.onAllNodesWithText("진단 기록을 읽지 못했습니다", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("직접 적은 설명은 그대로 전달됩니다. 페어링 코드나 개인정보는 적지 마세요.").assertExists()
+        composeTestRule.onNode(hasSetTextAction()).performTextInput("한글 & + ? # % =\n다음 줄")
+        composeTestRule.runOnIdle { assertEquals(0, opened.size) }
+        composeTestRule.onNodeWithText("이메일로 보내기").performClick()
+        composeTestRule.runOnIdle {
+            assertEquals(1, builds)
+            assertEquals(1, opened.size)
+            assertEquals(android.content.Intent.ACTION_CHOOSER, opened.single().action)
+            @Suppress("DEPRECATION")
+            val draft = opened.single().getParcelableExtra<android.content.Intent>(android.content.Intent.EXTRA_INTENT)!!
+            val query = draft.data!!.encodedSchemeSpecificPart.substringAfter('?').split('&').associate {
+                val pair = it.split('=', limit = 2)
+                android.net.Uri.decode(pair[0]) to android.net.Uri.decode(pair[1])
+            }
+            org.junit.Assert.assertTrue(query.getValue("body").contains("한글 & + ? # % =\n다음 줄"))
+            org.junit.Assert.assertTrue(query.getValue("body").contains("2026-11-01T21:30:15+09:00 [Asia/Seoul]"))
+            org.junit.Assert.assertTrue(query.getValue("body").contains("진단 기록을 읽지 못했습니다"))
+        }
+    }
+
     private fun openReport() {
         composeTestRule.onNodeWithText("문제가 해결되지 않나요?").performScrollTo().performClick()
     }

@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticReportBuilder
+import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticEmail
 import io.github.hoons1994.shuttersoundzero.ui.components.openDeveloperDonation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -205,9 +206,15 @@ fun SettingsHelpSection(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
+                    Text(
+                        text = "직접 적은 설명은 그대로 전달됩니다. 페어링 코드나 개인정보는 적지 마세요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
                     OutlinedTextField(
                         value = userDescription,
-                        onValueChange = { userDescription = it.take(2000) },
+                        onValueChange = { userDescription = it.take(DiagnosticEmail.MAX_DESCRIPTION_CHARS) },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("문제가 발생하기 전에 한 작업") },
                         placeholder = {
@@ -444,24 +451,10 @@ private fun sendDiagnosticEmail(
     report: DiagnosticReportBuilder.Report,
     userDescription: String
 ) {
-    val body = buildString {
-        appendLine("안녕하세요. ShutterSoundZero 사용 중 오류가 발생해 진단 정보를 보냅니다.")
-        appendLine()
-        appendLine("[사용자 설명]")
-        appendLine(userDescription.trim().ifBlank { "작성하지 않음" })
-        appendLine()
-        appendLine(report.diagnosticText)
-    }
-    val mailUri = Uri.parse(
-        "mailto:${Uri.encode(DiagnosticReportBuilder.SUPPORT_EMAIL)}" +
-            "?subject=${Uri.encode(report.subject)}" +
-            "&body=${Uri.encode(body)}"
-    )
-
     try {
         context.startActivity(
             Intent.createChooser(
-                Intent(Intent.ACTION_SENDTO, mailUri),
+                DiagnosticEmail.intent(report, userDescription),
                 "오류 신고 메일 보내기"
             )
         )

@@ -245,6 +245,7 @@
   },
   "io.github.hoons1994.shuttersoundzero.ui.settings.SettingsHelpSectionInstrumentedTest": {
     "methods": [
+      "actualReportAndPrivacyNoticeAreReviewedBeforeOpeningUnchangedEmailDraft",
       "closingDuringClearDoesNotReopenAnOldReport",
       "refreshFailureAfterClearCannotLeaveOldLogAvailableForSending",
       "slowClearDisablesSendingUntilRefreshedAndPreservesUserInput",
@@ -298,6 +299,13 @@
       "bootCleanupBeforePreparationDoesNotTouchUninitializedFields",
       "identityCleanupBeforePreparationDoesNotTouchUninitializedFields",
       "skippedBootPreparationPreservesIdentityAndPreferences"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticReportInstrumentedTest": {
+    "methods": [
+      "actualBuilderIncludesFieldsTimestampRangeAndReadFailureWithoutExceptionText",
+      "actualLogReadDistinguishesMissingAndUnreadableFilesAndKeepsFifoEvents",
+      "largestReportAndUnicodeDescriptionSurviveMailtoEncodingWithoutChangingSnapshot"
     ]
   }
 }
