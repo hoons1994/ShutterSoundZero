@@ -36,8 +36,10 @@ export function validateSnapshot(snapshot, source) {
   requireValue(snapshot.version === 0 && snapshot.sha === source.sha && snapshot.ref === source.ref, 'Snapshot version, SHA or ref does not match the source run');
   record(snapshot.job, ['id', 'correlator'], ['id', 'correlator'], 'job');
   requireValue(snapshot.job.id === String(source.runId) && snapshot.job.correlator === correlator, 'Snapshot job does not match the source run');
-  const scanned = timestamp(snapshot.scanned, 'scanned');
-  requireValue(scanned >= source.startedAt - 60_000 && scanned <= source.updatedAt + 60_000, 'Snapshot scan time does not match the source run');
+  // This is runner-reported scan time, not proof of the source attempt. GitHub's
+  // Actions metadata clock can differ from the runner clock. Artifact freshness
+  // is checked against the source run using only GitHub API timestamps below.
+  timestamp(snapshot.scanned, 'scanned');
   record(snapshot.detector, ['name', 'version', 'url'], ['name', 'version', 'url'], 'detector');
   requireValue(snapshot.detector.name === 'GitHub Dependency Graph Gradle Plugin' && snapshot.detector.url === 'https://github.com/gradle/github-dependency-graph-gradle-plugin', 'Unexpected snapshot detector');
   text(snapshot.detector.version, 'detector version', 80);
@@ -142,6 +144,7 @@ export async function publishDependencySnapshot({ repository, runId, runAttempt,
     ref = `refs/heads/${repo.default_branch}`;
   }
   const source = { runId, sha: run.head_sha, ref, startedAt: timestamp(run.run_started_at, 'run start'), updatedAt: timestamp(run.updated_at, 'run update') };
+  requireValue(source.startedAt <= source.updatedAt, 'Invalid source run time range');
   const artifacts = [];
   for (let page = 1; page <= 10; page++) {
     const result = await get(`actions/runs/${runId}/artifacts?per_page=100&page=${page}`);
@@ -150,7 +153,11 @@ export async function publishDependencySnapshot({ repository, runId, runAttempt,
     if (result.artifacts.length < 100) break;
     requireValue(page < 10, 'Too many source run artifacts');
   }
-  const current = artifacts.filter(artifact => !artifact.expired && timestamp(artifact.created_at, 'artifact time') >= source.startedAt);
+  const current = artifacts.filter(artifact => {
+    if (artifact.expired) return false;
+    const createdAt = timestamp(artifact.created_at, 'artifact time');
+    return createdAt >= source.startedAt && createdAt <= source.updatedAt;
+  });
   requireValue(current.length === 1, 'Expected exactly one current source-run snapshot artifact');
   const artifact = current[0];
   requireValue(Number.isSafeInteger(artifact.id) && artifact.id > 0 && artifact.workflow_run?.id === runId && artifact.workflow_run.head_sha === source.sha && artifact.size_in_bytes > 0 && artifact.size_in_bytes <= maxArchiveBytes && /^sha256:[a-f0-9]{64}$/.test(artifact.digest ?? ''), 'Invalid source snapshot artifact');
@@ -173,6 +180,7 @@ export async function publishDependencySnapshot({ repository, runId, runAttempt,
     prNumber === undefined ? Promise.resolve() : readSourcePr(prNumber),
   ]);
   requireValue(finalRun.event === run.event && finalRun.head_sha === run.head_sha && finalRun.head_branch === run.head_branch && finalRun.head_repository.full_name === run.head_repository.full_name && finalRun.run_started_at === run.run_started_at, 'Source workflow changed before snapshot publication');
+  requireValue(timestamp(artifact.created_at, 'artifact time') <= timestamp(finalRun.updated_at, 'run update'), 'Source run no longer contains the snapshot artifact');
   const response = await request(`${apiUrl}/repos/${repository}/dependency-graph/snapshots`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(30_000) });
   requireValue(response.ok, `Dependency snapshot submission failed: HTTP ${response.status}`);
   return { runId, sha: source.sha, ref, artifactId: artifact.id, snapshot: await response.json() };
