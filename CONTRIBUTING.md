@@ -187,7 +187,8 @@ Windows x64에서는 JDK 17과 Zig C/C++ 컴파일러로 같은 Java/JNI 소스�
 사용하며, Linux CI는 `.github/scripts/verify-spake2-native.sh`로 실제 `getrandom()`
 경로도 실행합니다. 실패 주입 훅은 Android 산출물에 포함하지 않습니다.
 
-API 35 CI는 전체 계측 검사 뒤 인증·네트워크 검사를 두 번 더 실행합니다.
+API 30~37 CI는 각 API에서 전체 계측 검사를 한 번 실행하고, JUnit XML로 필수 테스트 실행과
+실패·건너뜀·누락 여부를 검증합니다. API 35만 추가 반복하는 단계는 사용하지 않습니다.
 PIN 테스트는 새 접근성 노드에서 실제 키보드 포커스를 기다리며, 인증 성공에는 계속
 실제 Keystore 서명 검증이 필요합니다. Wi-Fi 검사는 통제된 Android NetworkRequest transport fixture의
 비기본 경로와 실제 시스템 조회를 각각 확인하고, 물리적 보조 Wi-Fi 연결을 요구하지
