@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.util.Log
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
+import io.github.hoons1994.shuttersoundzero.core.attemptWirelessDebuggingCleanup
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkPermissionRequiredException
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
@@ -19,7 +20,10 @@ internal class PairingWorkflowFeedback(
     private val restartPairingDiscovery: () -> Unit,
     private val onCompleting: () -> Unit,
     private val onFailed: () -> Unit,
-    private val onCompleted: (Boolean) -> Unit
+    private val onCompleted: (Boolean) -> Unit,
+    private val disableWirelessDebugging: () -> Result<Unit> = {
+        DeveloperOptionsManager.disableWirelessDebugging(context)
+    }
 ) {
     private val prefs = PreferencesRepository.getInstance(context)
     private val TAG = "PairingWorkflow"
@@ -67,45 +71,50 @@ internal class PairingWorkflowFeedback(
                 PairingNotificationHelper.showProgressNotification(context)
             }
             PairingEvent.ApplySucceeded -> {
-                onCompleting()
-                prefs.lastSetupIssue = null
-                DiagnosticLogger.record(
-                    context,
-                    DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
-                    DiagnosticLogger.Outcome.SUCCESS
-                )
-                val wirelessCleanup = DeveloperOptionsManager.disableWirelessDebugging(
-                    context
-                )
-                val wirelessDebuggingDisabled = wirelessCleanup.isSuccess
-                DiagnosticLogger.record(
-                    context,
-                    DiagnosticLogger.Stage.WIRELESS_DEBUGGING_CLEANUP,
-                    if (wirelessDebuggingDisabled) {
+                try {
+                    onCompleting()
+                    prefs.lastSetupIssue = null
+                    DiagnosticLogger.record(
+                        context,
+                        DiagnosticLogger.Stage.ADB_PERMISSION_AND_CSC_APPLY,
                         DiagnosticLogger.Outcome.SUCCESS
+                    )
+                    val wirelessCleanup = attemptWirelessDebuggingCleanup(disableWirelessDebugging)
+                    val wirelessDebuggingDisabled = wirelessCleanup.isSuccess
+                    DiagnosticLogger.record(
+                        context,
+                        DiagnosticLogger.Stage.WIRELESS_DEBUGGING_CLEANUP,
+                        if (wirelessDebuggingDisabled) {
+                            DiagnosticLogger.Outcome.SUCCESS
+                        } else {
+                            DiagnosticLogger.Outcome.FAILURE
+                        },
+                        wirelessCleanup.exceptionOrNull()
+                    )
+                    if (wirelessDebuggingDisabled) {
+                        Log.i(TAG, "Wireless debugging disabled after successful setup")
                     } else {
-                        DiagnosticLogger.Outcome.FAILURE
-                    },
-                    wirelessCleanup.exceptionOrNull()
-                )
-                if (wirelessDebuggingDisabled) {
-                    Log.i(TAG, "Wireless debugging disabled after successful setup")
-                } else {
-                    wirelessCleanup.exceptionOrNull()?.let {
-                        logFailure("Unable to disable wireless debugging after setup", it)
+                        wirelessCleanup.exceptionOrNull()?.let {
+                            logFailure("Unable to disable wireless debugging after setup", it)
+                        }
                     }
+
+                    DiagnosticLogger.record(
+                        context,
+                        DiagnosticLogger.Stage.PAIRING_WORKFLOW,
+                        DiagnosticLogger.Outcome.SUCCESS
+                    )
+                    Log.i(TAG, "Pairing workflow completed successfully")
+
+                    onCompleted(wirelessDebuggingDisabled)
+                } catch (error: Exception) {
+                    // A failed or cancelled completion must never block the next retry.
+                    onFailed()
+                    throw error
                 }
-
-                DiagnosticLogger.record(
-                    context,
-                    DiagnosticLogger.Stage.PAIRING_WORKFLOW,
-                    DiagnosticLogger.Outcome.SUCCESS
-                )
-                Log.i(TAG, "Pairing workflow completed successfully")
-
-                onCompleted(wirelessDebuggingDisabled)
             }
             is PairingEvent.ApplyFailed -> {
+                onFailed()
                 prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
                 DiagnosticLogger.record(
                     context,

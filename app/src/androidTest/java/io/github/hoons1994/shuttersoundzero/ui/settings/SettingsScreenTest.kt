@@ -3,6 +3,7 @@ package io.github.hoons1994.shuttersoundzero.ui.settings
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -69,6 +70,9 @@ class SettingsScreenTest {
             .assertHasClickAction()
             .performClick()
 
+        composeTestRule.waitUntil(timeoutMillis = 10000) {
+            composeTestRule.onAllNodesWithText("전송될 진단 정보").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithText("오류 신고").assertExists()
         composeTestRule.onNodeWithText("전송될 진단 정보").assertExists()
         composeTestRule.onNodeWithText("이메일로 보내기").assertHasClickAction()
