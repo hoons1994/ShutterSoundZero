@@ -12,6 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlinx.coroutines.CancellationException
 
 /**
  * ShutterSoundZero 자체 동작만 기록하는 작은 진단 로그 저장소.
@@ -80,7 +81,7 @@ object DiagnosticLogger {
 
     private const val DIRECTORY_NAME = "diagnostics"
     private const val FILE_NAME = "events.log"
-    private val lock = Any()
+    private val store = DiagnosticLogStore()
 
     fun record(
         context: Context,
@@ -141,14 +142,8 @@ object DiagnosticLogger {
     }
 
     private fun save(context: Context, update: (List<String>) -> List<String>) {
-        synchronized(lock) {
-            runCatching {
-                val file = logFile(context)
-                val existing = if (file.exists()) file.readLines(Charsets.UTF_8) else emptyList()
-                val bounded = trimForStorage(update(existing))
-                writeLog(file, bounded)
-            }
-        }
+        val appContext = try { context.applicationContext } catch (_: Exception) { return }
+        store.update({ logFile(appContext) }, update)
     }
 
     internal fun writeLog(
@@ -172,16 +167,23 @@ object DiagnosticLogger {
         }
     }
 
-    fun read(context: Context): List<String> = synchronized(lock) {
-        runCatching {
-            val file = logFile(context)
-            if (!file.exists()) emptyList() else trimForStorage(file.readLines(Charsets.UTF_8))
-        }.getOrDefault(emptyList())
+    suspend fun read(context: Context): List<String> = try {
+        val appContext = context.applicationContext
+        store.read { logFile(appContext) }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        emptyList()
     }
 
     /** true: deleted; false: already absent. An uncertain or failed deletion is a failure. */
-    fun clear(context: Context): Result<Boolean> = synchronized(lock) {
-        runCatching { clear(logFile(context)).getOrThrow() }
+    suspend fun clear(context: Context): Result<Boolean> = try {
+        val appContext = context.applicationContext
+        store.clear { logFile(appContext) }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        Result.failure(error)
     }
 
     internal fun clear(file: File): Result<Boolean> = runCatching {

@@ -9,6 +9,8 @@ import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object DiagnosticReportBuilder {
     const val SUPPORT_EMAIL = "hoons1994@naver.com"
@@ -19,7 +21,7 @@ object DiagnosticReportBuilder {
         val diagnosticText: String
     )
 
-    fun build(context: Context): Report {
+    suspend fun build(context: Context): Report = withContext(Dispatchers.IO) {
         val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.packageManager.getPackageInfo(
                 context.packageName,
@@ -72,7 +74,7 @@ object DiagnosticReportBuilder {
             appendLine("이 진단 정보에는 페어링 코드, IP 주소, Wi-Fi SSID/BSSID, IMEI, 일련번호, ADB 개인키/인증서를 기록하지 않습니다.")
         }.trimEnd()
 
-        return Report(
+        Report(
             subject = "ShutterSoundZero 오류 신고 - v$versionName / ${Build.MODEL}",
             diagnosticText = diagnosticText
         )

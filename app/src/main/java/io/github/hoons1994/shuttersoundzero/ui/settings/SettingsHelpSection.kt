@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,6 +48,9 @@ import androidx.compose.ui.unit.sp
 import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticReportBuilder
 import io.github.hoons1994.shuttersoundzero.ui.components.openDeveloperDonation
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
 
 private data class HelpQuestion(val id: String, val question: String, val answer: String)
 
@@ -99,11 +103,17 @@ private val helpQuestions = listOf(
 )
 
 @Composable
-fun SettingsHelpSection() {
+fun SettingsHelpSection(
+    buildDiagnosticReport: suspend (Context) -> DiagnosticReportBuilder.Report = DiagnosticReportBuilder::build,
+    clearDiagnosticLog: suspend (Context) -> Result<Boolean> = DiagnosticLogger::clear
+) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var expandedQuestionId by remember { mutableStateOf<String?>(null) }
     var diagnosticReport by remember { mutableStateOf<DiagnosticReportBuilder.Report?>(null) }
     var userDescription by rememberSaveable { mutableStateOf("") }
+    var isPreparingReport by remember { mutableStateOf(false) }
+    var isClearingLog by remember { mutableStateOf(false) }
 
     SectionLabel("자주 묻는 질문")
 
@@ -153,8 +163,20 @@ fun SettingsHelpSection() {
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 thickness = 0.5.dp
             )
-            SupportRow(onClick = {
-                diagnosticReport = DiagnosticReportBuilder.build(context)
+            SupportRow(enabled = !isPreparingReport && !isClearingLog, isLoading = isPreparingReport, onClick = {
+                if (isPreparingReport || isClearingLog) return@SupportRow
+                isPreparingReport = true
+                scope.launch {
+                    try {
+                        diagnosticReport = buildDiagnosticReport(context.applicationContext)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        Toast.makeText(context, "진단 정보를 불러오지 못했습니다. 다시 시도해 주세요.", Toast.LENGTH_SHORT).show()
+                    } finally {
+                        isPreparingReport = false
+                    }
+                }
             })
             HorizontalDivider(
                 modifier = Modifier.padding(start = 20.dp),
@@ -208,28 +230,56 @@ fun SettingsHelpSection() {
                     }
 
                     TextButton(
+                        enabled = !isClearingLog,
                         onClick = {
-                            val cleared = DiagnosticLogger.clear(context)
-                            if (cleared.isSuccess) {
-                                diagnosticReport = DiagnosticReportBuilder.build(context)
+                            if (isClearingLog) return@TextButton
+                            isClearingLog = true
+                            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                try {
+                                    val cleared = try {
+                                        clearDiagnosticLog(context.applicationContext)
+                                    } catch (error: CancellationException) {
+                                        throw error
+                                    } catch (error: Exception) {
+                                        Result.failure(error)
+                                    }
+                                    if (cleared.isSuccess && diagnosticReport === report) {
+                                        try {
+                                            val refreshed = buildDiagnosticReport(context.applicationContext)
+                                            if (diagnosticReport === report) diagnosticReport = refreshed
+                                        } catch (error: CancellationException) {
+                                            throw error
+                                        } catch (_: Exception) {
+                                            // Never leave an old, cleared log available for sending.
+                                            if (diagnosticReport === report) diagnosticReport = null
+                                            Toast.makeText(context, "진단 정보를 다시 불러오지 못했습니다.", Toast.LENGTH_SHORT).show()
+                                            return@launch
+                                        }
+                                    }
+                                    val message = cleared.fold(
+                                        onSuccess = { deleted ->
+                                            if (deleted) "진단 로그를 삭제했습니다." else "지울 진단 로그가 없습니다."
+                                        },
+                                        onFailure = { "진단 로그를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요." }
+                                    )
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                } finally {
+                                    isClearingLog = false
+                                }
                             }
-                            val message = cleared.fold(
-                                onSuccess = { deleted ->
-                                    if (deleted) "진단 로그를 삭제했습니다." else "지울 진단 로그가 없습니다."
-                                },
-                                onFailure = { "진단 로그를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요." }
-                            )
-                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
                     ) {
-                        Text("진단 로그 지우기")
+                        Text(if (isClearingLog) "진단 로그를 지우는 중..." else "진단 로그 지우기")
                     }
                 }
             },
             confirmButton = {
                 TextButton(
+                    enabled = !isClearingLog,
                     onClick = {
-                        sendDiagnosticEmail(context, report, userDescription)
+                        if (!isClearingLog && diagnosticReport === report) {
+                            sendDiagnosticEmail(context, report, userDescription)
+                        }
                     }
                 ) {
                     Text("이메일로 보내기")
@@ -358,11 +408,11 @@ private fun DeveloperDonationRow(onClick: () -> Unit) {
 }
 
 @Composable
-private fun SupportRow(onClick: () -> Unit) {
+private fun SupportRow(enabled: Boolean, isLoading: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -375,7 +425,7 @@ private fun SupportRow(onClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "진단 정보를 확인하고 오류 신고 이메일 보내기",
+                text = if (isLoading) "진단 정보를 불러오는 중입니다." else "진단 정보를 확인하고 오류 신고 이메일 보내기",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
