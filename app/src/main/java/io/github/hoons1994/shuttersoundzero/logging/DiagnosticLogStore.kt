@@ -91,18 +91,24 @@ internal class DiagnosticLogStore(
     private fun readExisting(file: File): List<String> =
         if (file.exists()) file.readLines(Charsets.UTF_8) else emptyList()
 
-    suspend fun read(file: () -> File): List<String> = try {
+    suspend fun read(file: () -> File): Result<List<String>> = try {
         submit {
-            runCatching {
+            try {
                 val target = file()
-                if (!target.exists()) emptyList()
-                else DiagnosticLogger.trimForStorage(target.readLines(Charsets.UTF_8))
-            }.getOrDefault(emptyList())
+                Result.success(
+                    if (java.nio.file.Files.notExists(target.toPath())) emptyList()
+                    else DiagnosticLogger.trimForStorage(target.readLines(Charsets.UTF_8))
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
         }
     } catch (error: CancellationException) {
         throw error
-    } catch (_: Exception) {
-        emptyList()
+    } catch (error: Exception) {
+        Result.failure(error)
     }
 
     suspend fun clear(file: () -> File): Result<Boolean> = try {

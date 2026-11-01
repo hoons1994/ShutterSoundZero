@@ -20,6 +20,41 @@ import org.junit.rules.TemporaryFolder
 class DiagnosticLogStoreTest {
     @get:Rule val temporaryFolder = TemporaryFolder()
 
+    @Test fun missingLogIsEmptyButUnreadableLogAndFailedContextAreFailures() = runBlocking {
+        val store = DiagnosticLogStore()
+        try {
+            val missing = File(temporaryFolder.root, "absent.log")
+            assertEquals(emptyList<String>(), store.read { missing }.getOrThrow())
+            val directory = temporaryFolder.newFolder("not-a-log-file")
+            assertTrue(store.read { directory }.isFailure)
+            val failure = SecurityException("sensitive exception details must not become report text")
+            val result = store.read { throw failure }
+            assertSame(failure, result.exceptionOrNull())
+        } finally {
+            store.close()
+        }
+    }
+
+    @Test fun closedQueueCannotMasqueradeAsAnEmptyLog() = runBlocking {
+        val store = DiagnosticLogStore()
+        store.close()
+        assertTrue(store.read { File(temporaryFolder.root, "absent.log") }.isFailure)
+    }
+
+    @Test fun cancelledReadIsNotReportedAsAnIoFailureOrEmptyLog() = runBlocking {
+        val store = DiagnosticLogStore()
+        try {
+            try {
+                store.read { throw kotlinx.coroutines.CancellationException("cancel read") }
+                fail("Cancellation must propagate")
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                // Cancellation is control flow, not a diagnostic I/O result.
+            }
+        } finally {
+            store.close()
+        }
+    }
+
     @Test(timeout = 30000)
     fun queuedBurstCoalescesWritesWithoutCrossingReadOrClear() = runBlocking {
         val file = temporaryFolder.newFile("burst.log").apply { writeText("original\n") }
@@ -38,10 +73,10 @@ class DiagnosticLogStoreTest {
             assertTrue(writeStarted.await(10, TimeUnit.SECONDS))
             val burst = (1..100).map { "event-$it" }
             burst.forEach { event -> store.update({ file }) { it + event } }
-            val beforeClear = async(start = CoroutineStart.UNDISPATCHED) { store.read { file } }
+            val beforeClear = async(start = CoroutineStart.UNDISPATCHED) { store.read { file }.getOrThrow() }
             val clear = async(start = CoroutineStart.UNDISPATCHED) { store.clear { file } }
             store.update({ file }) { it + "after-clear" }
-            val afterClear = async(start = CoroutineStart.UNDISPATCHED) { store.read { file } }
+            val afterClear = async(start = CoroutineStart.UNDISPATCHED) { store.read { file }.getOrThrow() }
             releaseWrite.countDown()
 
             assertEquals(listOf("original", "first") + burst, withTimeout(10000) { beforeClear.await() })
@@ -77,10 +112,10 @@ class DiagnosticLogStoreTest {
 
             // These submissions and coroutine suspensions must return while disk is blocked.
             store.update({ file }) { it + "second" }
-            val beforeClear = async(start = CoroutineStart.UNDISPATCHED) { store.read { file } }
+            val beforeClear = async(start = CoroutineStart.UNDISPATCHED) { store.read { file }.getOrThrow() }
             val clear = async(start = CoroutineStart.UNDISPATCHED) { store.clear { file } }
             store.update({ file }) { it + "after-clear" }
-            val afterClear = async(start = CoroutineStart.UNDISPATCHED) { store.read { file } }
+            val afterClear = async(start = CoroutineStart.UNDISPATCHED) { store.read { file }.getOrThrow() }
             assertFalse(beforeClear.isCompleted)
             assertFalse(clear.isCompleted)
 
@@ -116,7 +151,7 @@ class DiagnosticLogStoreTest {
             clear.cancelAndJoin()
             store.update({ file }) { it + "after-clear" }
             releaseWrite.countDown()
-            assertEquals(listOf("after-clear"), withTimeout(10000) { store.read { file } })
+            assertEquals(listOf("after-clear"), withTimeout(10000) { store.read { file }.getOrThrow() })
         } finally {
             releaseWrite.countDown()
             store.close()
@@ -139,10 +174,10 @@ class DiagnosticLogStoreTest {
         })
         try {
             store.update({ file }) { it + "failed" }
-            assertEquals(listOf("original"), withTimeout(10000) { store.read { file } })
+            assertEquals(listOf("original"), withTimeout(10000) { store.read { file }.getOrThrow() })
             assertFalse(File(file.parentFile, "recovery.log.tmp").exists())
             store.update({ file }) { it + "recovered" }
-            assertEquals(listOf("original", "recovered"), withTimeout(10000) { store.read { file } })
+            assertEquals(listOf("original", "recovered"), withTimeout(10000) { store.read { file }.getOrThrow() })
         } finally {
             store.close()
         }
@@ -173,7 +208,7 @@ class DiagnosticLogStoreTest {
             assertTrue(writeStarted.await(10, TimeUnit.SECONDS))
             store.update({ file }) { it + "second" }
             store.update({ file }) { it + "third" }
-            val result = async(start = CoroutineStart.UNDISPATCHED) { store.read { file } }
+            val result = async(start = CoroutineStart.UNDISPATCHED) { store.read { file }.getOrThrow() }
             releaseWrite.countDown()
             assertEquals(listOf("original", "first", "second", "third"), withTimeout(10000) { result.await() })
             assertEquals(4, writes.get())
@@ -195,7 +230,7 @@ class DiagnosticLogStoreTest {
         })
         try {
             store.update({ file }) { it + "event" }
-            assertEquals(listOf("original", "event"), withTimeout(10000) { store.read { file } })
+            assertEquals(listOf("original", "event"), withTimeout(10000) { store.read { file }.getOrThrow() })
             assertEquals(1, writes.get())
         } finally {
             store.close()
@@ -215,10 +250,10 @@ class DiagnosticLogStoreTest {
         })
         try {
             store.update({ file }) { it + "event" }
-            assertEquals(listOf("external change"), withTimeout(10000) { store.read { file } })
+            assertEquals(listOf("external change"), withTimeout(10000) { store.read { file }.getOrThrow() })
             assertEquals(1, writes.get())
             store.update({ file }) { it + "later" }
-            assertEquals(listOf("external change", "later"), withTimeout(10000) { store.read { file } })
+            assertEquals(listOf("external change", "later"), withTimeout(10000) { store.read { file }.getOrThrow() })
         } finally {
             store.close()
         }
@@ -245,7 +280,7 @@ class DiagnosticLogStoreTest {
                 val line = "time-$repeat | CONNECT_SERVICE_DISCOVERED | INFO"
                 store.update({ file }) { DiagnosticLogger.appendDiscovery(it, stage, line, repeat) }
             }
-            val result = async(start = CoroutineStart.UNDISPATCHED) { store.read { file } }
+            val result = async(start = CoroutineStart.UNDISPATCHED) { store.read { file }.getOrThrow() }
             releaseWrite.countDown()
             val lines = withTimeout(10000) { result.await() }
             assertEquals(3, lines.size)

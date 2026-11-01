@@ -9,19 +9,32 @@ import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.core.DeveloperOptionsManager
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object DiagnosticReportBuilder {
     const val SUPPORT_EMAIL = "hoons1994@naver.com"
-    private const val MAX_EMAIL_EVENTS = 100
+    internal const val MAX_EMAIL_EVENTS = 100
+    const val MAX_DIAGNOSTIC_CHARS = 54_000
 
     data class Report(
         val subject: String,
         val diagnosticText: String
-    )
+    ) {
+        init {
+            require(diagnosticText.length <= MAX_DIAGNOSTIC_CHARS) { "Diagnostic report exceeds text limit" }
+        }
+    }
 
-    suspend fun build(context: Context): Report = withContext(Dispatchers.IO) {
+    suspend fun build(context: Context): Report = build(context, DiagnosticLogger::read)
+
+    internal suspend fun build(
+        context: Context,
+        readEvents: suspend (Context) -> Result<List<String>>,
+        now: () -> ZonedDateTime = { ZonedDateTime.now() }
+    ): Report = withContext(Dispatchers.IO) {
         val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.packageManager.getPackageInfo(
                 context.packageName,
@@ -31,7 +44,7 @@ object DiagnosticReportBuilder {
             @Suppress("DEPRECATION")
             context.packageManager.getPackageInfo(context.packageName, 0)
         }
-        val versionName = packageInfo.versionName ?: "알 수 없음"
+        val versionName = (packageInfo.versionName ?: "알 수 없음").take(128)
         val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             packageInfo.longVersionCode
         } else {
@@ -39,18 +52,26 @@ object DiagnosticReportBuilder {
             packageInfo.versionCode.toLong()
         }
         val prefs = PreferencesRepository.getInstance(context)
-        val events = DiagnosticLogger.read(context).takeLast(MAX_EMAIL_EVENTS)
+        val eventResult = readEvents(context).map(DiagnosticLogger::trimForStorage)
+        val retainedEvents = eventResult.getOrNull()
+        val events = retainedEvents?.takeLast(MAX_EMAIL_EVENTS).orEmpty()
+        val generatedAt = now()
+        val model = Build.MODEL.take(128)
 
         val diagnosticText = buildString {
             appendLine("ShutterSoundZero 오류 진단 정보")
             appendLine()
+            appendLine("생성 시각: ${generatedAt.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)} [${generatedAt.zone.id}]")
+            appendLine("현재 상태는 보고서 생성 시점의 조회값이며, 오류 발생 당시 상태를 재현한 값이 아닙니다.")
+            appendLine("진단 이벤트는 과거 작업 기록이며, 보내기 직전에 자동 갱신하지 않습니다.")
+            appendLine()
             appendLine("[앱 / 기기]")
             appendLine("앱 버전: $versionName ($versionCode)")
-            appendLine("기기: ${Build.MANUFACTURER} ${Build.MODEL}")
-            appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+            appendLine("기기: ${Build.MANUFACTURER.take(128)} $model")
+            appendLine("Android: ${Build.VERSION.RELEASE.take(128)} (SDK ${Build.VERSION.SDK_INT})")
             appendLine("One UI: ${detectOneUiVersion()}")
-            appendLine("보안 패치: ${Build.VERSION.SECURITY_PATCH.ifBlank { "알 수 없음" }}")
-            appendLine("소프트웨어 빌드: ${Build.DISPLAY}")
+            appendLine("보안 패치: ${Build.VERSION.SECURITY_PATCH.ifBlank { "알 수 없음" }.take(128)}")
+            appendLine("소프트웨어 빌드: ${Build.DISPLAY.take(128)}")
             appendLine()
             appendLine("[현재 상태]")
             appendLine("WRITE_SECURE_SETTINGS: ${yesNo(CscMuteManager.hasWritePermission(context))}")
@@ -64,9 +85,13 @@ object DiagnosticReportBuilder {
             appendLine(AudioDiagnosticSnapshot.read(context).format())
             appendLine()
             appendLine("[최근 진단 이벤트]")
-            if (events.isEmpty()) {
+            appendLine("기록 범위: 최근 최대 ${DiagnosticLogger.MAX_EVENTS}개 보관 / 마지막 최대 ${MAX_EMAIL_EVENTS}개 포함")
+            if (retainedEvents == null) {
+                appendLine("진단 기록을 읽지 못했습니다. 기록 유무와 포함 범위를 확인할 수 없습니다.")
+            } else if (events.isEmpty()) {
                 appendLine("기록된 진단 이벤트가 없습니다.")
             } else {
+                appendLine("포함 범위: 보관된 ${retainedEvents.size}개 중 마지막 ${events.size}개 (이벤트 시각은 UTC)")
                 events.forEach(::appendLine)
             }
             appendLine()
@@ -75,7 +100,7 @@ object DiagnosticReportBuilder {
         }.trimEnd()
 
         Report(
-            subject = "ShutterSoundZero 오류 신고 - v$versionName / ${Build.MODEL}",
+            subject = "ShutterSoundZero 오류 신고 - v$versionName / ${model}",
             diagnosticText = diagnosticText
         )
     }
