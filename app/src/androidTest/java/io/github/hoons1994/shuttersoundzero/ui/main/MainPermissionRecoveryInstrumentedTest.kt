@@ -120,6 +120,27 @@ class MainPermissionRecoveryInstrumentedTest {
         if (!hadWritePermission) shell("pm revoke ${application.packageName} android.permission.WRITE_SECURE_SETTINGS")
     }
 
+    @Test fun failedPairingRestoreKeepsItsIssueUntilTheRestoreTargetIsObserved() {
+        shell("settings put system ${CscMuteManager.CSC_KEY} 0")
+        composeTestRule.runOnIdle {
+            prefs.pendingPairingTarget = false
+            prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
+            viewModel.refreshState()
+            assertEquals(SetupIssue.CAMERA_APPLY, prefs.lastSetupIssue)
+            assertEquals(SetupIssue.CAMERA_APPLY, viewModel.uiState.value.setupIssue)
+            assertTrue(appliedTargets.isEmpty())
+        }
+
+        shell("settings put system ${CscMuteManager.CSC_KEY} 1")
+        composeTestRule.runOnIdle {
+            viewModel.refreshState()
+            assertNull(prefs.lastSetupIssue)
+            assertNull(viewModel.uiState.value.setupIssue)
+            assertEquals(false, prefs.pendingPairingTarget)
+            assertTrue(appliedTargets.isEmpty())
+        }
+    }
+
     @Test fun existingPermissionReapplyOpensAppSettingsAndResumesWithoutAnotherCode() {
         composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
         assertPermissionRepairAvailable()

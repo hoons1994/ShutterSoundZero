@@ -22,6 +22,7 @@ import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
 import io.github.hoons1994.shuttersoundzero.core.adb.StandaloneAdbManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
+import io.github.hoons1994.shuttersoundzero.data.isSetupTargetApplied
 import io.github.hoons1994.shuttersoundzero.service.PairingForegroundService
 import io.github.hoons1994.shuttersoundzero.security.AppLockSession
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,7 +76,7 @@ class MainScreenViewModel internal constructor(
         val isMuted = CscMuteManager.readCscMutedState(app)
         val wirelessDebuggingEnabled = wirelessDebuggingState(app)
 
-        if (perm && isMuted == true && prefs.lastSetupIssue != null) {
+        if (isSetupTargetApplied(perm, isMuted, prefs.pendingPairingTarget) && prefs.lastSetupIssue != null) {
             prefs.lastSetupIssue = null
         }
 

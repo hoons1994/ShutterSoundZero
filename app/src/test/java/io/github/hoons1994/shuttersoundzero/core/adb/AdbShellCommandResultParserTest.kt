@@ -10,6 +10,22 @@ class AdbShellCommandResultParserTest {
     private val marker = "__SSZ_EXIT_TEST__"
 
     @Test
+    fun splitExitCodeIsNotPublishedUntilItsLineEndingArrives() {
+        val response = "command failed\n$marker:127\n"
+        for (length in 0 until response.length) {
+            assertNull("Received only $length bytes", AdbShellCommandResultParser.parseOrNull(response.take(length), marker))
+        }
+        assertEquals(127, AdbShellCommandResultParser.parseOrNull(response, marker)?.exitCode)
+    }
+
+    @Test
+    fun splitCrLfDoesNotCompleteAtTheCarriageReturn() {
+        val response = "done\r\n$marker:0\r\n"
+        assertNull(AdbShellCommandResultParser.parseOrNull(response.dropLast(1), marker))
+        assertEquals(0, AdbShellCommandResultParser.parseOrNull(response, marker)?.exitCode)
+    }
+
+    @Test
     fun parseOrNull_whenCommandSucceeds_returnsOutputAndZeroExitCode() {
         val result = AdbShellCommandResultParser.parseOrNull(
             "command output\n$marker:0\n",

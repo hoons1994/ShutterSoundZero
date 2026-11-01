@@ -1,6 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.camera
 
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
@@ -22,7 +23,13 @@ internal class ChangeCameraMute(
         }
         currentCoroutineContext().ensureActive()
         // Cleanup failure must not turn a successfully applied camera setting into failure.
-        val cleanup = disableWirelessDebugging()
+        val cleanup = try {
+            disableWirelessDebugging()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
         onApplied(muted)
         return Result.success(CameraMuteChange(cleanup))
     }
