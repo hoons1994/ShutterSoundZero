@@ -23,13 +23,15 @@ class BootReceiverInstrumentedTest {
     private lateinit var context: Context
     private lateinit var prefs: PreferencesRepository
     private lateinit var identityFiles: List<File>
+    private var prepared = false
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        clearPreferences()
-        prefs = PreferencesRepository(context)
+        assumeFalse(CscMuteManager.hasWritePermission(context))
         identityFiles = listOf(
+            File(context.noBackupFilesDir, "adb_identity.enc"),
+            File(context.noBackupFilesDir, "adb_identity.enc.tmp"),
             File(context.noBackupFilesDir, "adb_private_key.enc"),
             File(context.noBackupFilesDir, "adb_private_key.enc.tmp"),
             File(context.noBackupFilesDir, "adb_private_key.der"),
@@ -37,15 +39,18 @@ class BootReceiverInstrumentedTest {
             File(context.filesDir, "adb_private_key.der"),
             File(context.filesDir, "adb_cert.der")
         )
+        prepared = true
+        clearPreferences()
+        prefs = PreferencesRepository(context)
         identityFiles.forEach { file ->
             file.parentFile?.mkdirs()
             file.writeText("stale-test-data")
         }
-        assumeFalse(CscMuteManager.hasWritePermission(context))
     }
 
     @After
     fun tearDown() {
+        if (!prepared) return
         identityFiles.forEach { it.delete() }
         clearPreferences()
     }

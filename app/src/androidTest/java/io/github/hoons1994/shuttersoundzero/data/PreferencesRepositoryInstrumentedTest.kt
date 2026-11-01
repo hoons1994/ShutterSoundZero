@@ -64,15 +64,18 @@ class PreferencesRepositoryInstrumentedTest {
     }
 
     private lateinit var context: Context
+    private var prepared = false
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
+        prepared = true
         clearPreferences()
     }
 
     @After
     fun tearDown() {
+        if (!prepared) return
         clearPreferences()
     }
 

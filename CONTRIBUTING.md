@@ -160,6 +160,9 @@ Windows:
 
 가능하면 세 검사를 모두 실행한 뒤 PR을 생성해 주세요.
 
+폐기용 계측 환경, API별 필수 테스트, 보고서 보관 및 출시 전 실제 재실행은
+[테스트 검증 안내](docs/TEST_VALIDATION.md)를 따릅니다.
+
 ## SPAKE2 네이티브 회귀 검사
 
 SPAKE2는 `app/src/main/cpp/UPSTREAM.md`에 기록된 소스를 앱에서 직접 빌드합니다.

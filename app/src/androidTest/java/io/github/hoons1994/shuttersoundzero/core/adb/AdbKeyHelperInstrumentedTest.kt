@@ -23,6 +23,7 @@ class AdbKeyHelperInstrumentedTest {
 
     private lateinit var context: Context
     private lateinit var identityFiles: List<File>
+    private var prepared = false
 
     @Before
     fun setUp() {
@@ -37,6 +38,7 @@ class AdbKeyHelperInstrumentedTest {
             File(context.filesDir, "adb_private_key.der"),
             File(context.filesDir, "adb_cert.der")
         )
+        prepared = true
         identityFiles.forEach { file ->
             file.parentFile?.mkdirs()
             file.writeText("stale-test-data")
@@ -45,6 +47,7 @@ class AdbKeyHelperInstrumentedTest {
 
     @After
     fun tearDown() {
+        if (!prepared) return
         identityFiles.forEach { it.delete() }
     }
 

@@ -24,7 +24,7 @@ android {
         targetSdk = 37
         versionCode = 169
         versionName = "1.5.18"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "io.github.hoons1994.shuttersoundzero.testing.DisposableAndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -75,6 +75,11 @@ android {
       shaders = false
     }
 
+    sourceSets {
+        getByName("test").java.srcDir("src/testSafety/java")
+        getByName("androidTest").java.srcDir("src/testSafety/java")
+    }
+
     packaging {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1,LICENSE.md}"
@@ -96,6 +101,13 @@ androidComponents {
 
 kotlin {
     jvmToolchain(17)
+}
+
+// Release validation reruns test actions; dependency/compiler caches remain usable.
+tasks.withType<Test>().configureEach {
+    if (providers.gradleProperty("releaseValidation").orNull == "true") {
+        outputs.upToDateWhen { false }
+    }
 }
 
 dependencies {

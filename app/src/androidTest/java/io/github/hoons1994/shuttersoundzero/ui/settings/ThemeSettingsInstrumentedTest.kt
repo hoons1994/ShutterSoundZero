@@ -49,7 +49,9 @@ class ThemeSettingsInstrumentedTest {
 
     @After
     fun tearDown() {
-        rule.runOnUiThread { prefs.appThemeMode = previousMode }
+        if (::prefs.isInitialized && ::previousMode.isInitialized) {
+            rule.runOnUiThread { prefs.appThemeMode = previousMode }
+        }
     }
 
     @Test

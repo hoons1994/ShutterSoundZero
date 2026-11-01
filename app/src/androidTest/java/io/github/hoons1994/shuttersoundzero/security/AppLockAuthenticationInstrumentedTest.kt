@@ -73,8 +73,8 @@ class AppLockAuthenticationInstrumentedTest {
     fun setUp() {
         assumeTrue("Credential tests require an emulator", Build.HARDWARE in setOf("ranchu", "goldfish"))
         assumeFalse("Do not replace an existing screen-lock credential", keyguard.isDeviceSecure)
-        shell("locksettings set-pin $TEST_PIN")
         configuredCredential = true
+        shell("locksettings set-pin $TEST_PIN")
         awaitCondition("Emulator PIN was not configured") { keyguard.isDeviceSecure }
         deleteAuthenticationKey()
         val automation = instrumentation.uiAutomation

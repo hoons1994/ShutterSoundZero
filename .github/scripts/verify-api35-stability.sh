@@ -18,10 +18,11 @@ test -s "$TEST_APK"
 adb -s "$SERIAL" install -r -t "${APP_APKS[0]}"
 adb -s "$SERIAL" install -r -t "$TEST_APK"
 CLASSES='io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticationInstrumentedTest,io.github.hoons1994.shuttersoundzero.core.WifiConnectionStatusInstrumentedTest'
-RUNNER='io.github.hoons1994.shuttersoundzero.test/androidx.test.runner.AndroidJUnitRunner'
+RUNNER='io.github.hoons1994.shuttersoundzero.test/io.github.hoons1994.shuttersoundzero.testing.DisposableAndroidJUnitRunner'
+: "${DISPOSABLE_TEST_TOKEN:?CI run token required}"
 for attempt in 1 2; do
   log="$REPORT_DIR/api35-stability-$attempt.log"
-  adb -s "$SERIAL" shell am instrument -w -r -e class "$CLASSES" "$RUNNER" \
+  adb -s "$SERIAL" shell am instrument -w -r -e disposableTestToken "$DISPOSABLE_TEST_TOKEN" -e class "$CLASSES" "$RUNNER" \
     | tr -d '\r' | tee "$log"
   # am instrument can exit zero even when JUnit fails. Require its actual result,
   # including no ignored/assumption-failed tests in this controlled emulator fixture.
