@@ -20,10 +20,12 @@ import org.junit.runner.RunWith
 class MainActivityAppLockInstrumentedTest {
 
     private lateinit var context: Context
+    private var prepared = false
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
+        prepared = true
         clearPreferences()
         PreferencesRepository(context).apply {
             hasSeenInitialNotice = true
@@ -34,6 +36,7 @@ class MainActivityAppLockInstrumentedTest {
 
     @After
     fun tearDown() {
+        if (!prepared) return
         AppLockSession.lock()
         clearPreferences()
     }

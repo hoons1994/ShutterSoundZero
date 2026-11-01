@@ -145,9 +145,11 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Build debug and release APKs, run unit tests and Android Lint
+        id: gradle_validation
         run: |
           set -euo pipefail
           node --test .github/scripts/*.test.mjs
+          python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
           ./gradlew assembleDebug assembleRelease testDebugUnitTest lintDebug --no-daemon --stacktrace
           RELEASE_APK="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
           if [[ -z "$RELEASE_APK" || ! -s "$RELEASE_APK" ]]; then
@@ -155,6 +157,32 @@ jobs:
             exit 1
           fi
           echo "Verified release APK: $RELEASE_APK"
+
+      - name: Verify JVM and Lint report completeness
+        if: always() && steps.gradle_validation.outcome != 'skipped'
+        env:
+          GRADLE_OUTCOME: ${{ steps.gradle_validation.outcome }}
+        run: python3 .github/scripts/verify-build-reports.py --gradle-outcome "$GRADLE_OUTCOME"
+
+      - name: Upload JVM test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ShutterSoundZero-jvm-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/test-results/test*UnitTest/TEST-*.xml
+            app/build/reports/tests/test*UnitTest/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Android Lint reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ShutterSoundZero-lint-${{ github.run_id }}-${{ github.run_attempt }}
+          path: app/build/reports/lint-results-*
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Verify native entropy failures and JNI ownership on Linux
         run: bash .github/scripts/verify-spake2-native.sh
@@ -444,12 +472,30 @@ jobs:
           test "$(adb -s "$SERIAL" shell id -u | tr -d '\r')" = 2000
           wait_for_wifi '^Wifi is connected to '
 
-      - name: Run the full instrumented test suite
-        run: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+      - name: Prepare and verify disposable test environment gate
+        run: |
+          set -euo pipefail
+          DISPOSABLE_TEST_TOKEN="$(openssl rand -hex 16)"
+          export DISPOSABLE_TEST_TOKEN
+          echo "DISPOSABLE_TEST_TOKEN=$DISPOSABLE_TEST_TOKEN" >> "$GITHUB_ENV"
+          ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --stacktrace
+          SERIAL="$(adb devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+          bash .github/scripts/verify-disposable-test-guard.sh "$SERIAL" "$RUNNER_TEMP"
 
-      - name: Repeat API 35 authentication and network regressions
-        if: matrix.api == 35
-        run: bash .github/scripts/verify-api35-stability.sh "$RUNNER_TEMP"
+      - name: Run the full instrumented test suite
+        id: instrumentation
+        run: >-
+          ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+          -Pandroid.testInstrumentationRunnerArguments.disposableTestToken="$DISPOSABLE_TEST_TOKEN"
+
+      - name: Validate complete API-specific JUnit results
+        if: always() && steps.instrumentation.outcome != 'skipped'
+        env:
+          GRADLE_OUTCOME: ${{ steps.instrumentation.outcome }}
+        run: >-
+          python3 .github/scripts/verify-instrumented-results.py
+          --results app/build/outputs/androidTest-results/connected --api "$API_LEVEL"
+          --gradle-outcome "$GRADLE_OUTCOME"
 
       - name: Collect emulator logs and stop emulator
         if: always()
@@ -467,18 +513,27 @@ jobs:
             kill "$(cat "$RUNNER_TEMP/emulator-api-$API_LEVEL.pid")" 2>/dev/null || true
           fi
 
-      - name: Upload API ${{ matrix.api }} test reports and emulator logs
+      - name: Upload API ${{ matrix.api }} test reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ShutterSoundZero-androidTest-api${{ matrix.api }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            build/reports/dependency-verification/**
             app/build/reports/androidTests/connected/**
             app/build/outputs/androidTest-results/connected/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload API ${{ matrix.api }} emulator and guard logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ShutterSoundZero-emulator-logs-api${{ matrix.api }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/reports/dependency-verification/**
+            ${{ runner.temp }}/guard-*.log
             ${{ runner.temp }}/emulator-api-${{ matrix.api }}.log
             ${{ runner.temp }}/logcat-api-${{ matrix.api }}.log
-            ${{ runner.temp }}/api35-stability-*.log
           if-no-files-found: warn
           retention-days: 14
 

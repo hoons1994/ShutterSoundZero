@@ -30,6 +30,7 @@ class DeveloperDonationPromptTest {
     private lateinit var context: Context
     private lateinit var prefs: PreferencesRepository
     private var originallyUnlocked = false
+    private var prepared = false
 
     @Before fun prepare() {
         originallyUnlocked = AppLockSession.isUnlocked
@@ -38,12 +39,14 @@ class DeveloperDonationPromptTest {
             override fun getSharedPreferences(name: String, mode: Int) =
                 super.getSharedPreferences("donation_prompt_test", mode)
         }
+        prepared = true
         context.getSharedPreferences("", Context.MODE_PRIVATE).edit().clear().commit()
         prefs = PreferencesRepository(context)
         prefs.hasSeenInitialNotice = true
     }
 
     @After fun cleanUp() {
+        if (!prepared) return
         context.getSharedPreferences("", Context.MODE_PRIVATE).edit().clear().commit()
         if (originallyUnlocked) AppLockSession.unlock() else AppLockSession.lock()
     }

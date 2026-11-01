@@ -1,0 +1,303 @@
+{
+  "io.github.hoons1994.shuttersoundzero.core.adb.AdbKeyHelperInstrumentedTest": {
+    "methods": [
+      "bothPlaintextLocationsMigrateTheSameIdentityAndRemoveSourcesOnlyAfterCommit",
+      "completeOldEncryptedPairMigratesWithoutChangingItsIdentity",
+      "failedExistingIdentityLoadPreservesCurrentAndLegacyFiles",
+      "failedInitialWriteLeavesNoIncompleteCommittedIdentityAndCanRetry",
+      "failedMigrationWritePreservesOriginalFilesAndCanRetry",
+      "firstIdentityCreationRetriesAfterAnInterruptedStagingWrite",
+      "interruptedOldMigrationRecoversFromMatchingPlaintextOriginal",
+      "malformedCompleteOldEncryptedPairCannotFallBackToValidPlaintext",
+      "resetIdentity_removesCurrentAndLegacyIdentityFiles"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.core.adb.AdbStartupReadinessInstrumentedTest": {
+    "methods": [
+      "fastConnectionRefusalsWaitForTheActualListenerWithoutPairingRecovery"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.core.adb.LegacyNsdResolveServiceInstrumentedTest": {
+    "methods": [
+      "workerDeathDisconnectsClientAndNextBindingStarts"
+    ],
+    "max_api": 33
+  },
+  "io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccessInstrumentedTest": {
+    "methods": [
+      "freshInstall_failsClosedThenRuntimePermissionFlowGrantsAccess"
+    ],
+    "min_api": 37
+  },
+  "io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigatorInstrumentedTest": {
+    "methods": [
+      "bothSettingsLaunchFailuresAreReported",
+      "failedSettingsLaunchDoesNotStartPairingOrDiscardSavedRecoveryState",
+      "fallbackSettingsLaunchDropsThePackageAndKeepsTheAction",
+      "homeApplyRetryPreservesSavedEndpointAndDoesNotAskForAnotherCode",
+      "permissionSettingsTargetsOnlyThisAppAndReportsUnavailableSettings",
+      "primarySettingsLaunchKeepsItsIntentAndDoesNotRetry",
+      "successfulSettingsLaunchPrecedesPairingServiceAndGuidance"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.core.WifiConnectionStatusInstrumentedTest": {
+    "methods": [
+      "actualSystemQueryMatchesStableFrameworkCapabilities",
+      "blockedConnectivityServiceFailsClosed",
+      "connectedWifiIsAcceptedWhenItIsNotTheDefaultDataNetwork",
+      "missingConnectivityServiceFailsClosed"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.data.PreferencesRepositoryInstrumentedTest": {
+    "methods": [
+      "adbLinkageHistoryMigration_convertsLegacyPortEvidence",
+      "adbLinkageHistoryMigration_doesNotRestoreExplicitlyRevokedLinkage",
+      "changingTheme_preservesCameraAndSetupFailurePreferences",
+      "clearingTransientAdbState_removesPortButPreservesUserSettingsAndLinkageHistory",
+      "donationInvitationRequiresVerifiedMuteAndIsClaimedOnlyOnceAcrossRecreation",
+      "explicitPermissionRevoke_clearsLinkageHistory",
+      "initialNoticeMigration_distinguishesFreshAndExistingInstall",
+      "pendingRestoreTargetSurvivesRepositoryRecreationAndCanBeCleared",
+      "permissionRevokedFlag_persistsAcrossRepositoryInstances",
+      "restoringBeforeInvitationIsShownClearsOnlyThePendingInvitation",
+      "simultaneousRepositoryClaimsCannotRepeatTheInvitation",
+      "themeListener_observesOtherRepositoryAndCanBeRemoved",
+      "themeMode_defaultsToSystemAndPersistsEveryChoice",
+      "unknownThemeMode_fallsBackToSystem"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.MainActivityAppLockInstrumentedTest": {
+    "methods": [
+      "appLockDisabled_clearsSecureWindowFlag",
+      "appLockEnabled_setsSecureWindowFlag",
+      "appLockPreferenceChange_updatesSecureWindowFlagImmediately",
+      "configurationChange_preservesUnlockedSession",
+      "leavingForegroundDuringAuthenticationStillLocksTheSession",
+      "leavingForeground_locksPreviouslyUnlockedSession"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.pairing.PairingRestoreInstrumentedTest": {
+    "methods": [
+      "rePairingRestoresCscAndDisablesMuteOnBoot"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.pairing.PairingWorkflowFeedbackInstrumentedTest": {
+    "methods": [
+      "cancellationIsPropagatedAndDoesNotLeaveCompletionBlocked",
+      "cleanupExceptionKeepsInitialPairingAndAppliedTargetSuccessful",
+      "cleanupFailureResultAlsoKeepsTheVerifiedPairingSuccess",
+      "failedCompletionResetsTheFlagBeforeTheErrorIsPropagated",
+      "failureTransitionClearsTheCompletingFlagForRetry"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.receiver.BootReceiverInstrumentedTest": {
+    "methods": [
+      "appUpdate_clearsTransientPortAndResetsIdentityAfterUnexpectedPermissionLoss",
+      "explicitRevoke_preventsIdentityResetOnAppUpdate",
+      "normalBoot_clearsTransientPortButPreservesIdentityAndUserSettings",
+      "softwareUpdate_clearsTransientPortAndResetsIdentityAfterUnexpectedPermissionLoss"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.receiver.PairingNotificationReceiverInstrumentedTest": {
+    "methods": [
+      "authenticatedRecoveryOffersApplyRetryWithoutCodeEntry",
+      "cancelAction_forwardsStopCommandWithoutStartingPairing",
+      "codeRetryAndStopPendingIntentsDoNotCrossSessionBoundaries",
+      "developerOptionsReadyState_exposesCurrentNextStepWithoutLegacyCopy",
+      "discoveryFailure_opensAppForASetupRestartWithoutStaleCodeEntry",
+      "extrasWithoutFixedIdentityCannotSubmitOrCancel",
+      "identityFailureDoesNotOfferCodeEntryEvenWhenAPortIsRediscovered",
+      "localNetworkPermissionFailure_guidesAppSettings",
+      "mutableReplyFillInCannotReplaceTheFixedSessionIdentity",
+      "pairingFailureState_asksForFreshPairingWindow",
+      "pairingNotification_hidesInternalPortAndFocusesOnCodeEntry",
+      "progressNotification_avoidsPermissionLinkageJargon",
+      "remoteInput_trimsCodeAndForwardsSubmitCommand",
+      "serviceCompanion_buildsStartTransition",
+      "tlsAndCodeAuthenticationFailuresShowDifferentRecoveryInstructions",
+      "unreadableWirelessStateDoesNotOfferCodeEntryOrAskToTurnItOn",
+      "wirelessDebuggingReady_advancesGuidanceWithoutExposingCodeEntryBeforeDiscovery"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticationInstrumentedTest": {
+    "methods": [
+      "appPermissionSettingsReapplyWaitsForActualUnlockAndRunsOnce",
+      "appPermissionSettingsRestoreWaitsForActualUnlockAndRunsOnce",
+      "cancellingActualCredentialPromptDoesNotUnlock",
+      "devicePinCompletesActualCryptoAuthenticationOnce",
+      "keystoreRequiresPerUseStrongBiometricOrDeviceCredential",
+      "removingAndRestoringScreenLockRecreatesInvalidatedKey",
+      "settingsPermissionStillDeniedAfterUnlockDoesNotRunTheAction",
+      "settingsReapplyAfterPermissionSettingsWaitsForUnlockAndRunsOnce",
+      "settingsRestoreAfterPermissionSettingsWaitsForUnlockAndConfirmation",
+      "signingWithoutSystemAuthenticationIsRejected",
+      "wirelessSettingsReapplyWaitsForActualUnlockAndRunsOnce",
+      "wirelessSettingsRestoreWaitsForActualUnlockAndRunsOnce"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.security.ManifestSecurityContractInstrumentedTest": {
+    "methods": [
+      "adbIdentityProviderIsExportedOnlyWithDumpPermission",
+      "applicationDisablesBackupAndCleartextTraffic",
+      "cameraMuteTileServiceUsesQuickSettingsBindingPermission",
+      "internalComponentsAreNotExported",
+      "releaseApiUsesPlatformNetworkSecurityPolicy"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.service.TileCscObserverInstrumentedTest": {
+    "methods": [
+      "lateCscChangeRefreshesVisibleTileAndStopsAfterListeningEnds"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.theme.ThemeInstrumentedTest": {
+    "methods": [
+      "darkTheme_screenAndSelectionTextMeetAaContrast",
+      "darkTheme_statusColorsMeetAaContrast",
+      "darkTheme_usesDarkPalette",
+      "lightTheme_screenAndSelectionTextMeetAaContrast",
+      "lightTheme_statusColorsMeetAaContrast",
+      "lightTheme_usesLightPalette"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.main.CameraMuteFailureDialogTest": {
+    "methods": [
+      "connectionFailureStartsPairingRecovery",
+      "discoveryFailureCanCheckSettingsBeforeRePairing",
+      "settingFailureDoesNotRequestAnotherPairing"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.main.DeveloperDonationPromptTest": {
+    "methods": [
+      "dialogShowsAgreedWordingAndOpensDonationOnlyOnExplicitClick",
+      "invitationWaitsForEligibleScreenAndNeverRepeatsAfterClosing",
+      "invitationWaitsForInitialNoticeAndSurvivesStateRestorationUntilDismissed",
+      "resumedScreenCannotConsumeInvitationBeforeAppUnlock",
+      "successfulRestoreCannotDisplayMuteInvitation"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.main.HomeNoticeCardInstrumentedTest": {
+    "methods": [
+      "manualSelectionSurvivesHomeStatusRefresh",
+      "narrowCardKeepsControlsInsideAndHeightStableAtDoubleFontSize",
+      "noticeOffersSettingsActionWithoutDuplicatingCameraAction",
+      "readyHomeOffersOnlyTheHeroCameraAction",
+      "reapplyRequiredStartsWithUpdateGuidanceAndPreviousWraps",
+      "swipeAndRestorationPreserveManuallySelectedNotice",
+      "switchingNoticesKeepsCardHeight",
+      "switchingNoticesKeepsCardHeightWithLargeText"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.main.MainAccessibilityInstrumentedTest": {
+    "methods": [
+      "compactScreenAt200PercentFont_keepsPrimaryFlowReachable",
+      "importantHomeActions_exposeTalkBackLabelsAndActions"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.main.MainPermissionRecoveryInstrumentedTest": {
+    "methods": [
+      "existingPermissionReapplyOpensAppSettingsAndResumesWithoutAnotherCode",
+      "failedPairingRestoreKeepsItsIssueUntilTheRestoreTargetIsObserved",
+      "newManualRequestCancelsTheOlderPermissionSettingsRequest",
+      "pairingPermissionDenialConsumesTheRequestWithoutStartingPairing",
+      "pairingPermissionReturnKeepsItsOriginalRestoreTargetAndRunsOnce",
+      "permanentDenialCanReopenSettingsAndResumeTheOriginalRestoreOnlyOnce",
+      "restoreGoalSurvivesPermissionRepairWhenWirelessDebuggingAlsoNeedsEnabling",
+      "returningWithWirelessStillOffCanRetryTheSameGoalOnce",
+      "unavailablePermissionSettingsKeepsTheRestoreRecoveryAction",
+      "unavailableWirelessSettingsDoesNotLeaveAnAutomaticApplyQueued"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.main.MainScreenTest": {
+    "methods": [
+      "cameraApplyFailure_isShownInlineAtApplyStep",
+      "connectionFailure_explainsChangedPairingPort",
+      "developerOptionsStep_isMarkedCompleteWhenEnabled",
+      "developerOptionsStep_opensDeviceInfo",
+      "discoveryFailure_showsWirelessDebuggingRecovery",
+      "home_doesNotShowDetailedLegalNotice",
+      "localNetworkPermissionFailure_opensAppSettings",
+      "pairingFailure_isShownInlineAtCodeStep",
+      "pendingCameraChangeNeverShowsCompletionOrAllowsAnotherAction",
+      "pendingVolumeChangeKeepsRequestedValueWithoutReportingCompletion",
+      "readyHomeHidesWirelessDebuggingSettingsActionWhenEnabled",
+      "readyHome_keepsCameraCheckAsSecondaryAction",
+      "reapplyHomeOpensWirelessDebuggingWithoutStartingPairingAgain",
+      "reapplyInProgressDoesNotShowPrematureSuccessOrAllowRepeatedRequests",
+      "rejectedVolumeChangeOffersNativeSettings",
+      "ringerMutedVolumeExplainsRestrictionAndOpensPhoneSettings",
+      "setupRequiredHome_focusesOnCurrentAction",
+      "unreadableCscStateShowsRetryWithoutClaimingSuccessOrReset",
+      "unreadableWirelessStateDoesNotAskToTurnItOnAgain",
+      "zeroVolumeInSoundModeCanStillBeRaised"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.settings.AppUpdateSectionTest": {
+    "methods": [
+      "availableReleaseDisplaysVersionAndOpensThatRelease",
+      "checkingPreventsDuplicateTap",
+      "failedLookupKeepsManualReleaseLinkAndRetryAvailable"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.settings.SettingsAccessibilityInstrumentedTest": {
+    "methods": [
+      "compactScreenAt200PercentFont_keepsSettingsNavigationReachable"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.settings.SettingsHelpSectionInstrumentedTest": {
+    "methods": [
+      "closingDuringClearDoesNotReopenAnOldReport",
+      "refreshFailureAfterClearCannotLeaveOldLogAvailableForSending",
+      "slowClearDisablesSendingUntilRefreshedAndPreservesUserInput",
+      "slowReportLoadingLeavesTheSettingsScreenResponsive"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.settings.SettingsScreenTest": {
+    "methods": [
+      "detailedPopupSetting_isAvailableFromDeviceSettings",
+      "developerLinks_areAvailableFromHelpSection",
+      "deviceReportEntry_isNotAvailable",
+      "errorReporting_isStillAvailable",
+      "settings_areGroupedByUserGoal"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.settings.SettingsWirelessDebuggingTest": {
+    "methods": [
+      "reapplyPromptClosesWhenWirelessDebuggingIsEnabled",
+      "restorePromptClosesWhenWirelessDebuggingIsEnabled"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.settings.ThemeSettingsInstrumentedTest": {
+    "methods": [
+      "compactScreenAt200PercentFont_keepsAllThreeChoicesReachable",
+      "savedManualChoice_isAppliedWhenAppCompositionIsRecreated",
+      "settingsSelection_updatesOuterAppThemeImmediatelyAndRestoresSavedChoice",
+      "systemChanges_followSystemOnlyWhileSystemChoiceIsSelected"
+    ]
+  },
+  "io.github.muntashirakon.adb.AdbIdentityInstrumentedTest": {
+    "methods": [
+      "testAppUidCannotForgeProofEvenWithDumpPermissionAndToken",
+      "testCancelledChallengeCannotBeReplayedByShell",
+      "testConscryptPairingRejectsAuthenticatedWrongPeerType",
+      "testConscryptPairingRejectsDifferentTlsExporter",
+      "testConscryptPairingRejectsWrongCode",
+      "testConscryptPairingSucceedsWithMatchingCodeAndTlsExporter",
+      "testRealShellBinderIdentityCompletesOneShotChallenge"
+    ]
+  },
+  "io.github.muntashirakon.adb.PairingNativeOwnershipInstrumentedTest": {
+    "methods": [
+      "failedGenerationReleasesTheContextExactlyOnce",
+      "invalidCurvePointFailsAndCanBeDestroyedRepeatedly",
+      "invalidLengthsFailAndCanBeDestroyedRepeatedly",
+      "validExchangeStillDerivesTheSameKey"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.testing.TestFixtureLifecycleInstrumentedTest": {
+    "methods": [
+      "bootCleanupBeforePreparationDoesNotTouchUninitializedFields",
+      "identityCleanupBeforePreparationDoesNotTouchUninitializedFields",
+      "skippedBootPreparationPreservesIdentityAndPreferences"
+    ]
+  }
+}

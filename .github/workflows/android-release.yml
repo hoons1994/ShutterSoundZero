@@ -115,6 +115,30 @@ jobs:
         shell: bash
         run: bash .github/scripts/verify-launcher-icon.sh
 
+      - name: Run fresh Debug and Release unit tests and Lint
+        id: release_validation
+        run: bash .github/scripts/validate-release-tests.sh
+
+      - name: Verify release validation reports
+        if: always() && steps.release_validation.outcome != 'skipped'
+        env:
+          GRADLE_OUTCOME: ${{ steps.release_validation.outcome }}
+        run: >-
+          python3 .github/scripts/verify-build-reports.py
+          --variants debug release --gradle-outcome "$GRADLE_OUTCOME"
+
+      - name: Preserve release validation reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ShutterSoundZero-release-validation-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/test-results/test*UnitTest/TEST-*.xml
+            app/build/reports/tests/test*UnitTest/**
+            app/build/reports/lint-results-*
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Restore release keystore
         shell: bash
         env:
@@ -376,6 +400,30 @@ jobs:
       - name: Verify complete launcher icon resources
         shell: bash
         run: bash .github/scripts/verify-launcher-icon.sh
+
+      - name: Run fresh Debug and Release unit tests and Lint
+        id: release_validation
+        run: bash .github/scripts/validate-release-tests.sh
+
+      - name: Verify release validation reports
+        if: always() && steps.release_validation.outcome != 'skipped'
+        env:
+          GRADLE_OUTCOME: ${{ steps.release_validation.outcome }}
+        run: >-
+          python3 .github/scripts/verify-build-reports.py
+          --variants debug release --gradle-outcome "$GRADLE_OUTCOME"
+
+      - name: Preserve release validation reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ShutterSoundZero-release-validation-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/test-results/test*UnitTest/TEST-*.xml
+            app/build/reports/tests/test*UnitTest/**
+            app/build/reports/lint-results-*
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Restore release keystore
         shell: bash
