@@ -37,10 +37,10 @@ sys.stdout.buffer.write(buffer.getvalue())
 
 const validArchive = archive();
 
-function fixture({ graph, event = 'pull_request', fork = false } = {}) {
+function fixture({ graph, event = 'pull_request', fork = false, attempt = 1 } = {}) {
   const bytes = graph ? archive([{ name: 'dependency-graph-reports/dependency_submission-generate.json', contents: JSON.stringify(graph) }]) : validArchive;
   const run = {
-    id: 123, run_attempt: 1, name: 'Dependency Submission', path: '.github/workflows/dependency-submission.yml',
+    id: 123, run_attempt: attempt, name: 'Dependency Submission', path: '.github/workflows/dependency-submission.yml',
     repository: { full_name: repository }, head_repository: { full_name: fork ? 'contributor/fork' : repository },
     status: 'completed', conclusion: 'success', event, head_sha: sha,
     head_branch: event === 'pull_request' ? 'feature' : 'main', pull_requests: [],
@@ -71,7 +71,7 @@ function fixture({ graph, event = 'pull_request', fork = false } = {}) {
     if (path.endsWith('/actions/artifacts/456/zip')) return state.redirect ? new Response(null, { status: 302, headers: { location: 'https://artifacts.example.test/snapshot.zip' } }) : new Response(state.bytes);
     throw new Error(`Unexpected mock API path: ${path}`);
   };
-  state.publish = () => publishDependencySnapshot({ repository, runId: 123, runAttempt: 1, token: 'mock-token', request });
+  state.publish = () => publishDependencySnapshot({ repository, runId: 123, runAttempt: attempt, token: 'mock-token', request });
   return state;
 }
 
@@ -102,6 +102,56 @@ test('push and manual main source runs preserve the main snapshot flow', async (
     assert.equal(state.submitted[0].ref, 'refs/heads/main');
     assert.equal(state.calls.some(call => call.url.includes('/pulls')), false);
   }
+});
+
+test('runner and GitHub metadata clocks can differ without changing the reported scan time', async () => {
+  for (const offset of [-60 * 60_000, 60 * 60_000]) {
+    const state = fixture();
+    for (const key of ['run_started_at', 'updated_at']) {
+      state.run[key] = new Date(Date.parse(state.run[key]) + offset).toISOString();
+    }
+    state.artifacts[0].created_at = new Date(Date.parse(state.artifacts[0].created_at) + offset).toISOString();
+    await state.publish();
+    assert.equal(state.submitted.length, 1);
+    assert.equal(state.submitted[0].scanned, snapshot().scanned);
+  }
+});
+
+test('a rerun with clock skew selects only the current attempt artifact', async () => {
+  const state = fixture({ attempt: 2 });
+  const previous = { ...state.artifacts[0], id: 455 };
+  state.run.run_started_at = '2026-10-17T02:00:00Z';
+  state.run.updated_at = '2026-10-17T02:02:00Z';
+  state.artifacts[0].created_at = '2026-10-17T02:01:30Z';
+  state.artifacts.unshift(previous);
+  const result = await state.publish();
+  assert.equal(result.artifactId, 456);
+  assert.deepEqual(state.submitted, [snapshot()]);
+  assert.equal(state.calls.filter(call => new URL(call.url).pathname.endsWith('/zip')).length, 1);
+});
+
+test('an artifact uploaded after source completion is rejected even with a matching scan time', async () => {
+  const state = fixture();
+  state.artifacts[0].created_at = '2026-10-17T01:02:01Z';
+  await assert.rejects(state.publish(), /current source-run snapshot artifact/);
+  assert.equal(state.submitted.length, 0);
+  assert.equal(state.calls.some(call => new URL(call.url).pathname.endsWith('/zip')), false);
+});
+
+test('artifact upload times at both source-run boundaries are accepted', async () => {
+  for (const createdAt of ['2026-10-17T01:00:00Z', '2026-10-17T01:02:00Z']) {
+    const state = fixture();
+    state.artifacts[0].created_at = createdAt;
+    await state.publish();
+    assert.equal(state.submitted.length, 1);
+  }
+});
+
+test('an inconsistent source-run interval cannot authorize an artifact', async () => {
+  const state = fixture();
+  state.run.updated_at = '2026-10-17T00:59:59Z';
+  await assert.rejects(state.publish(), /source run time range/);
+  assert.equal(state.submitted.length, 0);
 });
 
 test('PR snapshots specifying main, another SHA or another source job never reach POST', async () => {
@@ -144,6 +194,7 @@ test('source attempts and source identity changed during download never reach PO
     state => { state.run.event = 'push'; },
     state => { state.run.head_repository.full_name = 'other/fork'; },
     state => { state.run.run_started_at = '2026-10-17T01:01:00Z'; },
+    state => { state.run.updated_at = '2026-10-17T01:01:00Z'; },
   ]) {
     const state = fixture();
     state.onDownload = mutate;
@@ -184,8 +235,8 @@ test('unknown or ambiguous source PR associations fail closed', async () => {
   }
 });
 
-test('empty dependencies, unknown schema fields, dangling references and unrelated scan time are rejected', () => {
-  for (const mutate of [graph => { graph.manifests = {}; }, graph => { graph.manifests.dependency_submission.resolved = {}; }, graph => { graph.manifests.dependency_submission.file.source_location = '../outside'; }, graph => { graph.manifests.dependency_submission.resolved['kotlin:2.4.21'].dependencies = ['missing']; }, graph => { graph.scanned = '2026-10-16T01:01:00Z'; }]) {
+test('empty dependencies, unknown schema fields, dangling references and invalid scan time are rejected', () => {
+  for (const mutate of [graph => { graph.manifests = {}; }, graph => { graph.manifests.dependency_submission.resolved = {}; }, graph => { graph.manifests.dependency_submission.file.source_location = '../outside'; }, graph => { graph.manifests.dependency_submission.resolved['kotlin:2.4.21'].dependencies = ['missing']; }, graph => { graph.scanned = 'not-a-timestamp'; }, graph => { graph.scanned = '2026-10-17T02:01:00+01:00'; }]) {
     const graph = snapshot();
     mutate(graph);
     assert.throws(() => validateSnapshot(graph, source));
