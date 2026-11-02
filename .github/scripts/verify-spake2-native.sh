@@ -11,6 +11,10 @@ TESTS="$ROOT/app/src/nativeTest"
 ANNOTATIONS="$(find "${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2/files-2.1/androidx.annotation/annotation-jvm" -name '*.jar' -print -quit)"
 test -s "$ANNOTATIONS"
 mkdir -p "$OUT"
+g++ -std=c++17 -I "$JAVA_HOME/include" -I "$JAVA_HOME/include/linux" \
+  -I "$CPP/spake2-c/include" "$TESTS/spake2_jni_allocation_test.cpp" \
+  -o "$OUT/jni-allocation-test"
+"$OUT/jni-allocation-test"
 for source in sha512 spake2 secure_random; do
   gcc -fPIC -DSPAKE2_RANDOM_TESTING -I "$CPP/spake2-c/include" \
     -c "$CPP/spake2-c/$source.c" -o "$OUT/$source.o"

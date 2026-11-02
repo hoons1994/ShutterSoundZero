@@ -18,6 +18,11 @@ function Invoke-Checked([string]$Program, [string[]]$Arguments) {
 # The host compatibility header supplies byte-order macros only. Production C/JNI
 # and Java are compiled directly, without changing their error/cleanup paths.
 try {
+Invoke-Checked $ZigPath @('c++', '-target', 'x86_64-windows-gnu', '-std=c++17',
+    '-fno-exceptions', '-fno-rtti', '-nostdlib++',
+    '-I', "$JdkPath/include", '-I', "$JdkPath/include/win32", '-I', "$nativeSource/spake2-c/include",
+    "$hostTests/spake2_jni_allocation_test.cpp", '-o', "$outputPath/jni-allocation-test.exe")
+Invoke-Checked "$outputPath/jni-allocation-test.exe" @()
 foreach ($source in @('sha512', 'spake2', 'secure_random')) {
     Invoke-Checked $ZigPath @('cc', '-target', 'x86_64-windows-gnu', '-D__linux__=1',
         '-DSPAKE2_RANDOM_TESTING', '-I', "$hostTests/include", '-I', "$nativeSource/spake2-c/include", '-c',
