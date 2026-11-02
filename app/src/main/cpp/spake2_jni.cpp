@@ -83,11 +83,16 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     if (vm->GetEnv((void **) &env, JNI_VERSION_1_6) != JNI_OK)
         return -1;
 
-    JNINativeMethod methods_Spake2Context[] = {
-            {"allocNewContext", "(I[B[B)J", (void *) Spake2Context_AllocNewContext},
-            {"generateMessage", "(J[B)[B",  (void *) Spake2Context_GenerateMessage},
-            {"processMessage",  "(J[B)[B",  (void *) Spake2Context_ProcessMessage},
-            {"destroy",         "(J)V",     (void *) Spake2Context_Destroy},
+    // JNI's legacy ABI uses char* for read-only method names and signatures.
+    const JNINativeMethod methods_Spake2Context[] = {
+            {const_cast<char *>("allocNewContext"), const_cast<char *>("(I[B[B)J"),
+                    (void *) Spake2Context_AllocNewContext},
+            {const_cast<char *>("generateMessage"), const_cast<char *>("(J[B)[B"),
+                    (void *) Spake2Context_GenerateMessage},
+            {const_cast<char *>("processMessage"), const_cast<char *>("(J[B)[B"),
+                    (void *) Spake2Context_ProcessMessage},
+            {const_cast<char *>("destroy"), const_cast<char *>("(J)V"),
+                    (void *) Spake2Context_Destroy},
     };
 
     env->RegisterNatives(env->FindClass("io/github/muntashirakon/crypto/spake2/Spake2Context"), methods_Spake2Context,

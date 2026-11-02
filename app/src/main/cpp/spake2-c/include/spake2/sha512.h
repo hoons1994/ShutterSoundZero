@@ -33,7 +33,7 @@
 #elif defined(__APPLE__) && defined(__MACH__)
 #include <machine/endian.h>
 #else
-#error Couldn't find any appropriate endian.h
+#error "Could not find an appropriate endian.h"
 #endif
 
 #ifdef __cplusplus
