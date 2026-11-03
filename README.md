@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.5.18-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.5.19-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터사운드 제로 안내 인포그래픽" width="720" />
@@ -19,7 +19,7 @@
 
 접근성 서비스를 이용해 화면이나 카메라 실행을 상시 감시하지 않습니다. 최초 1회 로컬 무선 ADB로 `WRITE_SECURE_SETTINGS` 권한을 연동한 뒤, 필요할 때만 무선 디버깅을 켜서 실제 CSC 값을 변경합니다.
 
-현재 앱 버전은 **v1.5.18**입니다. 홈의 적용 완료 카드와 중요 안내 디자인을 통일하고, 상황별 안내와 좁은 화면·큰 글꼴에서의 사용성을 개선했습니다. 자세한 변경 사항은 [v1.5.18 릴리즈 노트](.github/release-notes/v1.5.18.md)를 확인해 주세요.
+현재 앱 버전은 **v1.5.19**입니다. 설정 완료·재시도와 촬영음 복원 안내의 정확성을 높이고, 진단 기록·오류 신고 및 페어링 예외 처리를 보완한 안정화 버전입니다. 자세한 변경 사항은 [v1.5.19 릴리즈 노트](.github/release-notes/v1.5.19.md)를 확인해 주세요.
 
 ## 📱 다운로드
 
