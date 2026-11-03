@@ -20,8 +20,14 @@ static jlong Spake2Context_AllocNewContext(JNIEnv *env, jclass clazz, jint myRol
     spake2_role_t my_role = myRole == 0 ? spake2_role_alice : spake2_role_bob;
     auto my_len = env->GetArrayLength(myName);
     auto my_name = env->GetByteArrayElements(myName, nullptr);
+    if (my_name == nullptr) return 0;
     auto their_len = env->GetArrayLength(theirName);
     auto their_name = env->GetByteArrayElements(theirName, nullptr);
+    if (their_name == nullptr) {
+        // Releasing an acquired array is permitted with a pending exception.
+        env->ReleaseByteArrayElements(myName, my_name, JNI_ABORT);
+        return 0;
+    }
 
     struct spake2_ctx_st *ctx = SPAKE2_CTX_new(my_role, (uint8_t *) my_name, my_len, (uint8_t *) their_name, their_len);
     env->ReleaseByteArrayElements(myName, my_name, 0);
@@ -37,6 +43,7 @@ static jbyteArray Spake2Context_GenerateMessage(JNIEnv *env, jclass clazz, jlong
     struct spake2_ctx_st *ctx = (struct spake2_ctx_st *) ctxPtr;
     auto pswd_size = env->GetArrayLength(password);
     auto pswd = env->GetByteArrayElements(password, nullptr);
+    if (pswd == nullptr) return nullptr;
     size_t msg_size = 0;
     uint8_t msg[SPAKE2_MAX_MSG_SIZE];
     int status = SPAKE2_generate_msg(ctx, msg, &msg_size, SPAKE2_MAX_MSG_SIZE, (uint8_t *) pswd, pswd_size);
@@ -47,6 +54,7 @@ static jbyteArray Spake2Context_GenerateMessage(JNIEnv *env, jclass clazz, jlong
         return nullptr;
     }
     jbyteArray outMsg = env->NewByteArray(msg_size);
+    if (outMsg == nullptr) return nullptr;
     env->SetByteArrayRegion(outMsg, 0, msg_size, (jbyte *) msg);
     return outMsg;
 }
@@ -55,6 +63,7 @@ static jbyteArray Spake2Context_ProcessMessage(JNIEnv *env, jclass clazz, jlong 
     struct spake2_ctx_st *ctx = (struct spake2_ctx_st *) ctxPtr;
     auto their_msg_len = env->GetArrayLength(theirMessage);
     auto their_msg = env->GetByteArrayElements(theirMessage, nullptr);
+    if (their_msg == nullptr) return nullptr;
     size_t key_material_len = 0;
     uint8_t key_material[SPAKE2_MAX_KEY_SIZE];
     int status = SPAKE2_process_msg(ctx, key_material, &key_material_len, SPAKE2_MAX_KEY_SIZE, (uint8_t *) their_msg, their_msg_len);
@@ -65,6 +74,7 @@ static jbyteArray Spake2Context_ProcessMessage(JNIEnv *env, jclass clazz, jlong 
         return nullptr;
     }
     jbyteArray outKey = env->NewByteArray(key_material_len);
+    if (outKey == nullptr) return nullptr;
     env->SetByteArrayRegion(outKey, 0, key_material_len, (jbyte *) key_material);
     return outKey;
 }
