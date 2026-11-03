@@ -22,8 +22,8 @@ android {
         applicationId = "io.github.hoons1994.shuttersoundzero"
         minSdk = 30
         targetSdk = 37
-        versionCode = 169
-        versionName = "1.5.18"
+        versionCode = 170
+        versionName = "1.5.19"
         testInstrumentationRunner = "io.github.hoons1994.shuttersoundzero.testing.DisposableAndroidJUnitRunner"
     }
 
