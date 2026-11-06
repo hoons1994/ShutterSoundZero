@@ -9,6 +9,8 @@
       "firstIdentityCreationRetriesAfterAnInterruptedStagingWrite",
       "interruptedOldMigrationRecoversFromMatchingPlaintextOriginal",
       "malformedCompleteOldEncryptedPairCannotFallBackToValidPlaintext",
+      "missingWrappingKeyPreservesIdentityUntilExplicitFreshPairing",
+      "replacedWrappingKeyIsAlsoReplacedOnlyAfterExplicitFreshPairing",
       "resetIdentity_removesCurrentAndLegacyIdentityFiles"
     ]
   },
@@ -105,8 +107,10 @@
       "codeRetryAndStopPendingIntentsDoNotCrossSessionBoundaries",
       "developerOptionsReadyState_exposesCurrentNextStepWithoutLegacyCopy",
       "discoveryFailure_opensAppForASetupRestartWithoutStaleCodeEntry",
+      "discoveryTimeoutExplainsThatTheCodeMustBeSubmittedAgain",
       "extrasWithoutFixedIdentityCannotSubmitOrCancel",
       "identityFailureDoesNotOfferCodeEntryEvenWhenAPortIsRediscovered",
+      "inFlightNotificationShowsProgressAndDoesNotAcceptAnotherCode",
       "localNetworkPermissionFailure_guidesAppSettings",
       "mutableReplyFillInCannotReplaceTheFixedSessionIdentity",
       "pairingFailureState_asksForFreshPairingWindow",
@@ -195,9 +199,12 @@
   },
   "io.github.hoons1994.shuttersoundzero.ui.main.MainPermissionRecoveryInstrumentedTest": {
     "methods": [
+      "confirmedIdentityRecoveryKeepsRestoreTargetAndDoesNotResumeOldApply",
       "existingPermissionReapplyOpensAppSettingsAndResumesWithoutAnotherCode",
+      "explicitRestoreCanProbeAnUnreadableWirelessSetting",
       "failedPairingRestoreKeepsItsIssueUntilTheRestoreTargetIsObserved",
       "newManualRequestCancelsTheOlderPermissionSettingsRequest",
+      "ordinaryApplyRetryNeverRequestsIdentityReset",
       "pairingPermissionDenialConsumesTheRequestWithoutStartingPairing",
       "pairingPermissionReturnKeepsItsOriginalRestoreTargetAndRunsOnce",
       "permanentDenialCanReopenSettingsAndResumeTheOriginalRestoreOnlyOnce",
@@ -306,6 +313,11 @@
       "actualBuilderIncludesFieldsTimestampRangeAndReadFailureWithoutExceptionText",
       "actualLogReadDistinguishesMissingAndUnreadableFilesAndKeepsFifoEvents",
       "largestReportAndUnicodeDescriptionSurviveMailtoEncodingWithoutChangingSnapshot"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.settings.IdentityRecoveryRowTest": {
+    "methods": [
+      "resetRequiresConfirmationAndCancellationDoesNotRequestRecovery"
     ]
   }
 }

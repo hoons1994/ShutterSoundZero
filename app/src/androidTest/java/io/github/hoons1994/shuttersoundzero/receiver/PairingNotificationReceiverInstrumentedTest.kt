@@ -24,6 +24,25 @@ import org.junit.runner.RunWith
 class PairingNotificationReceiverInstrumentedTest {
     private val sessionId = "test-session"
 
+    @Test fun discoveryTimeoutExplainsThatTheCodeMustBeSubmittedAgain() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val notification = PairingNotificationHelper.buildPairingNotification(
+            context, sessionId = sessionId, state = PairingNotificationState.DISCOVERY_WAITING
+        )
+        val text = notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
+        assertTrue(text.contains("코드 처리를 중단"))
+        assertTrue(text.contains("코드를 다시 입력"))
+        assertTrue(text.contains("탐색은 계속"))
+        assertTrue(notification.actions.any { !it.remoteInputs.isNullOrEmpty() })
+    }
+
+    @Test fun inFlightNotificationShowsProgressAndDoesNotAcceptAnotherCode() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val notification = PairingNotificationHelper.buildProgressNotification(context)
+        assertTrue(notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("적용하고 있습니다"))
+        assertTrue(notification.actions.isNullOrEmpty())
+    }
+
     @Test fun codeRetryAndStopPendingIntentsDoNotCrossSessionBoundaries() {
         fun codeNotification(id: String) = PairingNotificationHelper.buildPairingNotification(
             baseContext, sessionId = id, pairingPort = 37123)

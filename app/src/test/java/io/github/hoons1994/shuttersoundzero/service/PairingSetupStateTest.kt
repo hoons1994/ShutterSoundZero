@@ -6,8 +6,15 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PairingSetupStateTest {
+    @Test fun userStartedDiscoveryCanProbeAnUnreadableSettingButNeverKnownOff() {
+        org.junit.Assert.assertTrue(PairingSetupState(true, null).canDiscover)
+        org.junit.Assert.assertTrue(PairingSetupState(true, true).canDiscover)
+        org.junit.Assert.assertFalse(PairingSetupState(true, false).canDiscover)
+        org.junit.Assert.assertFalse(PairingSetupState(false, null).canDiscover)
+    }
+
     @Test
-    fun unreadableWirelessSettingRequestsVerificationInsteadOfEnablingOrPairing() {
+    fun unreadableWirelessSettingStillReportsUnknownInsteadOfClaimingEnabled() {
         assertEquals(
             PairingNotificationState.WIRELESS_DEBUGGING_STATE_UNKNOWN,
             PairingSetupState(true, null).notificationState

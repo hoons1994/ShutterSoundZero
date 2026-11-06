@@ -35,6 +35,7 @@ internal fun MainNavigation(
   }
   val backStack = rememberNavBackStack(*initialEntries)
   var pairingRecoveryTarget by rememberSaveable { mutableStateOf<Boolean?>(null) }
+  var pairingRecoveryResetIdentity by rememberSaveable { mutableStateOf(false) }
 
   LaunchedEffect(permissionRecovery) {
     if (shouldRestoreSettings(permissionRecovery) && backStack.lastOrNull() != Settings) {
@@ -56,7 +57,11 @@ internal fun MainNavigation(
             onItemClick = { navKey -> backStack.add(navKey) },
             modifier = Modifier.safeDrawingPadding(),
             pairingRecoveryTarget = pairingRecoveryTarget,
-            onPairingRecoveryHandled = { pairingRecoveryTarget = null }
+            pairingRecoveryResetIdentity = pairingRecoveryResetIdentity,
+            onPairingRecoveryHandled = {
+              pairingRecoveryTarget = null
+              pairingRecoveryResetIdentity = false
+            }
           )
         }
         entry<Settings> {
@@ -67,6 +72,12 @@ internal fun MainNavigation(
             },
             modifier = Modifier.safeDrawingPadding(),
             onPairingRecoveryRequested = { targetMuted ->
+              pairingRecoveryResetIdentity = false
+              pairingRecoveryTarget = targetMuted
+              backStack.removeLastOrNull()
+            },
+            onIdentityRecoveryRequested = { targetMuted ->
+              pairingRecoveryResetIdentity = true
               pairingRecoveryTarget = targetMuted
               backStack.removeLastOrNull()
             }

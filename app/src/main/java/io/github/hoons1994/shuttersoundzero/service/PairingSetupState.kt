@@ -7,6 +7,10 @@ internal data class PairingSetupState(
     val developerOptionsEnabled: Boolean,
     val wirelessDebuggingEnabled: Boolean?
 ) {
+    // An unreadable hidden setting is not evidence that the listener is off.
+    // This policy is used only by an explicitly started setup session.
+    val canDiscover: Boolean get() = developerOptionsEnabled && wirelessDebuggingEnabled != false
+
     val notificationState: PairingNotificationState?
         get() = when {
             !developerOptionsEnabled -> null
