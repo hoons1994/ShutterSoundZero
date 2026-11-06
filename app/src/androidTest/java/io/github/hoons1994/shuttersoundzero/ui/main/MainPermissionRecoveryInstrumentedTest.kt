@@ -259,6 +259,7 @@ class MainPermissionRecoveryInstrumentedTest {
 
     @Test fun confirmedIdentityRecoveryKeepsRestoreTargetAndDoesNotResumeOldApply() {
         composeTestRule.runOnIdle {
+            prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
             viewModel.startNotificationPairing(context, targetMuted = false, resetIdentity = true)
             assertEquals(1, context.serviceStarts)
             val intent = requireNotNull(context.lastServiceIntent)
@@ -271,6 +272,7 @@ class MainPermissionRecoveryInstrumentedTest {
 
     @Test fun ordinaryApplyRetryNeverRequestsIdentityReset() {
         composeTestRule.runOnIdle {
+            prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
             viewModel.startNotificationPairing(context, targetMuted = false)
             val intent = requireNotNull(context.lastServiceIntent)
             assertFalse(intent.getBooleanExtra("reset_identity", true))

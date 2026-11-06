@@ -30,7 +30,7 @@ class PairingNotificationReceiverInstrumentedTest {
             context, sessionId = sessionId, state = PairingNotificationState.DISCOVERY_WAITING
         )
         val text = notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
-        assertTrue(text.contains("코드 처리를 중단"))
+        assertTrue(notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString().contains("코드 처리를 중단"))
         assertTrue(text.contains("코드를 다시 입력"))
         assertTrue(text.contains("탐색은 계속"))
         assertFalse(notification.actions.orEmpty().any { !it.remoteInputs.isNullOrEmpty() })
