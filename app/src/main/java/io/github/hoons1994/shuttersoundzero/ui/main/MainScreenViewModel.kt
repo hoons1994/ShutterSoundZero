@@ -196,10 +196,11 @@ class MainScreenViewModel internal constructor(
         false
     }
 
-    fun startNotificationPairing(context: Context, targetMuted: Boolean = prefs.pendingPairingTarget ?: true) {
+    fun startNotificationPairing(context: Context, targetMuted: Boolean = prefs.pendingPairingTarget ?: true,
+                                 resetIdentity: Boolean = false) {
         cancelAfterPermissionSettings()
         prefs.pendingPairingTarget = targetMuted
-        val resumeApply = prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY
+        val resumeApply = !resetIdentity && prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY
         val devOptionsOff = !DeveloperOptionsManager.isDeveloperOptionsEnabled(context)
         if (!handleSettingsLaunch(SetupSettingsNavigator.openPairingSetupScreen(context))) return
         if (!resumeApply) {
@@ -216,7 +217,7 @@ class MainScreenViewModel internal constructor(
                 showWirelessDebuggingCleanupHelp = false
             )
         }
-        PairingForegroundService.start(context, devOptionsOff, resumeApply, targetMuted)
+        PairingForegroundService.start(context, devOptionsOff, resumeApply, targetMuted, resetIdentity)
         _uiState.update {
             it.copy(
                 infoMessage = context.getString(if (resumeApply) R.string.pairing_help_connection_retry
@@ -270,17 +271,15 @@ class MainScreenViewModel internal constructor(
         }
 
         val wirelessDebuggingEnabled = wirelessDebuggingState(app)
-        if (wirelessDebuggingEnabled != true) {
+        if (wirelessDebuggingEnabled == false) {
             _uiState.update {
                 it.copy(
                     isWirelessDebuggingEnabled = wirelessDebuggingEnabled,
-                    showSwitchFailureHelp = wirelessDebuggingEnabled == false,
+                    showSwitchFailureHelp = true,
                     showWirelessDebuggingCleanupHelp = false,
                     cameraMuteFailure = null,
                     pendingCameraMuteTarget = enableMute,
-                    errorMessage = if (wirelessDebuggingEnabled == null) {
-                        app.getString(R.string.wireless_debugging_state_unknown_guidance)
-                    } else null,
+                    errorMessage = null,
                     infoMessage = null
                 )
             }

@@ -76,6 +76,41 @@ class AdbKeyHelperInstrumentedTest {
         assertArrayEquals(identity.second.encoded, AdbKeyHelper.getOrCreateKeyPairAndCertificate(context).second.encoded)
     }
 
+    @Test fun missingWrappingKeyPreservesIdentityUntilExplicitFreshPairing() {
+        val original = newIdentity()
+        val committed = bundleFile.readBytes()
+        java.security.KeyStore.getInstance("AndroidKeyStore").apply {
+            load(null)
+            deleteEntry("shuttersoundzero_adb_identity_wrap_v1")
+        }
+        assertThrows(IOException::class.java) { AdbKeyHelper.getOrCreateKeyPairAndCertificate(context) }
+        assertArrayEquals(committed, bundleFile.readBytes())
+        AdbKeyHelper.resetForFreshPairing(context)
+        val fresh = AdbKeyHelper.getOrCreateKeyPairAndCertificate(context)
+        assertFalse(original.second.encoded.contentEquals(fresh.second.encoded))
+        assertTrue(AdbIdentityValidator.isValid(fresh.first, fresh.second))
+        assertArrayEquals(fresh.second.encoded, AdbKeyHelper.getOrCreateKeyPairAndCertificate(context).second.encoded)
+    }
+
+    @Test fun replacedWrappingKeyIsAlsoReplacedOnlyAfterExplicitFreshPairing() {
+        val original = newIdentity()
+        val committed = bundleFile.readBytes()
+        javax.crypto.KeyGenerator.getInstance("AES", "AndroidKeyStore").apply {
+            init(android.security.keystore.KeyGenParameterSpec.Builder(
+                "shuttersoundzero_adb_identity_wrap_v1",
+                android.security.keystore.KeyProperties.PURPOSE_ENCRYPT or android.security.keystore.KeyProperties.PURPOSE_DECRYPT
+            ).setBlockModes("GCM").setEncryptionPaddings("NoPadding").setKeySize(256).build())
+            generateKey()
+        }
+        assertThrows(Exception::class.java) { AdbKeyHelper.getOrCreateKeyPairAndCertificate(context) }
+        assertArrayEquals(committed, bundleFile.readBytes())
+        AdbKeyHelper.resetForFreshPairing(context)
+        val fresh = AdbKeyHelper.getOrCreateKeyPairAndCertificate(context)
+        assertFalse(original.second.encoded.contentEquals(fresh.second.encoded))
+        assertTrue(AdbIdentityValidator.isValid(fresh.first, fresh.second))
+        assertArrayEquals(fresh.second.encoded, AdbKeyHelper.getOrCreateKeyPairAndCertificate(context).second.encoded)
+    }
+
     @Test fun bothPlaintextLocationsMigrateTheSameIdentityAndRemoveSourcesOnlyAfterCommit() {
         val original = newIdentity()
         for (directory in listOf(context.noBackupFilesDir, context.filesDir)) {

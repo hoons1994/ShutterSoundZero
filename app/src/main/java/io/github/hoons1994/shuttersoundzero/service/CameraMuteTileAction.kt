@@ -67,11 +67,8 @@ internal object CameraMuteTileAction {
         }
 
         val wirelessDebuggingEnabled = DeveloperOptionsManager.readWirelessDebuggingEnabled(appContext)
-        if (wirelessDebuggingEnabled != true) {
-            showMessage(appContext, appContext.getString(
-                if (wirelessDebuggingEnabled == null) R.string.wireless_debugging_state_unknown_guidance
-                else R.string.tile_action_enable_wireless_debugging
-            ))
+        if (wirelessDebuggingEnabled == false) {
+            showMessage(appContext, appContext.getString(R.string.tile_action_enable_wireless_debugging))
             requestTileRefresh()
             return
         }

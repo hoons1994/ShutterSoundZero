@@ -36,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -70,6 +71,7 @@ fun MainScreen(
     onItemClick: (NavKey) -> Unit = {},
     viewModel: MainScreenViewModel = viewModel(),
     pairingRecoveryTarget: Boolean? = null,
+    pairingRecoveryResetIdentity: Boolean = false,
     onPairingRecoveryHandled: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -79,9 +81,11 @@ fun MainScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var showWifiRequiredDialog by remember { mutableStateOf(false) }
+    var resetIdentityForSetup by rememberSaveable { mutableStateOf(false) }
 
     val startPairing = {
-        viewModel.startNotificationPairing(context, prefs.pendingPairingTarget ?: true)
+        viewModel.startNotificationPairing(context, prefs.pendingPairingTarget ?: true, resetIdentityForSetup)
+        resetIdentityForSetup = false
     }
 
     val permissionSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -96,6 +100,7 @@ fun MainScreen(
         if (LocalNetworkAccess.isGranted(context)) {
             startPairing()
         } else {
+            resetIdentityForSetup = false
             viewModel.reportLocalNetworkPermissionDenied()
             Toast.makeText(
                 context,
@@ -125,6 +130,7 @@ fun MainScreen(
         if (isGranted) {
             requestLocalNetworkAccess()
         } else {
+            resetIdentityForSetup = false
             Toast.makeText(
                 context,
                 "6자리 코드 입력을 위해 알림 권한이 필요합니다. [앱 설정]에서 알림을 켜 주세요.",
@@ -145,6 +151,7 @@ fun MainScreen(
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else if (!PairingNotificationHelper.areNotificationsEnabled(context)) {
+            resetIdentityForSetup = false
             Toast.makeText(
                 context,
                 "알림이 꺼져 있습니다. 코드 입력을 위해 알림을 켜 주세요.",
@@ -239,7 +246,8 @@ fun MainScreen(
     val reapplyAction: () -> Unit = {
         viewModel.toggleCscMute(true)
     }
-    val startSetup: (Boolean) -> Unit = { targetMuted ->
+    val startSetup: (Boolean, Boolean) -> Unit = { targetMuted, resetIdentity ->
+        resetIdentityForSetup = resetIdentity
         viewModel.cancelAfterPermissionSettings()
         if (!CscMuteManager.isSamsungDevice()) {
             Toast.makeText(
@@ -253,12 +261,13 @@ fun MainScreen(
         }
     }
 
-    val setupAction: () -> Unit = { startSetup(prefs.pendingPairingTarget ?: true) }
+    val setupAction: () -> Unit = { startSetup(prefs.pendingPairingTarget ?: true, false) }
 
     LaunchedEffect(pairingRecoveryTarget) {
         if (pairingRecoveryTarget != null) {
+            val resetIdentity = pairingRecoveryResetIdentity
             onPairingRecoveryHandled()
-            startSetup(pairingRecoveryTarget)
+            startSetup(pairingRecoveryTarget, resetIdentity)
         }
     }
 
@@ -321,8 +330,8 @@ fun MainScreen(
                 viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWifiSettings(context))
             },
             secondaryLabel = "닫기",
-            onSecondary = { showWifiRequiredDialog = false },
-            onDismissRequest = { showWifiRequiredDialog = false }
+            onSecondary = { showWifiRequiredDialog = false; resetIdentityForSetup = false },
+            onDismissRequest = { showWifiRequiredDialog = false; resetIdentityForSetup = false }
         )
     }
 
@@ -331,7 +340,7 @@ fun MainScreen(
         CameraMuteFailureDialog(
             failure = failure,
             onDismiss = viewModel::dismissCameraMuteFailure,
-            onReconnect = { startSetup(cameraMuteTarget ?: true) },
+            onReconnect = { startSetup(cameraMuteTarget ?: true, false) },
             onOpenSettings = {
                 if (failure == CameraMuteFailure.LOCAL_NETWORK_PERMISSION) {
                     viewModel.prepareAfterPermissionSettings(cameraTarget = cameraMuteTarget)

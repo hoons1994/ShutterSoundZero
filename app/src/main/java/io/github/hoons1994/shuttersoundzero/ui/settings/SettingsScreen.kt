@@ -72,7 +72,8 @@ import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationH
 fun SettingsScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onPairingRecoveryRequested: (Boolean) -> Unit = { onBackClick() }
+    onPairingRecoveryRequested: (Boolean) -> Unit = { onBackClick() },
+    onIdentityRecoveryRequested: (Boolean) -> Unit = onPairingRecoveryRequested
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -148,7 +149,7 @@ fun SettingsScreen(
         if (!operationState.isReapplyInProgress) {
             if (!CscMuteManager.hasWritePermission(context)) {
                 restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-            } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) != true) {
+            } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
                 showReapplyWirelessDebuggingHelp = true
             } else if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
                 deniedLocalNetworkAction = CameraAction.REAPPLY
@@ -162,7 +163,7 @@ fun SettingsScreen(
         cameraState.refresh()
         if (!CscMuteManager.hasWritePermission(context)) {
             restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-        } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) != true) {
+        } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
             if (action == CameraAction.REAPPLY) showReapplyWirelessDebuggingHelp = true
             else showRestoreWirelessDebuggingHelp = true
         } else if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
@@ -268,7 +269,7 @@ fun SettingsScreen(
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
                                     "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-                            } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) != true) {
+                            } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
                                 showRestoreWirelessDebuggingHelp = true
                             } else if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
                                 requestLocalNetworkPermission(CameraAction.RESTORE)
@@ -287,7 +288,7 @@ fun SettingsScreen(
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
                                     "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
-                            } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) != true) {
+                            } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
                                 showReapplyWirelessDebuggingHelp = true
                             } else if (!operationState.isReapplyInProgress) {
                                 if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
@@ -402,6 +403,13 @@ fun SettingsScreen(
                     }
                 )
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            IdentityRecoveryRow(
+                enabled = !operationState.isReapplyInProgress && !operationState.isRestoreInProgress,
+                onConfirmed = { onIdentityRecoveryRequested(prefs.pendingPairingTarget ?: prefs.shouldMuteOnBoot) }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 

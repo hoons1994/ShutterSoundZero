@@ -69,7 +69,12 @@ class StandaloneAdbManager(context: Context) {
         }
     }
 
-    private val keyPairAndCert by lazy { AdbKeyHelper.getOrCreateKeyPairAndCertificate(context) }
+    // Accessed only inside operationRunner, including an explicitly confirmed identity reset.
+    private var cachedIdentity: Pair<java.security.PrivateKey, java.security.cert.Certificate>? = null
+    private val keyPairAndCert: Pair<java.security.PrivateKey, java.security.cert.Certificate>
+        get() = cachedIdentity ?: AdbKeyHelper.getOrCreateKeyPairAndCertificate(context).also {
+            cachedIdentity = it
+        }
     private var connection: CancellableAdbConnection? = null // Accessed only inside operationRunner.
     private val operationRunner = AdbOperationRunner(
         enter = CameraMuteOperationGate::enter,
@@ -220,7 +225,7 @@ class StandaloneAdbManager(context: Context) {
         }
     }
 
-    suspend fun pairLocal(port: Int, pairingCode: String): Result<Unit> = operation(
+    suspend fun pairLocal(port: Int, pairingCode: String, resetIdentity: Boolean = false): Result<Unit> = operation(
         "페어링 중 오류가 발생했습니다. 무선 디버깅 상태와 코드를 확인해 주세요."
     ) {
         require(port in 1..65535) { "Invalid pairing port" }
@@ -228,6 +233,12 @@ class StandaloneAdbManager(context: Context) {
         val host = LOCAL_ADB_HOST
         val identityStarted = System.nanoTime()
         val keys = try {
+            if (resetIdentity) {
+                diagnosed(DiagnosticLogger.Stage.PAIRING_IDENTITY_RESET) {
+                    cachedIdentity = null
+                    AdbKeyHelper.resetForFreshPairing(context)
+                }
+            }
             keyPairAndCert.also {
                 recordPairingPhase(PairingFailureException.Phase.IDENTITY,
                     (System.nanoTime() - identityStarted) / 1_000_000L, null)

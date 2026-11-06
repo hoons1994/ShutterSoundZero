@@ -126,6 +126,27 @@ class PairingWorkflowTest {
         assertEquals(9000L, currentTime)
     }
 
+    @Test fun latePortRequiresFreshSubmissionInsteadOfSilentlyReusingTheTimedOutCode() = runTest {
+        var port: Int? = null
+        val events = mutableListOf<PairingEvent>()
+        val submitted = mutableListOf<String>()
+        val targets = mutableListOf<Boolean>()
+        val workflow = PairingWorkflow({ port }, { _, code ->
+            submitted += code
+            Result.success(Unit)
+        }, { target -> targets += target; Result.success(Unit) }, targetMuted = false)
+        workflow.run("123456", events::add)
+        assertEquals(3_000L, currentTime)
+        assertEquals(listOf(PairingEvent.DiscoveryTimedOut), events)
+        port = 37123
+        advanceTimeBy(500)
+        assertTrue(submitted.isEmpty())
+        workflow.run("654321", events::add)
+        assertEquals(listOf("654321"), submitted)
+        assertEquals(listOf(false), targets)
+        assertEquals(PairingEvent.ApplySucceeded, events.last())
+    }
+
     @Test fun portDiscoveredDuringWaitCanCompleteSetup() = runTest {
         var port: Int? = null
         val events = mutableListOf<PairingEvent>()

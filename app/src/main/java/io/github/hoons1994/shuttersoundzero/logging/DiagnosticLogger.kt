@@ -33,6 +33,7 @@ object DiagnosticLogger {
         PAIRING_CODE_SUBMITTED,
         PAIRING,
         PAIRING_IDENTITY,
+        PAIRING_IDENTITY_RESET,
         PAIRING_TCP_CONNECT,
         PAIRING_TLS_HANDSHAKE,
         PAIRING_TLS_EXPORT,

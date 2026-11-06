@@ -48,7 +48,7 @@ class MainPermissionRecoveryInstrumentedTest {
     private lateinit var registry: RecordingRegistry
     private lateinit var context: RecordingContext
     private var permissionGranted = false
-    private var wirelessEnabled = true
+    private var wirelessEnabled: Boolean? = true
     private val appliedTargets = mutableListOf<Boolean>()
     private var originalCsc: String? = null
     private var originalPreferences: Map<String, *> = emptyMap<String, Any>()
@@ -250,6 +250,36 @@ class MainPermissionRecoveryInstrumentedTest {
         }
     }
 
+    @Test fun explicitRestoreCanProbeAnUnreadableWirelessSetting() {
+        permissionGranted = true
+        wirelessEnabled = null
+        composeTestRule.runOnIdle { viewModel.toggleCscMute(false) }
+        composeTestRule.runOnIdle { assertEquals(listOf(false), appliedTargets) }
+    }
+
+    @Test fun confirmedIdentityRecoveryKeepsRestoreTargetAndDoesNotResumeOldApply() {
+        composeTestRule.runOnIdle {
+            prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
+            viewModel.startNotificationPairing(context, targetMuted = false, resetIdentity = true)
+            assertEquals(1, context.serviceStarts)
+            val intent = requireNotNull(context.lastServiceIntent)
+            assertTrue(intent.getBooleanExtra("reset_identity", false))
+            assertFalse(intent.getBooleanExtra("target_muted", true))
+            assertFalse(intent.getBooleanExtra("resume_apply", true))
+            assertEquals(false, prefs.pendingPairingTarget)
+        }
+    }
+
+    @Test fun ordinaryApplyRetryNeverRequestsIdentityReset() {
+        composeTestRule.runOnIdle {
+            prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
+            viewModel.startNotificationPairing(context, targetMuted = false)
+            val intent = requireNotNull(context.lastServiceIntent)
+            assertFalse(intent.getBooleanExtra("reset_identity", true))
+            assertTrue(intent.getBooleanExtra("resume_apply", false))
+        }
+    }
+
     @Test fun unavailableWirelessSettingsDoesNotLeaveAnAutomaticApplyQueued() {
         permissionGranted = true
         wirelessEnabled = false
@@ -323,6 +353,7 @@ class MainPermissionRecoveryInstrumentedTest {
     private class RecordingContext(base: Context) : ContextWrapper(base) {
         val settingsIntents = mutableListOf<Intent>()
         var serviceStarts = 0
+        var lastServiceIntent: Intent? = null
         var failSettingsLaunch = false
         override fun startActivity(intent: Intent) {
             settingsIntents += intent
@@ -330,6 +361,7 @@ class MainPermissionRecoveryInstrumentedTest {
         }
         override fun startForegroundService(intent: Intent): ComponentName? {
             serviceStarts++
+            lastServiceIntent = intent
             return intent.component
         }
         override fun startService(intent: Intent): ComponentName? = startForegroundService(intent)

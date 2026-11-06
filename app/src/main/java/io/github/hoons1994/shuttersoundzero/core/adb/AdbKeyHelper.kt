@@ -74,6 +74,16 @@ object AdbKeyHelper {
         Log.i(TAG, "Cleared persisted ADB identity for fresh pairing")
     }
 
+    /** Only an explicitly confirmed fresh-pairing request may discard the wrapping key too. */
+    @Synchronized
+    internal fun resetForFreshPairing(context: Context) {
+        resetIdentity(context)
+        KeyStore.getInstance(KEYSTORE_PROVIDER).apply {
+            load(null)
+            deleteEntry(WRAPPING_KEY_ALIAS)
+        }
+    }
+
     @Synchronized
     fun getOrCreateKeyPairAndCertificate(context: Context): Pair<PrivateKey, Certificate> {
         val privFile = File(context.noBackupFilesDir, ENCRYPTED_PRIV_KEY_FILE)
