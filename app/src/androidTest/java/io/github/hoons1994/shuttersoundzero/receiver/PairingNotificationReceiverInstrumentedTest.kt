@@ -33,7 +33,11 @@ class PairingNotificationReceiverInstrumentedTest {
         assertTrue(text.contains("코드 처리를 중단"))
         assertTrue(text.contains("코드를 다시 입력"))
         assertTrue(text.contains("탐색은 계속"))
-        assertTrue(notification.actions.any { !it.remoteInputs.isNullOrEmpty() })
+        assertFalse(notification.actions.orEmpty().any { !it.remoteInputs.isNullOrEmpty() })
+        val found = PairingNotificationHelper.buildPairingNotification(
+            context, sessionId = sessionId, pairingPort = 37123
+        )
+        assertTrue(found.actions.any { !it.remoteInputs.isNullOrEmpty() })
     }
 
     @Test fun inFlightNotificationShowsProgressAndDoesNotAcceptAnotherCode() {

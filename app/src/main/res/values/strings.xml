@@ -97,7 +97,7 @@
     <string name="pairing_state_timeout">기기 응답 시간이 초과되었습니다</string>
     <string name="pairing_state_error">기기 연결 중 문제가 발생했습니다</string>
     <string name="pairing_help_local_network">[앱 권한 설정]에서 [근처 기기]를 허용한 뒤 앱으로 돌아와 1회 설정을 계속해 주세요. 기기에 따라 [로컬 네트워크]로 표시될 수 있습니다.</string>
-    <string name="pairing_help_discovery">연결 화면 탐색은 계속합니다. Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 열어 둔 채 [코드 입력]에서 현재 6자리 코드를 다시 입력해 주세요.</string>
+    <string name="pairing_help_discovery">연결 화면 탐색은 계속합니다. Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 열어 주세요. 연결 화면을 찾으면 나타나는 [코드 입력]에서 현재 6자리 코드를 다시 입력해 주세요.</string>
     <string name="pairing_help_discovery_restart">Wi-Fi와 무선 디버깅을 확인해 주세요. 알림을 눌러 앱으로 돌아간 뒤 [1회 설정 시작]을 다시 눌러 주세요.</string>
     <string name="pairing_help_invalid_code">연결 화면의 숫자 6자리를 확인하고 새 코드가 표시되면 그 코드를 입력해 주세요.</string>
     <string name="pairing_help_connection">페어링 창이 닫혔거나 연결 정보가 바뀌었을 수 있습니다. 창을 다시 열고 새 6자리 코드로 시도해 주세요.</string>
