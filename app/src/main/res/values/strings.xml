@@ -91,7 +91,7 @@
     <string name="pairing_state_identity_failed">연결 인증 정보를 준비하지 못했습니다</string>
     <string name="pairing_state_tls_failed">보안 연결을 완료하지 못했습니다</string>
     <string name="pairing_state_authentication_failed">페어링 코드 인증을 완료하지 못했습니다</string>
-    <string name="pairing_help_identity">휴대전화의 날짜·시간 설정을 확인하고 1회 설정을 다시 시작해 주세요. 인증 정보 오류가 계속되면 앱 설정의 [연결 정보 재설정]에서 새 코드로 연결할 수 있습니다.</string>
+    <string name="pairing_help_identity">휴대전화의 날짜·시간 설정을 확인하고 1회 설정을 다시 시작해 주세요. 인증 정보 오류가 계속되면 앱 설정의 [연결 정보 재설정]에서 새 코드로 연결할 수 있습니다. 해결되지 않으면 앱 설정에서 진단 정보를 보내 주세요.</string>
     <string name="pairing_help_tls">휴대전화의 날짜·시간 설정을 확인하고 무선 디버깅을 껐다 켠 뒤 다시 시도해 주세요. 계속 실패하면 앱 설정에서 진단 정보를 보내 주세요.</string>
     <string name="pairing_help_authentication">페어링 창을 다시 열고 새 6자리 코드를 입력해 주세요. 창은 코드를 제출할 때까지 열어 두세요.</string>
     <string name="pairing_state_timeout">기기 응답 시간이 초과되었습니다</string>
