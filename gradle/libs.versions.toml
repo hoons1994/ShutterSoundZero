@@ -1,5 +1,5 @@
 [versions]
-androidGradlePlugin = "9.5.0"
+androidGradlePlugin = "9.5.1"
 androidxCore = "1.19.1"
 androidxLifecycle = "2.11.0"
 androidxActivity = "1.13.0"
@@ -16,7 +16,7 @@ nav3Core = "1.1.7"
 lifecycleViewmodelNav3 = "2.11.0"
 libadb = "3.1.1"
 bouncycastle = "1.86"
-conscrypt = "2.8.0"
+conscrypt = "2.9.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
