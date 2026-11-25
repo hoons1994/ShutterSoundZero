@@ -16,7 +16,9 @@ val localProperties = Properties().apply {
 
 android {
     namespace = "io.github.hoons1994.shuttersoundzero"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
     ndkVersion = "27.1.12297006"
     defaultConfig {
         applicationId = "io.github.hoons1994.shuttersoundzero"

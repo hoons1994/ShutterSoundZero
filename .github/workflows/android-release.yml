@@ -85,19 +85,8 @@ jobs:
       - name: Install Android 17 SDK
         shell: bash
         run: |
-          sdkmanager --list --channel=3 > sdk-packages.txt
 
-          if grep -q 'platforms;android-CinnamonBun' sdk-packages.txt; then
-            PLATFORM_PACKAGE='platforms;android-CinnamonBun'
-          elif grep -q 'platforms;android-37.0' sdk-packages.txt; then
-            PLATFORM_PACKAGE='platforms;android-37.0'
-          elif grep -q 'platforms;android-37 ' sdk-packages.txt; then
-            PLATFORM_PACKAGE='platforms;android-37'
-          else
-            echo 'Android 17 SDK platform package was not found.'
-            grep -E 'platforms;android-(CinnamonBun|37)' sdk-packages.txt || true
-            exit 1
-          fi
+          PLATFORM_PACKAGE='platforms;android-37.1'
 
           echo "Installing $PLATFORM_PACKAGE"
           sdkmanager --channel=3 "$PLATFORM_PACKAGE" 'build-tools;37.0.0' platform-tools
@@ -374,19 +363,8 @@ jobs:
       - name: Install Android 17 SDK
         shell: bash
         run: |
-          sdkmanager --list --channel=3 > sdk-packages.txt
 
-          if grep -q 'platforms;android-CinnamonBun' sdk-packages.txt; then
-            PLATFORM_PACKAGE='platforms;android-CinnamonBun'
-          elif grep -q 'platforms;android-37.0' sdk-packages.txt; then
-            PLATFORM_PACKAGE='platforms;android-37.0'
-          elif grep -q 'platforms;android-37 ' sdk-packages.txt; then
-            PLATFORM_PACKAGE='platforms;android-37'
-          else
-            echo 'Android 17 SDK platform package was not found.'
-            grep -E 'platforms;android-(CinnamonBun|37)' sdk-packages.txt || true
-            exit 1
-          fi
+          PLATFORM_PACKAGE='platforms;android-37.1'
 
           echo "Installing $PLATFORM_PACKAGE"
           sdkmanager --channel=3 "$PLATFORM_PACKAGE" 'build-tools;37.0.0' platform-tools
