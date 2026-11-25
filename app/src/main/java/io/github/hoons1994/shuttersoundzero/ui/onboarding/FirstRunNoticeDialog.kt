@@ -30,17 +30,17 @@ fun FirstRunNoticeDialog(onConfirm: () -> Unit) {
                     lineHeight = 20.sp
                 )
                 Text(
-                    text = "• 처음 한 번 무선 디버깅으로 기기 연동이 필요합니다. 설정이 끝나면 계속 켜둘 필요는 없습니다.",
+                    text = "• 처음 한 번은 무선 디버깅으로 기기를 연결해야 합니다. 설정이 끝나면 계속 켜둘 필요는 없습니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 20.sp
                 )
                 Text(
-                    text = "• One UI 또는 Android 소프트웨어 업데이트 후 카메라 셔터음 설정이 초기화될 수 있습니다. 매번 다시 설정할 필요는 없으며, 필요한 경우에만 알림으로 알려드립니다.",
+                    text = "• One UI 또는 Android 소프트웨어 업데이트 후 카메라 셔터음 설정이 초기화될 수 있습니다. 매번 다시 설정할 필요는 없습니다. 다시 설정해야 할 때만 알림으로 알려드립니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 20.sp
                 )
                 Text(
-                    text = "자세한 원리와 상황별 조치는 설정 → 도움말에서 확인할 수 있습니다.",
+                    text = "자세한 원리와 상황별 대처 방법은 설정 → 도움말에서 확인해 주세요.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 18.sp

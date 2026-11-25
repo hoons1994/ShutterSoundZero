@@ -148,7 +148,7 @@ fun SettingsScreen(
     val runReapply: () -> Unit = {
         if (!operationState.isReapplyInProgress) {
             if (!CscMuteManager.hasWritePermission(context)) {
-                restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+                restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 눌러 주세요."
             } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
                 showReapplyWirelessDebuggingHelp = true
             } else if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
@@ -162,7 +162,7 @@ fun SettingsScreen(
     val resumeCameraAction: (CameraAction) -> Unit = { action ->
         cameraState.refresh()
         if (!CscMuteManager.hasWritePermission(context)) {
-            restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+            restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 눌러 주세요."
         } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
             if (action == CameraAction.REAPPLY) showReapplyWirelessDebuggingHelp = true
             else showRestoreWirelessDebuggingHelp = true
@@ -262,13 +262,13 @@ fun SettingsScreen(
                 } else if (cameraState.isCscMuted == true) {
                     ClickableRow(
                         title = "카메라 셔터음 원래대로 복원",
-                        subtitle = "현재 셔터음 강제 해제 설정값 적용됨",
+                        subtitle = "셔터음 강제 설정값을 해제한 상태입니다.",
                         onClick = {
                             cameraSettingsViewModel.cancelPermissionRecovery()
                             cameraState.refresh()
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
-                                    "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+                                    "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 눌러 주세요."
                             } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
                                 showRestoreWirelessDebuggingHelp = true
                             } else if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
@@ -281,13 +281,13 @@ fun SettingsScreen(
                 } else {
                     ClickableRow(
                         title = if (operationState.isReapplyInProgress) "카메라 무음 다시 적용 중…" else "카메라 무음 다시 적용",
-                        subtitle = "카메라 설정이 기본 상태로 돌아온 경우 사용",
+                        subtitle = "카메라 설정이 기본 상태로 돌아왔다면 다시 적용해 주세요.",
                         onClick = {
                             cameraSettingsViewModel.cancelPermissionRecovery()
                             cameraState.refresh()
                             if (!CscMuteManager.hasWritePermission(context)) {
                                 restoreResultMessage =
-                                    "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 진행해 주세요."
+                                    "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 눌러 주세요."
                             } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
                                 showReapplyWirelessDebuggingHelp = true
                             } else if (!operationState.isReapplyInProgress) {
@@ -393,7 +393,7 @@ fun SettingsScreen(
                 RowDivider()
                 ClickableRow(
                     title = "개발자 옵션 전체 끄기",
-                    subtitle = "선택 사항 · 개발자 옵션 자체를 더 이상 사용하지 않을 때",
+                    subtitle = "선택 사항 · 개발자 옵션을 더 이상 사용하지 않을 때",
                     onClick = {
                         if (DeveloperOptionsManager.canDisableDirectly(context)) {
                             showDeveloperOptionsConfirm = true
@@ -629,7 +629,7 @@ fun SettingsScreen(
                 title = { Text("개발자 옵션 끄기") },
                 text = {
                     Text(
-                        "개발자 옵션 자체와 USB·무선 디버깅을 모두 끕니다.\n\n" +
+                        "개발자 옵션과 USB·무선 디버깅을 모두 끕니다.\n\n" +
                             "이미 연결된 ShutterSoundZero 권한과 적용된 카메라 설정은 그대로 유지됩니다."
                     )
                 },

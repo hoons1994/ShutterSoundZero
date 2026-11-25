@@ -58,24 +58,24 @@ internal fun StatusHeroCard(
         HomeStatus.SETUP_REQUIRED -> if (setupIssue == SetupIssue.CAMERA_APPLY) {
             "연결·설정을 다시 시도해 주세요"
         } else if (hasSetupIssue) {
-            "1회 설정을 다시 진행해 주세요"
+            "1회 설정을 다시 시작해 주세요"
         } else {
             "처음 한 번만 설정해 주세요"
         }
     }
     val subtitle = when (status) {
-        HomeStatus.APPLYING -> "실제 적용 상태를 확인하고 있습니다. 완료될 때까지 기다려 주세요."
+        HomeStatus.APPLYING -> "설정이 적용됐는지 확인하고 있습니다. 완료될 때까지 기다려 주세요."
         HomeStatus.READY -> stringResource(R.string.home_ready_description)
         HomeStatus.REAPPLY_REQUIRED -> when (isWirelessDebuggingEnabled) {
-            true -> "앱 권한은 유지되어 있습니다. [다시 적용하기]를 눌러 주세요."
-            false -> "앱 권한은 유지되어 있습니다. 무선 디버깅을 켠 뒤 [다시 적용하기]를 눌러 주세요."
+            true -> "앱 권한은 그대로 있습니다. [다시 적용하기]를 눌러 주세요."
+            false -> "앱 권한은 그대로 있습니다. 무선 디버깅을 켠 뒤 [다시 적용하기]를 눌러 주세요."
             null -> stringResource(R.string.wireless_debugging_state_unknown_guidance)
         }
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_unknown_guidance)
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
-            "문제가 생긴 단계를 아래에 표시했습니다. 해당 단계부터 다시 진행하면 됩니다."
+            "아래에서 문제가 생긴 단계를 확인하고 그 단계부터 다시 시도해 주세요."
         } else {
-            "4단계 안내에 따라 연결하면 이후에는 앱을 계속 열어둘 필요가 없습니다."
+            "4단계 안내에 따라 연결해 주세요. 설정이 끝나면 앱을 닫아도 됩니다."
         }
     }
     val badgeText = when (status) {
