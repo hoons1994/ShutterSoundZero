@@ -32,7 +32,7 @@ class PairingNotificationReceiverInstrumentedTest {
         val text = notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
         assertTrue(notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString().contains("코드 처리를 중단"))
         assertTrue(text.contains("코드를 다시 입력"))
-        assertTrue(text.contains("탐색은 계속"))
+        assertTrue(text.contains("연결 화면을 계속 찾고 있습니다"))
         assertFalse(notification.actions.orEmpty().any { !it.remoteInputs.isNullOrEmpty() })
         val found = PairingNotificationHelper.buildPairingNotification(
             context, sessionId = sessionId, pairingPort = 37123
