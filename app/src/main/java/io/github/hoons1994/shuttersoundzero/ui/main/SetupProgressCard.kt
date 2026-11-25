@@ -79,7 +79,7 @@ internal fun SetupProgressCard(
 
     val pairingErrorText = when (issue) {
         SetupIssue.PAIRING_DISCOVERY ->
-            "페어링 연결 화면을 찾지 못했습니다. Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 다시 열어 둔 채 시도해 주세요."
+            "페어링 연결 화면을 찾지 못했습니다. Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 다시 열고 창을 열어 둔 채 시도해 주세요."
         SetupIssue.PAIRING_CODE ->
             "숫자 6자리를 정확히 입력해 주세요. 연결 화면의 코드가 바뀌었다면 새 코드를 사용해 주세요."
         SetupIssue.PAIRING_CONNECTION ->
@@ -151,7 +151,7 @@ internal fun SetupProgressCard(
                 } else "무선 디버깅 켜기",
                 subtitle = if (uiState.isWirelessDebuggingEnabled == null) {
                     stringResource(R.string.wireless_debugging_state_unknown_guidance)
-                } else "[1회 설정 시작]을 누르면 개발자 옵션의 무선 디버깅 화면을 엽니다.",
+                } else "[1회 설정 시작]을 누르면 개발자 옵션의 무선 디버깅 화면이 열립니다.",
                 state = step2State
             )
             SetupStepRow(

@@ -133,7 +133,7 @@ fun MainScreen(
             resetIdentityForSetup = false
             Toast.makeText(
                 context,
-                "6자리 코드 입력을 위해 알림 권한이 필요합니다. [앱 설정]에서 알림을 켜 주세요.",
+                "6자리 코드를 입력하려면 알림 권한이 필요합니다. [앱 설정]에서 알림을 켜 주세요.",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -154,7 +154,7 @@ fun MainScreen(
             resetIdentityForSetup = false
             Toast.makeText(
                 context,
-                "알림이 꺼져 있습니다. 코드 입력을 위해 알림을 켜 주세요.",
+                "알림이 꺼져 있습니다. 코드를 입력하려면 알림을 켜 주세요.",
                 Toast.LENGTH_LONG
             ).show()
             PairingNotificationHelper.openNotificationSettings(context)
@@ -323,7 +323,7 @@ fun MainScreen(
         io.github.hoons1994.shuttersoundzero.ui.components.ModernPromptDialog(
             eyebrow = "연결 확인",
             title = "Wi-Fi 연결이 필요해요",
-            message = "1회 설정을 진행하려면 Wi-Fi에 연결되어 있어야 합니다.\n\nWi-Fi에 연결한 뒤 다시 [1회 설정 시작]을 눌러 주세요.",
+            message = "1회 설정을 하려면 Wi-Fi에 연결해 주세요.\n\nWi-Fi에 연결한 뒤 다시 [1회 설정 시작]을 눌러 주세요.",
             primaryLabel = "Wi-Fi 설정 열기",
             onPrimary = {
                 showWifiRequiredDialog = false

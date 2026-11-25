@@ -10,7 +10,7 @@ enum class CameraMuteFailure(val title: String, val message: String) {
     ),
     DISCOVERY(
         "무선 디버깅 연결을 찾지 못했어요",
-        "Wi-Fi 연결과 무선 디버깅 화면의 연결 허용 여부를 확인해 주세요. 무선 디버깅을 껐다 켠 뒤 다시 시도하고, 계속 실패하면 앱의 연결 오류 안내에서 [$PAIRING_RECOVERY_LABEL]을 눌러 새 코드로 연결해 주세요."
+        "Wi-Fi가 연결됐는지, 무선 디버깅 화면에서 연결을 허용했는지 확인해 주세요. 무선 디버깅을 껐다 켠 뒤 다시 시도하고, 계속 실패하면 앱의 연결 오류 안내에서 [$PAIRING_RECOVERY_LABEL]을 눌러 새 코드로 연결해 주세요."
     ),
     CONNECTION(
         "기기에 연결하지 못했어요",
@@ -18,7 +18,7 @@ enum class CameraMuteFailure(val title: String, val message: String) {
     ),
     APPLY(
         "카메라 설정을 변경하지 못했어요",
-        "설정 적용 또는 확인 과정에서 오류가 발생했습니다. 다시 시도해도 실패하면 설정 → 도움말의 오류 신고에 진단 정보를 포함해 주세요."
+        "설정을 적용하거나 확인하는 중에 오류가 발생했습니다. 다시 시도해도 실패하면 설정 → 도움말의 오류 신고에 진단 정보를 포함해 주세요."
     );
 
     val canReconnect: Boolean get() = this == DISCOVERY || this == CONNECTION

@@ -160,7 +160,7 @@ class MainScreenTest {
         )
 
         composeTestRule.onNodeWithText("확인 필요").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("1회 설정을 다시 진행해 주세요").fetchSemanticsNode()
+        composeTestRule.onNodeWithText("1회 설정을 다시 시작해 주세요").fetchSemanticsNode()
         composeTestRule.onNodeWithText("1회 설정 다시 시작").fetchSemanticsNode()
         composeTestRule.onNodeWithText(
             "숫자 6자리를 정확히 입력해 주세요. 연결 화면의 코드가 바뀌었다면 새 코드를 사용해 주세요."
@@ -219,7 +219,7 @@ class MainScreenTest {
         ))
 
         composeTestRule.onNodeWithText(
-            "페어링 연결 화면을 찾지 못했습니다. Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 다시 열어 둔 채 시도해 주세요."
+            "페어링 연결 화면을 찾지 못했습니다. Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 다시 열고 창을 열어 둔 채 시도해 주세요."
         ).fetchSemanticsNode()
     }
 
@@ -293,7 +293,7 @@ class MainScreenTest {
 
         composeTestRule.onNodeWithContentDescription("시스템 음량 조절").performScrollTo().assertIsNotEnabled()
         composeTestRule.onNodeWithText(
-            "진동·무음 모드에서는 시스템 소리가 음소거됩니다. 휴대전화를 소리 모드로 전환한 뒤 조절해 주세요."
+            "진동·무음 모드에서는 시스템 소리가 음소거됩니다. 휴대전화를 소리 모드로 바꾼 뒤 조절해 주세요."
         ).fetchSemanticsNode()
         composeTestRule.onNodeWithText("휴대전화 음량 설정").performScrollTo().performClick()
         assertTrue(opened)

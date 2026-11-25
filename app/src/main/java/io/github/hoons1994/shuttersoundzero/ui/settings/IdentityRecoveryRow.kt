@@ -21,9 +21,9 @@ internal fun IdentityRecoveryRow(enabled: Boolean, onConfirmed: () -> Unit) {
             onDismissRequest = { confirm = false },
             title = { Text("연결 정보를 새로 만들까요?") },
             text = {
-                Text("기기 날짜와 시간을 확인하고 다시 연결해도 인증 정보 오류가 반복될 때 사용하세요. " +
+                Text("기기 날짜와 시간을 확인하고 다시 연결해도 인증 정보 오류가 계속될 때 사용해 주세요. " +
                     "새 코드로 연결을 시작할 때 기존 ADB 연결 키를 지우고 새로 만듭니다. " +
-                    "6자리 코드로 다시 페어링해야 하며, 연결 후 이전에 요청한 촬영음 설정을 적용합니다. 앱 설정은 유지됩니다.")
+                    "6자리 코드로 다시 페어링해야 합니다. 연결 후 이전에 요청한 촬영음 설정을 적용합니다. 앱 설정은 유지됩니다.")
             },
             confirmButton = {
                 TextButton(enabled = enabled, onClick = { confirm = false; onConfirmed() }) {

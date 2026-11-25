@@ -55,7 +55,7 @@ class DeveloperDonationPromptTest {
         var donated = false
         rule.setContent { AppTheme { DeveloperDonationPromptDialog(onDismiss = {}, onDonate = { donated = true }) } }
         rule.onNodeWithText("셔터음 제거가\n완료되었습니다.").assertExists()
-        rule.onNodeWithText("셔터사운드제로가 도움이 되셨다면, 후원으로 개발을 응원하실 수 있습니다.\n\n보내주시는 응원은 앱을 꾸준히 개선하는 데 큰 힘이 됩니다.").assertExists()
+        rule.onNodeWithText("셔터사운드제로가 도움이 되셨다면 후원으로 개발을 응원하실 수 있습니다.\n\n후원은 앱을 꾸준히 개선하는 데 큰 힘이 됩니다.").assertExists()
         assertFalse(donated)
         val screenshot = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         try {
