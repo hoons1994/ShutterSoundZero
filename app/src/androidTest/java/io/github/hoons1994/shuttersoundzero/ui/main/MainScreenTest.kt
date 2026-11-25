@@ -12,6 +12,8 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -301,9 +303,19 @@ class MainScreenTest {
 
     @Test
     fun zeroVolumeInSoundModeCanStillBeRaised() {
-        showHome(MainUiState(systemVolume = SystemVolumeUiState(current = 0, max = 15, isStreamMuted = true)))
-
+        val requests = mutableListOf<Int>()
+        composeTestRule.setContent {
+            HomeContent(
+                uiState = MainUiState(systemVolume = SystemVolumeUiState(current = 0, max = 15, isStreamMuted = true)),
+                onSystemVolumeChange = { index ->
+                    requests.add(index)
+                    index
+                }
+            )
+        }
         composeTestRule.onNodeWithContentDescription("시스템 음량 조절").performScrollTo().assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(4f) }
+        composeTestRule.runOnIdle { assertEquals(listOf(4), requests) }
     }
 
     @Test

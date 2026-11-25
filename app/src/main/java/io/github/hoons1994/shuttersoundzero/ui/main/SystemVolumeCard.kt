@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -117,17 +118,23 @@ internal fun SystemVolumeCard(
             }
 
             if (canAdjust) {
+                val state = remember(volume.min, volume.max) {
+                    SliderState(
+                        value = selectedVolume,
+                        steps = volume.max - volume.min - 1,
+                        trackRange = volume.min.toFloat()..volume.max.toFloat()
+                    )
+                }
+                state.value = selectedVolume
                 Slider(
                     enabled = sliderEnabled,
-                    value = selectedVolume,
+                    state = state,
                     onValueChange = { selectedVolume = it },
                     onValueChangeFinished = {
                         selectedVolume = (
                             onVolumeChange(selectedVolume.roundToInt()) ?: current
                         ).toFloat()
                     },
-                    valueRange = volume.min.toFloat()..volume.max.toFloat(),
-                    steps = (volume.max - volume.min - 1).coerceAtLeast(0),
                     colors = sliderColors,
                     thumb = {
                         Surface(

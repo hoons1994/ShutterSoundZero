@@ -12,6 +12,10 @@
          <trusted-key id="0785B3EFF60B1B1BEA94E0BB7C25280EAE63EBE5" group="org.apache.httpcomponents"/>
          <trusted-key id="0CC641C3A62453AB390066C4A41F13C999945293" group="commons-logging" name="commons-logging" version="1.2"/>
          <trusted-key id="0E225917414670F4442C250DFD533C07C264648F">
+            <trusting group="androidx.collection" name="collection" version="1.6.0"/>
+            <trusting group="androidx.collection" name="collection-jvm" version="1.6.0"/>
+            <trusting group="androidx.collection" name="collection-ktx" version="1.6.0"/>
+            <trusting group="androidx.emoji2" name="emoji2" version="1.7.0"/>
             <trusting group="androidx.activity"/>
             <trusting group="androidx.databinding"/>
             <trusting group="androidx.lifecycle"/>
@@ -21,6 +25,7 @@
             <trusting group="^com[.]android($|([.].*))" regex="true"/>
          </trusted-key>
          <trusted-key id="0F06FF86BEEAF4E71866EE5232EE5355A6BC6E42">
+            <trusting group="androidx.graphics" name="graphics-path" version="1.1.0"/>
             <trusting group="androidx.annotation"/>
             <trusting group="androidx.collection"/>
             <trusting group="androidx.core"/>
@@ -332,6 +337,16 @@
             <pgp value="F4DD59C90148BDC52BEB90A4530AA5F25C25011F"/>
          </artifact>
       </component>
+      <component group="org.apache.commons" name="commons-lang3" version="3.22.0">
+         <artifact name="commons-lang3-3.22.0.jar">
+            <pgp value="F4DD59C90148BDC52BEB90A4530AA5F25C25011F"/>
+            <sha256 value="2ea88052c8662bf51874f4159467ba24b040b22dfd54d2596e11936896c76192" origin="Maven Central; verified with existing signing key"/>
+         </artifact>
+         <artifact name="commons-lang3-3.22.0.pom">
+            <pgp value="F4DD59C90148BDC52BEB90A4530AA5F25C25011F"/>
+            <sha256 value="f2d1b011aa010af1b40c7c7ac3067914ca101f13da7f9cf6fc6771c8a9e82518" origin="Maven Central; verified with existing signing key"/>
+         </artifact>
+      </component>
       <component group="org.apache.commons" name="commons-parent" version="34">
          <artifact name="commons-parent-34.pom">
             <pgp value="D6F1BC78607808EC8E9F69437A8860944FAD5F62"/>
@@ -341,6 +356,12 @@
          <artifact name="commons-parent-105.pom">
             <sha256 value="31a68daabb4b361453788b9045ac87a6ae87c705e578facd99e4d9ddb6a481e9" origin="Maven Central" reason="Verified with the Apache Commons signing key"/>
             <pgp value="F4DD59C90148BDC52BEB90A4530AA5F25C25011F"/>
+         </artifact>
+      </component>
+      <component group="org.apache.commons" name="commons-parent" version="107">
+         <artifact name="commons-parent-107.pom">
+            <pgp value="F4DD59C90148BDC52BEB90A4530AA5F25C25011F"/>
+            <sha256 value="3b38ba6b152b096162e883b3f10ef1c40a8f37cf9d9392a34cab8fd580a98ffa" origin="Maven Central; verified with existing signing key"/>
          </artifact>
       </component>
       <component group="org.bouncycastle" name="bc-jdk18on-bom" version="1.80.2">
@@ -360,6 +381,20 @@
          <artifact name="conscrypt-android-2.8.0.pom">
             <pgp value="3EC80CAD1A3D50AFBBEFC136C2B98E64C61147AC"/>
             <sha256 value="26be2169bff9293a07a8bc58537021027c1de83b378592abd9cbc0c3f19f1aa5" origin="Maven Central; PGP and published SHA-256 verified"/>
+         </artifact>
+      </component>
+      <component group="org.conscrypt" name="conscrypt-android" version="2.9.0">
+         <artifact name="conscrypt-android-2.9.0.aar">
+            <pgp value="3EC80CAD1A3D50AFBBEFC136C2B98E64C61147AC"/>
+            <sha256 value="53ee06fc093b6f085c7f81da77f622823e65489cf1bdc64a87230a23603d7773" origin="Maven Central; verified with existing signing key"/>
+         </artifact>
+         <artifact name="conscrypt-android-2.9.0.module">
+            <pgp value="3EC80CAD1A3D50AFBBEFC136C2B98E64C61147AC"/>
+            <sha256 value="9783d85a0e92d3642d51d880885ad8906334139bc314d82e98226d75f0256300" origin="Maven Central; verified with existing signing key"/>
+         </artifact>
+         <artifact name="conscrypt-android-2.9.0.pom">
+            <pgp value="3EC80CAD1A3D50AFBBEFC136C2B98E64C61147AC"/>
+            <sha256 value="9919e21f11b9516a65a10103477dd71de74759c92d4ccbc75ddbf04b388c26c2" origin="Maven Central; verified with existing signing key"/>
          </artifact>
       </component>
       <component group="org.gradle.toolchains.foojay-resolver-convention" name="org.gradle.toolchains.foojay-resolver-convention.gradle.plugin" version="1.0.0">
