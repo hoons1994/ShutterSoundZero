@@ -15,11 +15,45 @@ const entry = (number, sha, checks = suites()) => ({
 const comparison = () => ({ base_commit: { sha: baseline }, merge_base_commit: { sha: baseline },
   commits: [{ sha: head }], files: [{ filename: '.github/release-notes/v1.5.9.md', status: 'modified' }] });
 const options = (entries, compare = comparison(), baselineChecks = suites(), totalCount = entries.length) => ({
-  repository: 'owner/repo', token: 'test', request: async url => ({ ok: true, json: async () =>
-    url.endsWith('/graphql') ? { data: { repository: {
-      defaultBranchRef: { target: { history: { nodes: entries, totalCount } } },
-      baseline: { oid: baseline, checkSuites: baselineChecks },
-    } } } : compare }),
+  repository: 'owner/repo', token: 'test', request: async (url, init) => ({ ok: true, json: async () => {
+    if (!url.endsWith('/graphql')) return compare;
+    const { after, firstPage } = JSON.parse(init.body).variables;
+    const start = Number(after ?? 0);
+    const nodes = entries.slice(start, start + 5);
+    const end = start + nodes.length;
+    return { data: { repository: {
+      defaultBranchRef: { target: { oid: entries[0]?.oid, history: {
+        nodes, totalCount, pageInfo: { hasNextPage: end < totalCount, endCursor: String(end) },
+      } } },
+      ...(firstPage ? { baseline: { oid: baseline, checkSuites: baselineChecks } } : {}),
+    } } };
+  } }),
+});
+
+test('all thirty recent entries are checked across pages, including a failure on the last page', async () => {
+  const entries = Array.from({ length: 32 }, (_, i) => entry(i + 1, i.toString(16).padStart(40, '0')));
+  assert.equal((await verifySastCoverage(options(entries))).direct, 30);
+  entries[29].associatedPullRequests.nodes[0].commits.nodes[0].commit.checkSuites = suites('github-actions');
+  await assert.rejects(verifySastCoverage(options(entries)), /Missing successful SAST for PR #30/);
+});
+
+test('an interrupted or inconsistent second history page cannot pass', async () => {
+  const entries = Array.from({ length: 12 }, (_, i) => entry(i + 1, i.toString(16).padStart(40, '0')));
+  for (const mutate of [
+    page => { page.errors = [{ message: 'Resource limits exceeded' }]; },
+    page => { page.data.repository.defaultBranchRef.target.oid = 'f'.repeat(40); },
+    page => { page.data.repository.defaultBranchRef.target.history.pageInfo.endCursor = '5'; },
+    page => { page.data.repository.defaultBranchRef.target.history.nodes[0] = entries[0]; },
+  ]) {
+    const fixture = options(entries);
+    const request = async (url, init) => {
+      const response = await fixture.request(url, init);
+      const page = await response.json();
+      if (JSON.parse(init.body).variables.after === '5') mutate(page);
+      return { ok: true, json: async () => page };
+    };
+    await assert.rejects(verifySastCoverage({ ...fixture, request }), /Incomplete|changed|Duplicate/);
+  }
 });
 
 test('successful recognized SAST is required; ordinary CI is not substituted', async () => {
