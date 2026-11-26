@@ -7,7 +7,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.6.0-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.6.1-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터사운드 제로 안내 인포그래픽" width="720" />
@@ -21,7 +21,7 @@
 
 접근성 서비스를 이용해 화면이나 카메라 실행을 상시 감시하지 않습니다. 최초 1회 로컬 무선 ADB로 `WRITE_SECURE_SETTINGS` 권한을 연동한 뒤, 필요할 때만 무선 디버깅을 켜서 실제 CSC 값을 변경합니다.
 
-**v1.6.0**에서는 설정에서 한국어·일본어·영어를 선택할 수 있습니다. 카메라를 열면 휴대전화가 무음 또는 진동 모드로 바뀌고, 닫으면 이전 소리 모드로 돌아오는 갤럭시 루틴도 추가할 수 있습니다. [v1.6.0 릴리스 노트](.github/release-notes/v1.6.0.md)
+**v1.6.1**에서는 영어 페어링 오류 안내를 바로잡았습니다. 코드 인증에 실패하면 새 6자리 코드를 입력하도록 안내합니다. [v1.6.1 릴리스 노트](.github/release-notes/v1.6.1.md)
 
 ## 📱 다운로드
 
