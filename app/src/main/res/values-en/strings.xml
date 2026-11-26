@@ -87,11 +87,11 @@
     <string name="pairing_state_identity_failed">Could not prepare the connection credentials</string>
     <string name="pairing_state_tls_failed">Could not establish a secure connection</string>
     <string name="pairing_state_authentication_failed">Could not verify the pairing code</string>
-    <string name="pairing_help_identity">The device timed out</string>
-    <string name="pairing_help_tls">Device connection error</string>
-    <string name="pairing_help_authentication">Check the date and time on your phone, then tap Start initial setup again. If the credential error persists, use Reset connection credentials in app settings and pair with a new code. If that does not help, send a diagnostic report from the app.</string>
-    <string name="pairing_state_timeout">Check the date and time on your phone. Turn wireless debugging off and back on, then try again. If it still fails, send a diagnostic report from the app.</string>
-    <string name="pairing_state_error">Reopen the pairing screen and enter a new six-digit code. Keep the screen open until you submit the code.</string>
+    <string name="pairing_help_identity">Check the date and time on your phone, then tap Start initial setup again. If the credential error persists, use Reset connection credentials in app settings and pair with a new code. If that does not help, send a diagnostic report from the app.</string>
+    <string name="pairing_help_tls">Check the date and time on your phone. Turn wireless debugging off and back on, then try again. If it still fails, send a diagnostic report from the app.</string>
+    <string name="pairing_help_authentication">Reopen the pairing screen and enter a new six-digit code. Keep the screen open until you submit the code.</string>
+    <string name="pairing_state_timeout">The device timed out</string>
+    <string name="pairing_state_error">Device connection error</string>
     <string name="pairing_help_local_network">Allow nearby device access in App permissions, then return to the app to continue setup. Some phones list this as local network access.</string>
     <string name="pairing_help_discovery">The app is still looking for the pairing service. Check Wi-Fi and wireless debugging and open the pairing code screen. When Enter code appears, enter the current six-digit code again.</string>
     <string name="pairing_help_discovery_restart">Check Wi-Fi and wireless debugging. Tap the notification to return to the app, then tap Start initial setup again.</string>
