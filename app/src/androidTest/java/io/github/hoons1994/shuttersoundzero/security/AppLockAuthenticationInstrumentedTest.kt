@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.security
 
+import io.github.hoons1994.shuttersoundzero.R
+import io.github.hoons1994.shuttersoundzero.testing.targetString
 import android.app.KeyguardManager
 import android.app.Application
 import android.app.Activity
@@ -192,9 +194,10 @@ class AppLockAuthenticationInstrumentedTest {
         val permissionGranted = AtomicBoolean(false)
         val application = context.applicationContext as Application
         val suppressAutomaticPermissionPrompt = object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityCreated(activity: Activity, state: Bundle?) {
+            override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
+            override fun onActivityPostCreated(activity: Activity, state: Bundle?) {
                 if (activity is MainActivity && Build.VERSION.SDK_INT >= 37) {
-                    MainActivity::class.java.getDeclaredField("localNetworkPermissionDeniedThisSession").apply {
+                    MainActivity::class.java.getDeclaredField("localNetworkPermissionRequestedThisSession").apply {
                         isAccessible = true
                         setBoolean(activity, true)
                     }
@@ -247,12 +250,12 @@ class AppLockAuthenticationInstrumentedTest {
                     setInitialNoticeVisible(activity, false)
                     PreferencesRepository.getInstance(context).hasSeenInitialNotice = true
                 }
-                composeTestRule.onNodeWithContentDescription("설정").performClick()
+                composeTestRule.onNodeWithContentDescription(targetString(R.string.action_settings)).performClick()
                 composeTestRule.onNodeWithText(
-                    if (targetMuted) "카메라 무음 다시 적용" else "카메라 셔터음 원래대로 복원"
+                    if (targetMuted) targetString(R.string.settings_reapply) else targetString(R.string.settings_restore)
                 ).performClick()
                 awaitSettingsPermissionDenial()
-                composeTestRule.onNodeWithText("앱 권한 설정").performClick()
+                composeTestRule.onNodeWithText(targetString(R.string.pairing_action_permission_settings)).performClick()
                 awaitCondition("App permission settings did not stop MainActivity") { scenario.state == Lifecycle.State.CREATED }
                 instrumentation.waitForIdleSync()
                 assertFalse(AppLockSession.isUnlocked)
@@ -281,15 +284,15 @@ class AppLockAuthenticationInstrumentedTest {
                     assertTrue(appliedTargets.isEmpty())
                 } else if (!targetMuted) {
                     awaitCondition("Restoration confirmation did not return after authentication") {
-                        composeTestRule.onAllNodesWithText("카메라 셔터음을 원래대로 복원할까요?")
+                        composeTestRule.onAllNodesWithText(targetString(R.string.restore_confirm))
                             .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
                     }
-                    composeTestRule.onNodeWithText("카메라 셔터음을 원래대로 복원할까요?").assertExists()
+                    composeTestRule.onNodeWithText(targetString(R.string.restore_confirm)).assertExists()
                     assertTrue("Restoration needs explicit confirmation", appliedTargets.isEmpty())
                     scenario.recreate()
-                    composeTestRule.onNodeWithText("카메라 셔터음을 원래대로 복원할까요?").assertExists()
+                    composeTestRule.onNodeWithText(targetString(R.string.restore_confirm)).assertExists()
                     assertTrue(appliedTargets.isEmpty())
-                    composeTestRule.onNodeWithText("원래대로 복원").performClick()
+                    composeTestRule.onNodeWithText(targetString(R.string.restore_action)).performClick()
                 }
                 if (grantOnReturn) {
                     try {
@@ -333,7 +336,7 @@ class AppLockAuthenticationInstrumentedTest {
                         node.isEnabled && node.isVisibleToUser
                 }
             }?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            composeTestRule.onAllNodesWithText("앱 권한 설정")
+            composeTestRule.onAllNodesWithText(targetString(R.string.pairing_action_permission_settings))
                 .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
         }
     }
@@ -366,9 +369,10 @@ class AppLockAuthenticationInstrumentedTest {
         // unrelated API 37 permission prompt, without granting LNP and invalidating
         // the separate fresh-install permission test. Authentication stays real.
         val permissionPromptFixture = object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityCreated(activity: Activity, state: Bundle?) {
+            override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
+            override fun onActivityPostCreated(activity: Activity, state: Bundle?) {
                 if (activity is MainActivity && Build.VERSION.SDK_INT >= 37) {
-                    MainActivity::class.java.getDeclaredField("localNetworkPermissionDeniedThisSession").apply {
+                    MainActivity::class.java.getDeclaredField("localNetworkPermissionRequestedThisSession").apply {
                         isAccessible = true
                         setBoolean(activity, true)
                     }
@@ -437,11 +441,11 @@ class AppLockAuthenticationInstrumentedTest {
                     assertTrue(appliedTargets.isEmpty())
                 }
                 if (targetMuted) {
-                    composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
+                    composeTestRule.onNodeWithText(targetString(R.string.home_reapply)).performScrollTo().performClick()
                 } else {
                     scenario.onActivity { viewModel.toggleCscMute(false) }
                 }
-                composeTestRule.onNodeWithText(if (permissionSettings) "앱 권한 설정" else "무선 디버깅 켜기").performClick()
+                composeTestRule.onNodeWithText(if (permissionSettings) targetString(R.string.pairing_action_permission_settings) else targetString(R.string.wireless_enable)).performClick()
                 awaitCondition("Settings did not stop MainActivity") { scenario.state == Lifecycle.State.CREATED }
                 instrumentation.waitForIdleSync()
                 assertFalse(AppLockSession.isUnlocked)

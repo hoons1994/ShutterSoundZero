@@ -177,8 +177,8 @@ class MainScreenTest {
         )
 
         composeTestRule.onNodeWithText(targetString(R.string.home_check_needed)).fetchSemanticsNode()
-        composeTestRule.onNodeWithText(targetString(R.string.home_restart_setup)).fetchSemanticsNode()
-        composeTestRule.onNodeWithText(targetString(R.string.home_restart)).fetchSemanticsNode()
+        composeTestRule.onNode(hasText(targetString(R.string.home_restart_setup)) and !hasClickAction()).assertExists()
+        composeTestRule.onNode(hasText(targetString(R.string.home_restart)) and hasClickAction()).assertIsEnabled()
         composeTestRule.onNodeWithText(
             targetString(R.string.step_code_invalid)
         ).fetchSemanticsNode()
