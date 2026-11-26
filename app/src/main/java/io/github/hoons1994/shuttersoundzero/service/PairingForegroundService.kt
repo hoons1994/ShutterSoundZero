@@ -1,5 +1,6 @@
 package io.github.hoons1994.shuttersoundzero.service
 
+import io.github.hoons1994.shuttersoundzero.data.withAppLanguage
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -55,15 +56,17 @@ class PairingForegroundService : Service() {
         private const val EXTRA_RESUME_APPLY = "resume_apply"
         private const val EXTRA_TARGET_MUTED = "target_muted"
         private const val EXTRA_RESET_IDENTITY = "reset_identity"
+        private const val EXTRA_SETUP_REVISION = "setup_revision"
 
         fun start(context: Context, isDevOptionsOff: Boolean, resumeApply: Boolean = false, targetMuted: Boolean = true,
-                  resetIdentity: Boolean = false) {
+                  resetIdentity: Boolean = false, setupRevision: Long? = null) {
             val intent = Intent(context, PairingForegroundService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_DEV_OPTIONS_OFF, isDevOptionsOff)
                 putExtra(EXTRA_RESUME_APPLY, resumeApply)
                 putExtra(EXTRA_TARGET_MUTED, targetMuted)
                 putExtra(EXTRA_RESET_IDENTITY, resetIdentity)
+                if (setupRevision != null) putExtra(EXTRA_SETUP_REVISION, setupRevision)
             }
             ContextCompat.startForegroundService(context, intent)
         }
@@ -109,7 +112,7 @@ class PairingForegroundService : Service() {
     private var isSetupObserverRegistered = false
     private val session = PairingSessionState()
     private var isPairingCompleting = false
-    private var resetIdentityBeforePairing = false
+    private var setupRevision = -1L
     private var applyFailureState = PairingNotificationState.CONNECTION_RETRY
     private val notificationRefresh = PairingNotificationRefreshState()
 
@@ -122,12 +125,28 @@ class PairingForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                val targetMuted = intent.getBooleanExtra(EXTRA_TARGET_MUTED, true)
-                prefs.pendingPairingTarget = targetMuted
+                val request = if (intent.hasExtra(EXTRA_SETUP_REVISION)) {
+                    prefs.pendingPairingSetup()?.takeIf {
+                        it.revision == intent.getLongExtra(EXTRA_SETUP_REVISION, -1)
+                    }
+                } else {
+                    prefs.beginPairingSetup(
+                        intent.getBooleanExtra(EXTRA_TARGET_MUTED, true),
+                        intent.getBooleanExtra(EXTRA_RESET_IDENTITY, false)
+                    )
+                }
+                if (request == null) {
+                    if (!session.isActive) stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                val sameSetup = session.isActive && setupRevision == request.revision
+                val targetMuted = request.targetMuted
+                setupRevision = request.revision
                 when {
-                    intent.getBooleanExtra(EXTRA_RESET_IDENTITY, false) -> startPairing(targetMuted, resetIdentity = true)
-                    session.isActive && session.hasPaired && session.targetMuted == targetMuted -> retryApply()
-                    (session.isActive && session.hasPaired) || intent.getBooleanExtra(EXTRA_RESUME_APPLY, false) ->
+                    sameSetup && pairingJob?.isActive == true -> Unit
+                    request.resetIdentity -> startPairing(targetMuted)
+                    sameSetup && session.hasPaired -> retryApply()
+                    prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY && intent.getBooleanExtra(EXTRA_RESUME_APPLY, false) ->
                         startApplyRecovery(targetMuted)
                     else -> startPairing(targetMuted)
                 }
@@ -157,7 +176,7 @@ class PairingForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startPairing(targetMuted: Boolean, resetIdentity: Boolean = false) {
+    private fun startPairing(targetMuted: Boolean) {
         // 새 1회 설정 시작은 이전 코드 제출 작업의 완료보다 우선한다.
         pairingGeneration.invalidate()
         pairingJob?.cancel()
@@ -166,7 +185,6 @@ class PairingForegroundService : Service() {
         adbManager.clearDiscoveredPorts()
         session.begin(targetMuted = targetMuted)
         isPairingCompleting = false
-        resetIdentityBeforePairing = resetIdentity
         val setupState = readPairingSetupState()
         notificationRefresh.reset(setupState)
 
@@ -293,6 +311,7 @@ class PairingForegroundService : Service() {
     }
 
     private fun submitPairingCode(code: String) {
+        if (!ensureCurrentSetup()) return
         if (pairingJob?.isActive == true || isPairingCompleting) return
         val pairingPort = adbManager.lastDiscoveredPairingPort?.takeIf { it in 1..65535 }
 
@@ -328,6 +347,7 @@ class PairingForegroundService : Service() {
     }
 
     private fun retryApply() {
+        if (!ensureCurrentSetup()) return
         if (pairingJob != null || isPairingCompleting || !session.hasPaired) return
         launchWorkflow(null)
     }
@@ -343,6 +363,7 @@ class PairingForegroundService : Service() {
         )
 
         val generation = pairingGeneration.next()
+        val revision = setupRevision
         val targetMuted = session.targetMuted
         val job = serviceScope.launch(start = CoroutineStart.LAZY) {
             try {
@@ -358,12 +379,16 @@ class PairingForegroundService : Service() {
                 val workflow = PairingWorkflow(
                     discoveredPort = { adbManager.lastDiscoveredPairingPort },
                     pair = { port, pairingCode ->
-                        val reset = resetIdentityBeforePairing
-                        resetIdentityBeforePairing = false
-                        adbManager.pairLocal(port, pairingCode, resetIdentity = reset)
+                        adbManager.pairLocal(
+                            port, pairingCode,
+                            resetIdentity = prefs.pendingPairingSetup()?.resetIdentity == true,
+                            isCurrent = { prefs.pairingSetupRevision == revision },
+                            onIdentityReset = { prefs.pairingIdentityReset(revision) }
+                        )
                     },
                     applyCameraMute = { target ->
-                        AppDependencies.cameraSettings(this@PairingForegroundService).applyCameraMuteViaAdb(targetMuted = target)
+                        AppDependencies.cameraSettings(this@PairingForegroundService)
+                            .applyCameraMuteViaAdb(setupRevision = revision, targetMuted = target)
                     },
                     targetMuted = targetMuted
                 )
@@ -400,7 +425,7 @@ class PairingForegroundService : Service() {
     }
 
     private fun commitPairingSideEffect(generation: Long, block: () -> Unit) {
-        if (!pairingGeneration.runIfCurrent(generation, block)) {
+        if (prefs.pairingSetupRevision != setupRevision || !pairingGeneration.runIfCurrent(generation, block)) {
             throw CancellationException("Stale pairing workflow")
         }
     }
@@ -424,18 +449,19 @@ class PairingForegroundService : Service() {
 
     private fun postSuccessfulCompletion(generation: Long, wirelessDebuggingDisabled: Boolean) {
         mainHandler.post {
+            if (!pairingGeneration.isCurrent(generation) || !ensureCurrentSetup()) return@post
             val accepted = pairingGeneration.runIfCurrent(generation) {
                 prefs.recordCameraMuteSuccess(session.targetMuted)
                 Toast.makeText(
                     this,
                     if (!session.targetMuted && wirelessDebuggingDisabled) {
-                        getString(R.string.pairing_restore_success_wireless_disabled)
+                        withAppLanguage().getString(R.string.pairing_restore_success_wireless_disabled)
                     } else if (!session.targetMuted) {
-                        getString(R.string.pairing_restore_success_disable_wireless_manually)
+                        withAppLanguage().getString(R.string.pairing_restore_success_disable_wireless_manually)
                     } else if (wirelessDebuggingDisabled) {
-                        getString(R.string.foreground_pairing_success_wireless_disabled)
+                        withAppLanguage().getString(R.string.foreground_pairing_success_wireless_disabled)
                     } else {
-                        getString(R.string.foreground_pairing_success_disable_wireless_manually)
+                        withAppLanguage().getString(R.string.foreground_pairing_success_disable_wireless_manually)
                     },
                     Toast.LENGTH_LONG
                 ).show()
@@ -465,12 +491,8 @@ class PairingForegroundService : Service() {
     }
 
     private fun stopPairing(showSuccess: Boolean, wirelessDebuggingDisabled: Boolean) {
-        // Explicit cancellation permits a fresh pairing next time, without deleting credentials.
-        if (!showSuccess && session.hasPaired && prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY) {
-            prefs.lastSetupIssue = null
-        }
         val targetMuted = session.targetMuted
-        prefs.pendingPairingTarget = null
+        prefs.finishPairingSetup(setupRevision)
         session.end()
         unregisterSetupObserver()
         pairingGeneration.invalidate()
@@ -505,7 +527,7 @@ class PairingForegroundService : Service() {
     )
 
     private fun refreshPairingSetupNotification() {
-        if (!session.isActive || isPairingCompleting) return
+        if (!session.isActive || !ensureCurrentSetup() || isPairingCompleting) return
         val state = readPairingSetupState()
         notificationRefresh.observeSetup(state)
         if (session.hasPaired) {
@@ -564,6 +586,13 @@ class PairingForegroundService : Service() {
             },
             isDevOptionsOff = !state.developerOptionsEnabled
         )
+    }
+
+    private fun ensureCurrentSetup(): Boolean {
+        if (!session.isActive) return false
+        if (setupRevision == prefs.pairingSetupRevision) return true
+        stopPairing(showSuccess = false, wirelessDebuggingDisabled = false)
+        return false
     }
 
     private fun stopPairingDiscovery() {

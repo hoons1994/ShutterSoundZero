@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.main
 
+import io.github.hoons1994.shuttersoundzero.testing.targetString
+import io.github.hoons1994.shuttersoundzero.R
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
@@ -51,14 +53,14 @@ class HomeNoticeCardInstrumentedTest {
         val restoration = StateRestorationTester(rule)
         val status = mutableStateOf(HomeStatus.SETUP_REQUIRED)
         restoration.setContent { MaterialTheme { HomeNoticeCard(status.value) } }
-        rule.onNodeWithText("무선 디버깅이 켜지지 않나요?").performTouchInput { swipeLeft() }
+        rule.onNodeWithText(targetString(R.string.home_notice_wireless_title)).performTouchInput { swipeLeft() }
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("업데이트 후 안내").assertIsSelected()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_reapply_label)).assertIsSelected()
         rule.runOnUiThread { status.value = HomeStatus.READY }
         rule.waitForIdle()
         restoration.emulateSavedInstanceStateRestore()
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("업데이트 후 안내").assertIsSelected()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_reapply_label)).assertIsSelected()
     }
 
     @Test
@@ -69,11 +71,11 @@ class HomeNoticeCardInstrumentedTest {
                 HomeNoticeCard(onOpenCameraSettings = { settingsCalls++ })
             }
         }
-        rule.onNodeWithContentDescription("업데이트 후 안내").performClick()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_reapply_label)).performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("앱 설정으로 이동").performClick()
+        rule.onNodeWithText(targetString(R.string.home_notice_open_camera_settings)).performClick()
         rule.runOnIdle { assertEquals(1, settingsCalls) }
-        rule.onNodeWithContentDescription("촬영음 확인 안내").performClick()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_camera_label)).performClick()
         rule.waitForIdle()
         rule.onNodeWithText("카메라 열기").assertDoesNotExist()
         rule.runOnIdle { assertEquals(1, settingsCalls) }
@@ -96,7 +98,7 @@ class HomeNoticeCardInstrumentedTest {
             }
         }
         rule.onNodeWithText("카메라 열기").assertDoesNotExist()
-        rule.onNodeWithText("카메라 열어보기").performScrollTo().performClick()
+        rule.onNodeWithText(targetString(R.string.home_open_camera)).performScrollTo().performClick()
         rule.runOnIdle { assertEquals(1, cameraCalls) }
     }
 
@@ -106,22 +108,22 @@ class HomeNoticeCardInstrumentedTest {
         rule.setContent { MaterialTheme { HomeNoticeCard(status.value) } }
         rule.runOnUiThread { status.value = HomeStatus.READY }
         rule.waitForIdle()
-        rule.onNodeWithText("설정 후 실제 촬영음을 확인해 주세요").assertIsDisplayed()
-        rule.onNodeWithContentDescription("업데이트 후 안내").performClick()
+        rule.onNodeWithText(targetString(R.string.home_notice_camera_title)).assertIsDisplayed()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_reapply_label)).performClick()
         rule.waitForIdle()
         rule.runOnUiThread { status.value = HomeStatus.SETUP_REQUIRED }
         rule.waitForIdle()
-        rule.onNodeWithText("업데이트 후 촬영음이 다시 나나요?").assertIsDisplayed()
+        rule.onNodeWithText(targetString(R.string.home_notice_reapply_title)).assertIsDisplayed()
     }
 
     @Test
     fun reapplyRequiredStartsWithUpdateGuidanceAndPreviousWraps() {
         rule.setContent { MaterialTheme { HomeNoticeCard(HomeStatus.REAPPLY_REQUIRED) } }
-        rule.onNodeWithText("업데이트 후 촬영음이 다시 나나요?").assertIsDisplayed()
+        rule.onNodeWithText(targetString(R.string.home_notice_reapply_title)).assertIsDisplayed()
         rule.onNodeWithText("1 / 3").assertIsDisplayed()
-        rule.onNodeWithContentDescription("이전 안내").performClick()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_previous)).performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("설정 후 실제 촬영음을 확인해 주세요").assertIsDisplayed()
+        rule.onNodeWithText(targetString(R.string.home_notice_camera_title)).assertIsDisplayed()
         rule.onNodeWithText("3 / 3").assertIsDisplayed()
     }
 
@@ -138,11 +140,11 @@ class HomeNoticeCardInstrumentedTest {
                 }
             }
         }
-        rule.onNodeWithText("무선 디버깅이 켜지지 않나요?").assertIsDisplayed()
+        rule.onNodeWithText(targetString(R.string.home_notice_wireless_title)).assertIsDisplayed()
         val initialHeight = cardHeight()
         listOf(
-            "업데이트 후 안내" to "업데이트 후 촬영음이 다시 나나요?",
-            "촬영음 확인 안내" to "설정 후 실제 촬영음을 확인해 주세요"
+            targetString(R.string.home_notice_reapply_label) to targetString(R.string.home_notice_reapply_title),
+            targetString(R.string.home_notice_camera_label) to targetString(R.string.home_notice_camera_title)
         ).forEach { (label, _) ->
             rule.onNodeWithContentDescription(label).performScrollTo().performClick()
             rule.waitForIdle()
@@ -150,19 +152,19 @@ class HomeNoticeCardInstrumentedTest {
             assertEquals(initialHeight, cardHeight(), 0.5f)
         }
         val card = rule.onNodeWithTag("notice-container").getUnclippedBoundsInRoot()
-        listOf("이전 안내", "다음 안내", "무선 디버깅 안내", "업데이트 후 안내", "촬영음 확인 안내").forEach { label ->
+        listOf(targetString(R.string.home_notice_previous), targetString(R.string.home_notice_next), targetString(R.string.home_notice_wireless_label), targetString(R.string.home_notice_reapply_label), targetString(R.string.home_notice_camera_label)).forEach { label ->
             val bounds = rule.onNodeWithContentDescription(label).getUnclippedBoundsInRoot()
             assertTrue("Control outside card: $label", bounds.left >= card.left && bounds.right <= card.right)
         }
-        rule.onNodeWithContentDescription("다음 안내").performScrollTo().performClick()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_next)).performScrollTo().performClick()
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("무선 디버깅 안내").assertIsSelected()
-        rule.onNodeWithContentDescription("이전 안내").performScrollTo().performClick()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_wireless_label)).assertIsSelected()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_previous)).performScrollTo().performClick()
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("촬영음 확인 안내").assertIsSelected()
-        rule.onNodeWithContentDescription("무선 디버깅 안내").performScrollTo().performClick()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_camera_label)).assertIsSelected()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_wireless_label)).performScrollTo().performClick()
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("무선 디버깅 안내").assertIsSelected()
+        rule.onNodeWithContentDescription(targetString(R.string.home_notice_wireless_label)).assertIsSelected()
         assertEquals(initialHeight, cardHeight(), 0.5f)
     }
 

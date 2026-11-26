@@ -7,10 +7,12 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
+import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 import java.io.File
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeFalse
 import org.junit.Before
@@ -60,6 +62,8 @@ class BootReceiverInstrumentedTest {
         prefs.lastConnectPort = 43210
         prefs.shouldMuteOnBoot = false
         prefs.isAppLockEnabled = true
+        prefs.pendingPairingTarget = false
+        prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
 
         BootReceiver().onReceive(context, Intent(Intent.ACTION_MY_PACKAGE_REPLACED))
 
@@ -68,6 +72,8 @@ class BootReceiverInstrumentedTest {
         assertTrue(reloaded.hasAdbLinkageHistory)
         assertFalse(reloaded.shouldMuteOnBoot)
         assertTrue(reloaded.isAppLockEnabled)
+        assertEquals(false, reloaded.pendingPairingTarget)
+        assertNull(reloaded.lastSetupIssue)
         identityFiles.forEach { assertFalse(it.exists()) }
     }
 
@@ -94,6 +100,8 @@ class BootReceiverInstrumentedTest {
         prefs.shouldMuteOnBoot = false
         prefs.isAppLockEnabled = true
         prefs.lastSoftwareFingerprint = "previous-build-fingerprint"
+        prefs.pendingPairingTarget = true
+        prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
 
         BootReceiver().onReceive(context, Intent(Intent.ACTION_BOOT_COMPLETED))
 
@@ -103,6 +111,8 @@ class BootReceiverInstrumentedTest {
         assertTrue(reloaded.hasAdbLinkageHistory)
         assertFalse(reloaded.shouldMuteOnBoot)
         assertTrue(reloaded.isAppLockEnabled)
+        assertEquals(true, reloaded.pendingPairingTarget)
+        assertNull(reloaded.lastSetupIssue)
         identityFiles.forEach { assertFalse(it.exists()) }
     }
 

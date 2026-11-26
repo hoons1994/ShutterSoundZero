@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.onboarding
 
+import androidx.compose.ui.res.stringResource
+import io.github.hoons1994.shuttersoundzero.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,29 +20,29 @@ fun FirstRunNoticeDialog(onConfirm: () -> Unit) {
         onDismissRequest = {},
         title = {
             Text(
-                text = "사용 전에 꼭 확인해 주세요",
+                text = stringResource(R.string.first_run_title),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
             )
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "ShutterSoundZero는 삼성 갤럭시의 카메라 셔터음 강제 설정을 변경합니다.",
+                    text = stringResource(R.string.first_run_purpose),
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 20.sp
                 )
                 Text(
-                    text = "• 처음 한 번은 무선 디버깅으로 기기를 연결해야 합니다. 설정이 끝나면 계속 켜둘 필요는 없습니다.",
+                    text = stringResource(R.string.first_run_wireless),
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 20.sp
                 )
                 Text(
-                    text = "• One UI 또는 Android 소프트웨어 업데이트 후 카메라 셔터음 설정이 초기화될 수 있습니다. 매번 다시 설정할 필요는 없습니다. 다시 설정해야 할 때만 알림으로 알려드립니다.",
+                    text = stringResource(R.string.first_run_updates),
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 20.sp
                 )
                 Text(
-                    text = "자세한 원리와 상황별 대처 방법은 설정 → 도움말에서 확인해 주세요.",
+                    text = stringResource(R.string.first_run_help),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 18.sp
@@ -49,7 +51,7 @@ fun FirstRunNoticeDialog(onConfirm: () -> Unit) {
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("확인하고 시작하기")
+                Text(stringResource(R.string.first_run_confirm))
             }
         },
         shape = RoundedCornerShape(20.dp),

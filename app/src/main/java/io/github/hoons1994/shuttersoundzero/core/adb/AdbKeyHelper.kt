@@ -47,6 +47,9 @@ object AdbKeyHelper {
     private const val GCM_TAG_LENGTH_BITS = 128
     private const val ENCRYPTED_KEY_MAGIC = 0x53535A31 // "SSZ1"
     private const val MAX_GCM_IV_BYTES = 32
+    // Read by the ADB manager under this object's monitor.
+    internal var identityVersion = 0L
+        private set
 
     /**
      * 소프트웨어 업데이트 뒤 기존 연동 흔적은 있는데 권한이 사라진 예외 상황에서만
@@ -55,6 +58,7 @@ object AdbKeyHelper {
      */
     @Synchronized
     fun resetIdentity(context: Context) {
+        identityVersion++
         val files = listOf(
             File(context.noBackupFilesDir, IDENTITY_BUNDLE_FILE),
             File(context.noBackupFilesDir, "$IDENTITY_BUNDLE_FILE.tmp"),

@@ -1,13 +1,25 @@
 package io.github.hoons1994.shuttersoundzero.ui.settings
 
+import io.github.hoons1994.shuttersoundzero.testing.targetString
+import io.github.hoons1994.shuttersoundzero.R
 import androidx.activity.ComponentActivity
+import android.content.res.Configuration
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import io.github.hoons1994.shuttersoundzero.camera.ChangeCameraMute
+import java.util.Locale
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -17,8 +29,7 @@ class SettingsScreenTest {
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
-    @Before
-    fun setup() {
+    private fun showSettings() {
         composeTestRule.setContent {
             SettingsScreen(onBackClick = {})
         }
@@ -26,37 +37,41 @@ class SettingsScreenTest {
 
     @Test
     fun settings_areGroupedByUserGoal() {
-        composeTestRule.onNodeWithText("카메라 설정").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("보안").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("상태 확인 및 업데이트").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("기기 설정").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("자주 묻는 질문").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("문의 및 지원").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("앱 정보").fetchSemanticsNode()
+        showSettings()
+        composeTestRule.onNodeWithText(targetString(R.string.settings_camera)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.settings_security)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.settings_status_updates)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.settings_device)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.faq_title)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.support_title)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.settings_about)).fetchSemanticsNode()
     }
 
     @Test
     fun detailedPopupSetting_isAvailableFromDeviceSettings() {
-        composeTestRule.onNodeWithText("알림 팝업 자세히 보기")
+        showSettings()
+        composeTestRule.onNodeWithText(targetString(R.string.support_popup_title))
             .assertHasClickAction()
     }
 
     @Test
     fun developerLinks_areAvailableFromHelpSection() {
-        composeTestRule.onNodeWithText("사용 문의")
+        showSettings()
+        composeTestRule.onNodeWithText(targetString(R.string.support_contact))
             .performScrollTo()
             .assertHasClickAction()
-        composeTestRule.onNodeWithText("카카오톡 오픈채팅으로 개발자에게 문의하기")
+        composeTestRule.onNodeWithText(targetString(R.string.support_contact_chat))
             .fetchSemanticsNode()
-        composeTestRule.onNodeWithText("개발자 후원")
+        composeTestRule.onNodeWithText(targetString(R.string.support_donate))
             .performScrollTo()
             .assertHasClickAction()
-        composeTestRule.onNodeWithText("앱이 도움이 되었다면 개발과 유지보수를 응원할 수 있습니다.")
+        composeTestRule.onNodeWithText(targetString(R.string.support_donate_body))
             .fetchSemanticsNode()
     }
 
     @Test
     fun deviceReportEntry_isNotAvailable() {
+        showSettings()
         composeTestRule.onNodeWithText("호환성 데이터 제출")
             .assertDoesNotExist()
         composeTestRule.onNodeWithText("호환성 데이터를 제출하시겠습니까?")
@@ -65,18 +80,52 @@ class SettingsScreenTest {
 
     @Test
     fun errorReporting_isStillAvailable() {
-        composeTestRule.onNodeWithText("문제가 해결되지 않나요?")
+        showSettings()
+        composeTestRule.onNodeWithText(targetString(R.string.support_unresolved))
             .performScrollTo()
             .assertHasClickAction()
             .performClick()
 
         composeTestRule.waitUntil(timeoutMillis = 10000) {
-            composeTestRule.onAllNodesWithText("전송될 진단 정보").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.report_preview)).fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("오류 신고").assertExists()
-        composeTestRule.onNodeWithText("전송될 진단 정보").assertExists()
-        composeTestRule.onNodeWithText("이메일로 보내기").assertHasClickAction()
-        composeTestRule.onNodeWithText("닫기").performClick()
-        composeTestRule.onNodeWithText("오류 신고").assertDoesNotExist()
+        composeTestRule.onNodeWithText(targetString(R.string.report_error)).assertExists()
+        composeTestRule.onNodeWithText(targetString(R.string.report_preview)).assertExists()
+        composeTestRule.onNodeWithText(targetString(R.string.report_send)).assertHasClickAction()
+        composeTestRule.onNodeWithText(targetString(R.string.camera_routine_close)).performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.report_error)).assertDoesNotExist()
+    }
+
+    @Test fun restoredResultUsesTheCurrentLanguageAfterRecreation() {
+        val activity = composeTestRule.activity
+        val factory = viewModelFactory {
+            initializer {
+                CameraSettingsOperationViewModel(
+                    activity.application,
+                    ChangeCameraMute({ Result.success(Unit) }, { true }, { Result.success(Unit) }),
+                    SavedStateHandle()
+                )
+            }
+        }
+        composeTestRule.runOnUiThread {
+            ViewModelProvider(activity, factory)[CameraSettingsOperationViewModel::class.java].setCameraMute(false)
+        }
+        fun strings(locale: Locale) = activity.createConfigurationContext(
+            Configuration().apply { setLocale(locale) }
+        ).resources
+        val korean = strings(Locale.KOREAN)
+        val japanese = strings(Locale.JAPANESE)
+        val resources = mutableStateOf(korean)
+        val restoration = StateRestorationTester(composeTestRule)
+        restoration.setContent {
+            CompositionLocalProvider(LocalResources provides resources.value) {
+                SettingsScreen(onBackClick = {})
+            }
+        }
+        composeTestRule.onNodeWithText(korean.getString(R.string.change_restored)).assertExists()
+        composeTestRule.runOnIdle { resources.value = japanese }
+        restoration.emulateSavedInstanceStateRestore()
+        composeTestRule.onNodeWithText(japanese.getString(R.string.change_restored)).assertExists()
+        composeTestRule.onNodeWithText(korean.getString(R.string.change_restored)).assertDoesNotExist()
     }
 }

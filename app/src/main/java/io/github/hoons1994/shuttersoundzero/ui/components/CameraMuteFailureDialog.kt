@@ -1,11 +1,12 @@
 package io.github.hoons1994.shuttersoundzero.ui.components
 
+import androidx.compose.ui.res.stringResource
+import io.github.hoons1994.shuttersoundzero.R
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
-import io.github.hoons1994.shuttersoundzero.core.adb.PAIRING_RECOVERY_LABEL
 
 @Composable
 internal fun CameraMuteFailureDialog(
@@ -13,12 +14,12 @@ internal fun CameraMuteFailureDialog(
     onDismiss: () -> Unit,
     onReconnect: () -> Unit,
     onOpenSettings: () -> Unit,
-    reconnectLabel: String = PAIRING_RECOVERY_LABEL
+    reconnectLabel: String = stringResource(R.string.recovery_reconnect)
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(failure.title) },
-        text = { Text(failure.message) },
+        title = { Text(stringResource(failure.titleRes)) },
+        text = { Text(stringResource(failure.messageRes)) },
         confirmButton = {
             TextButton(onClick = {
                 onDismiss()
@@ -30,9 +31,9 @@ internal fun CameraMuteFailureDialog(
             }) {
                 Text(when (failure) {
                     CameraMuteFailure.CONNECTION -> reconnectLabel
-                    CameraMuteFailure.DISCOVERY -> "무선 디버깅 설정"
-                    CameraMuteFailure.LOCAL_NETWORK_PERMISSION -> "앱 권한 설정"
-                    CameraMuteFailure.APPLY -> "확인"
+                    CameraMuteFailure.DISCOVERY -> stringResource(R.string.action_wireless_settings)
+                    CameraMuteFailure.LOCAL_NETWORK_PERMISSION -> stringResource(R.string.pairing_action_permission_settings)
+                    CameraMuteFailure.APPLY -> stringResource(R.string.action_ok)
                 })
             }
         },
@@ -42,7 +43,7 @@ internal fun CameraMuteFailureDialog(
                     onDismiss()
                     if (failure == CameraMuteFailure.DISCOVERY) onReconnect() else onOpenSettings()
                 }) {
-                    Text(if (failure == CameraMuteFailure.DISCOVERY) reconnectLabel else "무선 디버깅 설정")
+                    Text(if (failure == CameraMuteFailure.DISCOVERY) reconnectLabel else stringResource(R.string.action_wireless_settings))
                 }
             }
         }

@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.main
 
+import io.github.hoons1994.shuttersoundzero.testing.targetString
+import io.github.hoons1994.shuttersoundzero.R
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
@@ -43,14 +45,14 @@ class MainAccessibilityInstrumentedTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("설정")
+        composeTestRule.onNodeWithContentDescription(targetString(R.string.action_settings))
             .assertHasClickAction()
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("1회 설정 시작")
+        composeTestRule.onNodeWithText(targetString(R.string.home_start))
             .performScrollTo()
             .assertHasClickAction()
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("카메라 무음 적용")
+        composeTestRule.onNodeWithText(targetString(R.string.setup_apply_camera))
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -63,9 +65,9 @@ class MainAccessibilityInstrumentedTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("설정")
+        composeTestRule.onNodeWithContentDescription(targetString(R.string.action_settings))
             .assertHasClickAction()
-        composeTestRule.onNodeWithText("1회 설정 시작")
+        composeTestRule.onNodeWithText(targetString(R.string.home_start))
             .assertHasClickAction()
     }
 }

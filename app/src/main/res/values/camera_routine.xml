@@ -1,0 +1,15 @@
+<resources>
+    <string name="camera_routine_title">카메라 소리 모드 루틴</string>
+    <string name="camera_routine_summary">갤럭시 루틴으로 카메라를 쓰는 동안만 무음이나 진동으로 바꿔요.</string>
+    <string name="camera_routine_mode_question">카메라를 쓸 때 어떤 소리 모드로 바꿀까요?</string>
+    <string name="camera_routine_silent">무음</string>
+    <string name="camera_routine_vibrate">진동</string>
+    <string name="camera_routine_steps">1. 루틴 탭에서 +를 누르고 ‘앱 실행’ 조건에서 ‘카메라’를 고르세요.\n\n2. ‘소리 및 진동’ → ‘소리 모드와 음량’에서 ‘%1$s’을 선택하세요.\n\n3. ‘루틴이 종료될 때’에서 ‘루틴 실행 전 설정으로 돌아감’을 확인하고 저장하세요.</string>
+    <string name="camera_routine_open">루틴 열기</string>
+    <string name="camera_routine_add">루틴 추가</string>
+    <string name="camera_routine_manual">직접 설정하는 방법</string>
+    <string name="camera_routine_import_description">카메라에서 나오면 이전 소리 모드로 돌아갑니다. 갤럭시 루틴에 무음과 진동을 모두 저장했다면 하나만 켜 두세요.</string>
+    <string name="camera_routine_open_settings">휴대전화 설정 열기</string>
+    <string name="camera_routine_manual_path">루틴을 바로 열 수 없습니다. 휴대전화 설정에서 ‘모드 및 루틴’ 또는 ‘빅스비 루틴’을 찾아 주세요.</string>
+    <string name="camera_routine_close">닫기</string>
+</resources>

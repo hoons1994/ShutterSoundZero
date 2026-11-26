@@ -1,0 +1,15 @@
+<resources>
+    <string name="camera_routine_title">カメラ使用中のサウンドモード</string>
+    <string name="camera_routine_summary">Galaxyのルーチンで、カメラを使っている間だけ端末をサイレントまたはバイブに切り替えます。</string>
+    <string name="camera_routine_mode_question">カメラを使っている間のサウンドモード</string>
+    <string name="camera_routine_silent">サイレント</string>
+    <string name="camera_routine_vibrate">バイブ</string>
+    <string name="camera_routine_steps">1. ルーチンのタブで＋をタップし、アプリの起動を条件にしてカメラを選びます。\n\n2. サウンドとバイブに関する操作からサウンドモードと音量の設定を開き、%1$sを選びます。\n\n3. ルーチンの終了時の動作が「ルーチン実行前の状態に戻す」になっていることを確認し、保存します。</string>
+    <string name="camera_routine_open">ルーチンを開く</string>
+    <string name="camera_routine_add">ルーチンを追加</string>
+    <string name="camera_routine_manual">手動で設定する方法</string>
+    <string name="camera_routine_import_description">カメラを閉じると元のサウンドモードに戻ります。サイレントとバイブの両方のルーチンを保存した場合は、どちらか一方だけを有効にしてください。</string>
+    <string name="camera_routine_open_settings">端末の設定を開く</string>
+    <string name="camera_routine_manual_path">ルーチンを直接開けません。端末の設定で、モードとルーチン、またはBixbyのルーチンに関する項目を探してください。</string>
+    <string name="camera_routine_close">閉じる</string>
+</resources>

@@ -1,5 +1,6 @@
 package io.github.hoons1994.shuttersoundzero.diagnostics
 
+import io.github.hoons1994.shuttersoundzero.R
 import android.app.NotificationManager
 import android.content.Context
 import android.media.AudioManager
@@ -14,24 +15,27 @@ internal data class AudioDiagnosticSnapshot(
     val fixed: Boolean? = null,
     val interruptionFilter: Int? = null
 ) {
-    fun format(): String = buildString {
-        appendLine("[소리 상태]")
-        appendLine("시스템 음량: ${current ?: "알 수 없음"} (최소 ${min ?: "알 수 없음"}, 최대 ${max ?: "알 수 없음"})")
-        appendLine("소리 모드: ${when (ringerMode) {
-            AudioManager.RINGER_MODE_NORMAL -> "소리"
-            AudioManager.RINGER_MODE_VIBRATE -> "진동"
-            AudioManager.RINGER_MODE_SILENT -> "무음"
-            else -> "알 수 없음"
-        }}")
-        appendLine("시스템 스트림 음소거: ${yesNo(streamMuted)}")
-        appendLine("음량 고정: ${yesNo(fixed)}")
-        appendLine("방해 금지: ${when (interruptionFilter) {
-            NotificationManager.INTERRUPTION_FILTER_ALL -> "아니요"
+    fun format(text: (Int) -> String): String = buildString {
+        val unknown = text(R.string.diag_unknown)
+        val mode = when (ringerMode) {
+            AudioManager.RINGER_MODE_NORMAL -> R.string.diag_sound
+            AudioManager.RINGER_MODE_VIBRATE -> R.string.camera_routine_vibrate
+            AudioManager.RINGER_MODE_SILENT -> R.string.camera_routine_silent
+            else -> R.string.diag_unknown
+        }
+        val doNotDisturb = when (interruptionFilter) {
+            NotificationManager.INTERRUPTION_FILTER_ALL -> false
             NotificationManager.INTERRUPTION_FILTER_PRIORITY,
             NotificationManager.INTERRUPTION_FILTER_NONE,
-            NotificationManager.INTERRUPTION_FILTER_ALARMS -> "예"
-            else -> "알 수 없음"
-        }}")
+            NotificationManager.INTERRUPTION_FILTER_ALARMS -> true
+            else -> null
+        }
+        appendLine(text(R.string.diag_audio))
+        appendLine(text(R.string.diag_volume).format(current ?: unknown, min ?: unknown, max ?: unknown))
+        appendLine(text(R.string.diag_mode).format(text(mode)))
+        appendLine(text(R.string.diag_stream).format(text(diagnosticBooleanResource(streamMuted))))
+        appendLine(text(R.string.diag_fixed).format(text(diagnosticBooleanResource(fixed))))
+        appendLine(text(R.string.diag_dnd).format(text(diagnosticBooleanResource(doNotDisturb))))
     }.trimEnd()
 
     companion object {
@@ -50,10 +54,11 @@ internal data class AudioDiagnosticSnapshot(
         }
 
         private fun <T> safe(read: () -> T): T? = try { read() } catch (_: RuntimeException) { null }
-        private fun yesNo(value: Boolean?): String = when (value) {
-            true -> "예"
-            false -> "아니요"
-            null -> "알 수 없음"
-        }
     }
+}
+
+internal fun diagnosticBooleanResource(value: Boolean?): Int = when (value) {
+    true -> R.string.diag_yes
+    false -> R.string.diag_no
+    null -> R.string.diag_unknown
 }

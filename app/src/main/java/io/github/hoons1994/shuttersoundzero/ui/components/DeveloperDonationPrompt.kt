@@ -92,7 +92,7 @@ internal fun openDeveloperDonation(context: Context) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DEVELOPER_DONATION_URL)))
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "후원 링크를 열 수 있는 앱을 찾지 못했습니다.", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, context.getString(R.string.donation_no_handler), Toast.LENGTH_LONG).show()
     }
 }
 

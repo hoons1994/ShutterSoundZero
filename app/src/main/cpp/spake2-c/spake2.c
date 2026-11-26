@@ -905,12 +905,24 @@ struct spake2_ctx_st *SPAKE2_CTX_new(enum spake2_role_t my_role,
   }
   memset(ctx, 0, sizeof(struct spake2_ctx_st));
   ctx->my_role = my_role;
-  ctx->my_name = (uint8_t *) malloc(sizeof(uint8_t) * my_name_len);
   ctx->my_name_len = my_name_len;
-  memcpy(ctx->my_name, my_name, my_name_len);
-  ctx->their_name = (uint8_t *) malloc(sizeof(uint8_t) * their_name_len);
+  if (my_name_len != 0) {
+    ctx->my_name = (uint8_t *) malloc(my_name_len);
+    if (ctx->my_name == NULL) {
+      SPAKE2_CTX_free(ctx);
+      return NULL;
+    }
+    memcpy(ctx->my_name, my_name, my_name_len);
+  }
   ctx->their_name_len = their_name_len;
-  memcpy(ctx->their_name, their_name, their_name_len);
+  if (their_name_len != 0) {
+    ctx->their_name = (uint8_t *) malloc(their_name_len);
+    if (ctx->their_name == NULL) {
+      SPAKE2_CTX_free(ctx);
+      return NULL;
+    }
+    memcpy(ctx->their_name, their_name, their_name_len);
+  }
   return ctx;
 }
 
@@ -1041,7 +1053,7 @@ static void update_with_length_prefix(struct sha512_ctx *sha, const uint8_t *dat
   }
 
   __sha512_process_bytes(len_le, sizeof(len_le), sha);
-  __sha512_process_bytes(data, len, sha);
+  if (len != 0) __sha512_process_bytes(data, len, sha);
 }
 
 int SPAKE2_process_msg(struct spake2_ctx_st *ctx, uint8_t *out_key, size_t *out_key_len,

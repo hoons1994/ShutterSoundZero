@@ -88,7 +88,7 @@ internal class SharedNsdResolver private constructor(private val manager: NsdMan
         }
     }
 
-    private fun key(info: NsdServiceInfo) = "${info.serviceName}|${info.serviceType}"
+    private fun key(info: NsdServiceInfo) = info.discoveryKey()
 
     companion object {
         private const val TAG = "SharedNsdResolver"

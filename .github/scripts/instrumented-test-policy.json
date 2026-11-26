@@ -80,7 +80,9 @@
   },
   "io.github.hoons1994.shuttersoundzero.pairing.PairingRestoreInstrumentedTest": {
     "methods": [
-      "rePairingRestoresCscAndDisablesMuteOnBoot"
+      "rePairingRestoresCscAndDisablesMuteOnBoot",
+      "supersededSetupStopsAtConnectionGrantAndCscBoundaries",
+      "verifiedDirectChangeSupersedesAnOlderOppositeSetupInBothDirections"
     ]
   },
   "io.github.hoons1994.shuttersoundzero.pairing.PairingWorkflowFeedbackInstrumentedTest": {
@@ -203,6 +205,7 @@
       "existingPermissionReapplyOpensAppSettingsAndResumesWithoutAnotherCode",
       "explicitRestoreCanProbeAnUnreadableWirelessSetting",
       "failedPairingRestoreKeepsItsIssueUntilTheRestoreTargetIsObserved",
+      "invalidatedAuthenticationRequiresCodeWithoutChangingTheRestoreGoal",
       "newManualRequestCancelsTheOlderPermissionSettingsRequest",
       "ordinaryApplyRetryNeverRequestsIdentityReset",
       "pairingPermissionDenialConsumesTheRequestWithoutStartingPairing",
@@ -210,6 +213,7 @@
       "permanentDenialCanReopenSettingsAndResumeTheOriginalRestoreOnlyOnce",
       "restoreGoalSurvivesPermissionRepairWhenWirelessDebuggingAlsoNeedsEnabling",
       "returningWithWirelessStillOffCanRetryTheSameGoalOnce",
+      "supersededPermissionReturnCannotStartAnOlderIdentityReset",
       "unavailablePermissionSettingsKeepsTheRestoreRecoveryAction",
       "unavailableWirelessSettingsDoesNotLeaveAnAutomaticApplyQueued"
     ]
@@ -225,6 +229,7 @@
       "localNetworkPermissionFailure_opensAppSettings",
       "pairingFailure_isShownInlineAtCodeStep",
       "pendingCameraChangeNeverShowsCompletionOrAllowsAnotherAction",
+      "pendingRestoreShowsRestoreAsUnfinishedWhileCameraIsMuted",
       "pendingVolumeChangeKeepsRequestedValueWithoutReportingCompletion",
       "readyHomeHidesWirelessDebuggingSettingsActionWhenEnabled",
       "readyHome_keepsCameraCheckAsSecondaryAction",
@@ -265,6 +270,7 @@
       "developerLinks_areAvailableFromHelpSection",
       "deviceReportEntry_isNotAvailable",
       "errorReporting_isStillAvailable",
+      "restoredResultUsesTheCurrentLanguageAfterRecreation",
       "settings_areGroupedByUserGoal"
     ]
   },
@@ -312,7 +318,13 @@
     "methods": [
       "actualBuilderIncludesFieldsTimestampRangeAndReadFailureWithoutExceptionText",
       "actualLogReadDistinguishesMissingAndUnreadableFilesAndKeepsFifoEvents",
-      "largestReportAndUnicodeDescriptionSurviveMailtoEncodingWithoutChangingSnapshot"
+      "largestReportAndUnicodeDescriptionSurviveMailtoEncodingWithoutChangingSnapshot",
+      "localizedDraftsPreserveReviewedEventsTimestampAndDescription"
+    ]
+  },
+  "io.github.hoons1994.shuttersoundzero.ui.settings.AppLanguageInstrumentedTest": {
+    "methods": [
+      "selectedLanguageAppliesToBackgroundTextAndCanFollowSystemAgain"
     ]
   },
   "io.github.hoons1994.shuttersoundzero.ui.settings.IdentityRecoveryRowTest": {

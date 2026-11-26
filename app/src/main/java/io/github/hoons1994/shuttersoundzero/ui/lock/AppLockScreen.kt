@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.lock
 
+import androidx.compose.ui.res.stringResource
+import io.github.hoons1994.shuttersoundzero.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,7 +43,7 @@ fun AppLockScreen(
             tint = MaterialTheme.colorScheme.primary
         )
         Text(
-            text = "앱이 잠겨 있습니다",
+            text = stringResource(R.string.lock_title),
             style = MaterialTheme.typography.headlineSmall.copy(
                 fontWeight = FontWeight.Bold,
                 fontSize = 24.sp
@@ -49,7 +51,7 @@ fun AppLockScreen(
             modifier = Modifier.padding(top = 20.dp)
         )
         Text(
-            text = "지문 또는 기기의 PIN·패턴·비밀번호로 잠금을 해제해 주세요.",
+            text = stringResource(R.string.lock_instructions),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -65,10 +67,10 @@ fun AppLockScreen(
             )
         }
         Button(onClick = onUnlockClick) {
-            Text("잠금 해제")
+            Text(stringResource(R.string.lock_unlock))
         }
         TextButton(onClick = onExitClick) {
-            Text("앱 닫기")
+            Text(stringResource(R.string.lock_exit))
         }
     }
 }

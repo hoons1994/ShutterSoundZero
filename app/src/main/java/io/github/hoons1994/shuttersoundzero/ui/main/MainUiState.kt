@@ -1,5 +1,6 @@
 package io.github.hoons1994.shuttersoundzero.ui.main
 
+import androidx.annotation.StringRes
 import io.github.hoons1994.shuttersoundzero.core.adb.CameraMuteFailure
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
 
@@ -9,8 +10,10 @@ data class MainUiState(
     val isDeveloperOptionsEnabled: Boolean = false,
     val isWirelessDebuggingEnabled: Boolean? = null,
     val setupIssue: SetupIssue? = null,
-    val infoMessage: String? = null,
-    val errorMessage: String? = null,
+    val pendingPairingTarget: Boolean? = null,
+    val pendingPairingIdentityReset: Boolean = false,
+    @StringRes val infoMessage: Int? = null,
+    @StringRes val errorMessage: Int? = null,
     val showSwitchFailureHelp: Boolean = false,
     val cameraMuteFailure: CameraMuteFailure? = null,
     val pendingCameraMuteTarget: Boolean? = null,
@@ -34,7 +37,7 @@ data class SystemVolumeUiState(
     val min: Int = 0,
     val max: Int = 0,
     val isFixed: Boolean = false,
-    val error: String? = null,
+    @StringRes val error: Int? = null,
     val isRingerMuted: Boolean = false,
     val isStreamMuted: Boolean = false,
     val requested: Int? = null

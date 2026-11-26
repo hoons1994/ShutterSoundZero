@@ -41,27 +41,39 @@ internal class CameraSettingsRepository(
         }
     }
 
-    suspend fun applyCameraMuteViaAdb(connectPort: Int? = null, targetMuted: Boolean = true): Result<Unit> = runCommands(
+    suspend fun applyCameraMuteViaAdb(
+        setupRevision: Long, connectPort: Int? = null, targetMuted: Boolean = true
+    ): Result<Unit> = runCommands(
         "ADB 권한 적용 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."
     ) {
-        connect(connectPort, 7_000)
         val prefs = PreferencesRepository.getInstance(context)
+        prefs.withCurrentPairingSetup(setupRevision)
+        connect(connectPort, 7_000)
         val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
+        prefs.withCurrentPairingSetup(setupRevision)
         execute(AdbShellCommands.grantWriteSecureSettings(context.packageName, userId))
-        if (!CscMuteManager.hasWritePermission(context)) throw IOException("WRITE_SECURE_SETTINGS 권한 부여 상태를 확인할 수 없습니다.")
-        prefs.isPermissionRevokedByUser = false
-        applyAndVerifyMute(targetMuted)
-        prefs.shouldMuteOnBoot = targetMuted
+        val hasPermission = CscMuteManager.hasWritePermission(context)
+        prefs.withCurrentPairingSetup(setupRevision) {
+            if (!hasPermission) throw IOException("WRITE_SECURE_SETTINGS 권한 부여 상태를 확인할 수 없습니다.")
+            prefs.isPermissionRevokedByUser = false
+        }
+        applyAndVerifyMute(targetMuted) { prefs.withCurrentPairingSetup(setupRevision) }
+        prefs.withCurrentPairingSetup(setupRevision) { prefs.shouldMuteOnBoot = targetMuted }
     }
 
-    suspend fun revokePermissionViaAdb(): Result<Unit> = runCommands(
+    suspend fun revokePermissionViaAdb(): Result<Unit> {
+        val prefs = PreferencesRepository.getInstance(context)
+        val setupRevision = prefs.pairingSetupRevision
+        return revokePermissionViaAdb(prefs, setupRevision)
+    }
+
+    private suspend fun revokePermissionViaAdb(prefs: PreferencesRepository, setupRevision: Long): Result<Unit> = runCommands(
         "권한 연동 해제 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."
     ) {
-        val prefs = PreferencesRepository.getInstance(context)
         try {
             connect(null, 4_000)
             applyAndVerifyMute(false)
-            prefs.shouldMuteOnBoot = false
+            prefs.recordVerifiedCameraTarget(false, setupRevision)
             var commandFailure: Exception? = null
             try {
                 val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
@@ -87,19 +99,22 @@ internal class CameraSettingsRepository(
         }
     }
 
-    suspend fun setCameraMute(enableMute: Boolean): Result<Unit> = runCommands(
-        "셔터음 설정 변경 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요."
-    ) {
-        diagnosed(if (enableMute) DiagnosticLogger.Stage.CSC_REAPPLY else DiagnosticLogger.Stage.CSC_RESTORE) {
-            connect(null, 4_000)
-            applyAndVerifyMute(enableMute)
-            PreferencesRepository.getInstance(context).shouldMuteOnBoot = enableMute
+    suspend fun setCameraMute(enableMute: Boolean): Result<Unit> {
+        val prefs = PreferencesRepository.getInstance(context)
+        val setupRevision = prefs.pairingSetupRevision
+        return runCommands("셔터음 설정 변경 중 오류가 발생했습니다. 무선 디버깅 상태를 확인해 주세요.") {
+            diagnosed(if (enableMute) DiagnosticLogger.Stage.CSC_REAPPLY else DiagnosticLogger.Stage.CSC_RESTORE) {
+                connect(null, 4_000)
+                applyAndVerifyMute(enableMute)
+                prefs.recordVerifiedCameraTarget(enableMute, setupRevision)
+            }
         }
     }
 
-    private suspend fun AdbCommandSession.applyAndVerifyMute(mute: Boolean) {
+    private suspend fun AdbCommandSession.applyAndVerifyMute(mute: Boolean, beforeWrite: () -> Unit = {}) {
         val userId = AdbShellIdentity.androidUserIdForUid(context.applicationInfo.uid)
         diagnosed(DiagnosticLogger.Stage.CSC_WRITE) {
+            beforeWrite()
             execute(AdbShellCommands.setCameraMute(mute, userId))
         }
         diagnosed(DiagnosticLogger.Stage.CSC_VERIFY) {

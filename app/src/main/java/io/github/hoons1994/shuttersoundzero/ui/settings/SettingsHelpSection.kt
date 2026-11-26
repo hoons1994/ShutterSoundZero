@@ -1,5 +1,11 @@
 package io.github.hoons1994.shuttersoundzero.ui.settings
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
+import io.github.hoons1994.shuttersoundzero.R
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -41,6 +47,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,60 +55,97 @@ import androidx.compose.ui.unit.sp
 import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticReportBuilder
 import io.github.hoons1994.shuttersoundzero.diagnostics.DiagnosticEmail
+import io.github.hoons1994.shuttersoundzero.data.withAppLanguage
 import io.github.hoons1994.shuttersoundzero.ui.components.openDeveloperDonation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
-private data class HelpQuestion(val id: String, val question: String, val answer: String)
+private data class HelpQuestion(val id: String, @StringRes val question: Int, @StringRes val answer: Int)
 
 private val helpQuestions = listOf(
     HelpQuestion(
         "camera_behavior",
-        "카메라 무음 설정은 어떻게 동작하나요?",
-        "셔터음을 강제하는 설정값을 해제합니다. 이 설정을 지원하는 기기에서는 카메라가 휴대전화의 소리 상태를 따릅니다. 설정값을 적용해도 촬영음이 날 수 있으니 기본 카메라에서 직접 촬영해 확인해 주세요. 소리 모드여도 [소리 및 진동 → 음량 → 시스템] 음량이 0이면 촬영음이 들리지 않을 수 있습니다. 무음 모드와 시스템 음량 0에서도 소리가 나면 진단 정보를 포함해 오류를 신고해 주세요."
+        R.string.faq_camera_question,
+        R.string.faq_camera_answer
     ),
     HelpQuestion(
         "wireless_debugging",
-        "왜 무선 디버깅을 잠깐 켜야 하나요?",
-        "처음 기기를 연결하거나 카메라 설정을 바꿀 때 시스템 설정에 접근하려면 필요합니다. 설정이 끝나면 계속 켜둘 필요는 없습니다. 앱이 무선 디버깅을 다시 끄려고 시도합니다."
+        R.string.faq_wireless_question,
+        R.string.faq_wireless_answer
     ),
     HelpQuestion(
         "pairing_code_theme",
-        "무선 디버깅의 페어링 코드가 보이지 않아요.",
-        "갤럭시에 다크 계열의 테마를 적용한 경우 [페어링 코드로 기기 페어링] 화면에서 6자리 코드가 보이지 않을 수 있습니다. 기본 테마나 밝은 계열의 테마로 바꾼 뒤 페어링 화면을 다시 열어 시도해 주세요."
+        R.string.faq_code_question,
+        R.string.faq_code_answer
     ),
     HelpQuestion(
         "software_update",
-        "One UI·Android 업데이트 후 다시 설정해야 하나요?",
-        "카메라 설정이 초기화되면 무선 디버깅을 켜고 [카메라 무음 다시 적용]을 눌러 주세요. 무선 디버깅이 켜지지 않거나 차단 안내가 나오면 휴대전화 설정 → 보안 및 개인정보 보호 → 보안 위험 자동 차단을 잠시 꺼 주세요. 작업 후에는 무선 디버깅을 끄고 보안 위험 자동 차단을 다시 켜 주세요. 무선 디버깅이 켜져 있어도 기존 페어링이 만료되거나 해제되면 연결되지 않을 수 있습니다. 계속 실패하면 연결 오류 안내의 [6자리 코드로 다시 연결]을 눌러 새 코드로 연결해 주세요. 정상 상태라면 따로 설정할 필요는 없습니다."
+        R.string.faq_update_question,
+        R.string.faq_update_answer
     ),
     HelpQuestion(
         "reboot",
-        "휴대전화를 재부팅하면 설정이 유지되나요?",
-        "일반적인 재부팅에서는 설정이 유지됩니다. 앱이 재부팅 후 실제 상태를 확인해 다시 설정해야 할 때만 알려드립니다."
+        R.string.faq_reboot_question,
+        R.string.faq_reboot_answer
     ),
     HelpQuestion(
         "app_update",
-        "앱을 업데이트하면 다시 연결해야 하나요?",
-        "정상적인 앱 업데이트에서는 기존 연결과 앱 설정이 유지됩니다. 연결 권한이 사라진 경우에만 [1회 설정 시작]을 다시 안내합니다."
+        R.string.faq_app_update_question,
+        R.string.faq_app_update_answer
     ),
     HelpQuestion(
         "reapply_vs_setup",
-        "[다시 적용]과 [1회 설정 시작]은 무엇이 다른가요?",
-        "기기 연결은 남아 있는데 카메라 설정만 풀렸다면 [다시 적용]만 하면 됩니다. 기기 연결이 없을 때만 [1회 설정 시작]을 눌러 처음부터 연결해 주세요."
+        R.string.faq_reapply_question,
+        R.string.faq_reapply_answer
     ),
     HelpQuestion(
         "notifications",
-        "알림은 언제 표시되나요?",
-        "설정을 다시 하거나 연결을 확인해야 할 때만 알려드립니다. 소프트웨어 업데이트 뒤 카메라 설정이 풀리거나 앱 업데이트 뒤 기존 연결에 이상이 생긴 경우입니다. 정상 상태에서는 별도 알림을 보내지 않습니다."
+        R.string.faq_notifications_question,
+        R.string.faq_notifications_answer
     ),
     HelpQuestion(
         "legal",
-        "촬영 시 주의할 점이 있나요?",
-        "이 앱은 정숙이 필요한 장소나 반려동물·아기 촬영처럼 정당한 편의를 위한 도구입니다. 타인의 의사에 반하는 불법촬영, 성적 수치심을 유발하는 촬영, 사생활 침해 목적으로 사용할 수 없으며 모든 촬영 행위에 대한 법적 책임은 사용자 본인에게 있습니다."
+        R.string.faq_privacy_question,
+        R.string.faq_privacy_answer
     )
 )
+
+internal class DiagnosticPreviewViewModel : ViewModel() {
+    var report by mutableStateOf<DiagnosticReportBuilder.Report?>(null)
+    var isClearing by mutableStateOf(false)
+        private set
+
+    fun clearLog(
+        clear: suspend () -> Result<Boolean>,
+        rebuild: suspend () -> DiagnosticReportBuilder.Report,
+        notify: (Int) -> Unit
+    ) {
+        val previous = report ?: return
+        if (isClearing) return
+        isClearing = true
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            var cleared = false
+            try {
+                val deleted = clear().getOrThrow()
+                cleared = true
+                if (report === previous) {
+                    val refreshed = rebuild()
+                    if (report === previous) report = refreshed
+                }
+                notify(if (deleted) R.string.report_logs_deleted else R.string.report_no_logs)
+            } catch (error: CancellationException) {
+                if (report === previous) report = null
+                throw error
+            } catch (_: Exception) {
+                if (cleared && report === previous) report = null
+                notify(if (cleared) R.string.report_reload_failed else R.string.report_delete_failed)
+            } finally {
+                isClearing = false
+            }
+        }
+    }
+}
 
 @Composable
 fun SettingsHelpSection(
@@ -109,14 +153,14 @@ fun SettingsHelpSection(
     clearDiagnosticLog: suspend (Context) -> Result<Boolean> = DiagnosticLogger::clear
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     var expandedQuestionId by remember { mutableStateOf<String?>(null) }
-    var diagnosticReport by remember { mutableStateOf<DiagnosticReportBuilder.Report?>(null) }
+    val preview: DiagnosticPreviewViewModel = viewModel()
     var userDescription by rememberSaveable { mutableStateOf("") }
     var isPreparingReport by remember { mutableStateOf(false) }
-    var isClearingLog by remember { mutableStateOf(false) }
 
-    SectionLabel("자주 묻는 질문")
+    SectionLabel(stringResource(R.string.faq_title))
 
     Card(
         modifier = Modifier
@@ -148,7 +192,7 @@ fun SettingsHelpSection(
 
     Spacer(modifier = Modifier.height(24.dp))
 
-    SectionLabel("문의 및 지원")
+    SectionLabel(stringResource(R.string.support_title))
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -164,16 +208,16 @@ fun SettingsHelpSection(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 thickness = 0.5.dp
             )
-            SupportRow(enabled = !isPreparingReport && !isClearingLog, isLoading = isPreparingReport, onClick = {
-                if (isPreparingReport || isClearingLog) return@SupportRow
+            SupportRow(enabled = !isPreparingReport && !preview.isClearing, isLoading = isPreparingReport, onClick = {
+                if (isPreparingReport || preview.isClearing) return@SupportRow
                 isPreparingReport = true
                 scope.launch {
                     try {
-                        diagnosticReport = buildDiagnosticReport(context.applicationContext)
+                        preview.report = buildDiagnosticReport(context.applicationContext)
                     } catch (error: CancellationException) {
                         throw error
                     } catch (_: Exception) {
-                        Toast.makeText(context, "진단 정보를 불러오지 못했습니다. 다시 시도해 주세요.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, resources.getString(R.string.report_load_failed), Toast.LENGTH_SHORT).show()
                     } finally {
                         isPreparingReport = false
                     }
@@ -188,10 +232,10 @@ fun SettingsHelpSection(
         }
     }
 
-    diagnosticReport?.let { report ->
+    preview.report?.let { report ->
         AlertDialog(
-            onDismissRequest = { diagnosticReport = null },
-            title = { Text("오류 신고") },
+            onDismissRequest = { preview.report = null },
+            title = { Text(stringResource(R.string.report_error)) },
             text = {
                 Column(
                     modifier = Modifier
@@ -201,13 +245,13 @@ fun SettingsHelpSection(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "문제가 생기기 전에 한 작업을 적고, 아래 진단 정보를 확인한 뒤 이메일로 보내 주세요. 페어링 코드, Wi-Fi 이름·주소, 기기 식별 번호, 연결용 키는 진단 기록에 저장하지 않습니다.",
+                        text = stringResource(R.string.report_instructions),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Text(
-                        text = "직접 적은 설명은 그대로 전달됩니다. 페어링 코드나 개인정보는 적지 마세요.",
+                        text = stringResource(R.string.report_privacy),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -216,16 +260,16 @@ fun SettingsHelpSection(
                         value = userDescription,
                         onValueChange = { userDescription = it.take(DiagnosticEmail.MAX_DESCRIPTION_CHARS) },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("문제가 발생하기 전에 한 작업") },
+                        label = { Text(stringResource(R.string.report_description)) },
                         placeholder = {
-                            Text("예: 소프트웨어 업데이트 후 1회 설정을 다시 했는데 오류가 표시됨")
+                            Text(stringResource(R.string.report_example))
                         },
                         minLines = 3,
                         maxLines = 6
                     )
 
                     Text(
-                        text = "전송될 진단 정보",
+                        text = stringResource(R.string.report_preview),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -237,64 +281,35 @@ fun SettingsHelpSection(
                     }
 
                     TextButton(
-                        enabled = !isClearingLog,
+                        enabled = !preview.isClearing,
                         onClick = {
-                            if (isClearingLog) return@TextButton
-                            isClearingLog = true
-                            scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                                try {
-                                    val cleared = try {
-                                        clearDiagnosticLog(context.applicationContext)
-                                    } catch (error: CancellationException) {
-                                        throw error
-                                    } catch (error: Exception) {
-                                        Result.failure(error)
-                                    }
-                                    if (cleared.isSuccess && diagnosticReport === report) {
-                                        try {
-                                            val refreshed = buildDiagnosticReport(context.applicationContext)
-                                            if (diagnosticReport === report) diagnosticReport = refreshed
-                                        } catch (error: CancellationException) {
-                                            throw error
-                                        } catch (_: Exception) {
-                                            // Never leave an old, cleared log available for sending.
-                                            if (diagnosticReport === report) diagnosticReport = null
-                                            Toast.makeText(context, "진단 정보를 다시 불러오지 못했습니다.", Toast.LENGTH_SHORT).show()
-                                            return@launch
-                                        }
-                                    }
-                                    val message = cleared.fold(
-                                        onSuccess = { deleted ->
-                                            if (deleted) "진단 로그를 삭제했습니다." else "지울 진단 로그가 없습니다."
-                                        },
-                                        onFailure = { "진단 로그를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요." }
-                                    )
-                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                } finally {
-                                    isClearingLog = false
-                                }
-                            }
+                            val app = context.applicationContext
+                            preview.clearLog(
+                                clear = { clearDiagnosticLog(app) },
+                                rebuild = { buildDiagnosticReport(app) },
+                                notify = { Toast.makeText(app.withAppLanguage(), it, Toast.LENGTH_SHORT).show() }
+                            )
                         }
                     ) {
-                        Text(if (isClearingLog) "진단 로그를 지우는 중..." else "진단 로그 지우기")
+                        Text(stringResource(if (preview.isClearing) R.string.report_deleting else R.string.report_delete))
                     }
                 }
             },
             confirmButton = {
                 TextButton(
-                    enabled = !isClearingLog,
+                    enabled = !preview.isClearing,
                     onClick = {
-                        if (!isClearingLog && diagnosticReport === report) {
+                        if (!preview.isClearing && preview.report === report) {
                             sendDiagnosticEmail(context, report, userDescription)
                         }
                     }
                 ) {
-                    Text("이메일로 보내기")
+                    Text(stringResource(R.string.report_send))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { diagnosticReport = null }) {
-                    Text("닫기")
+                TextButton(onClick = { preview.report = null }) {
+                    Text(stringResource(R.string.camera_routine_close))
                 }
             },
             shape = RoundedCornerShape(20.dp),
@@ -315,13 +330,13 @@ internal fun NotificationPopupSettingsRow(onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "알림 팝업 자세히 보기",
+                text = stringResource(R.string.support_popup_title),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "간략한 팝업을 사용 중이라면 ShutterSoundZero만 자세한 팝업으로 바꿔 6자리 코드를 더 편하게 입력할 수 있습니다.",
+                text = stringResource(R.string.support_popup_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 19.sp
@@ -330,7 +345,7 @@ internal fun NotificationPopupSettingsRow(onClick: () -> Unit) {
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = "앱 알림 설정 열기",
+            contentDescription = stringResource(R.string.accessibility_app_notifications),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
@@ -348,13 +363,13 @@ private fun OpenChatSupportRow(onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "사용 문의",
+                text = stringResource(R.string.support_contact),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "카카오톡 오픈채팅으로 개발자에게 문의하기",
+                text = stringResource(R.string.support_contact_chat),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -362,7 +377,7 @@ private fun OpenChatSupportRow(onClick: () -> Unit) {
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = "개발자 오픈채팅 열기",
+            contentDescription = stringResource(R.string.accessibility_open_chat),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
@@ -374,7 +389,7 @@ private fun openDeveloperOpenChat(context: Context) {
     } catch (_: ActivityNotFoundException) {
         Toast.makeText(
             context,
-            "오픈채팅 링크를 열 수 있는 앱을 찾지 못했습니다.",
+            context.getString(R.string.support_chat_unavailable),
             Toast.LENGTH_LONG
         ).show()
     }
@@ -394,13 +409,13 @@ private fun DeveloperDonationRow(onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "개발자 후원",
+                text = stringResource(R.string.support_donate),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "앱이 도움이 되었다면 개발과 유지보수를 응원할 수 있습니다.",
+                text = stringResource(R.string.support_donate_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -408,7 +423,7 @@ private fun DeveloperDonationRow(onClick: () -> Unit) {
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = "개발자 후원 열기",
+            contentDescription = stringResource(R.string.accessibility_donate),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
@@ -426,13 +441,13 @@ private fun SupportRow(enabled: Boolean, isLoading: Boolean, onClick: () -> Unit
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "문제가 해결되지 않나요?",
+                text = stringResource(R.string.support_unresolved),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = if (isLoading) "진단 정보를 불러오는 중입니다." else "진단 정보를 확인하고 오류 신고 이메일 보내기",
+                text = if (isLoading) stringResource(R.string.report_loading) else stringResource(R.string.report_invitation),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -440,7 +455,7 @@ private fun SupportRow(enabled: Boolean, isLoading: Boolean, onClick: () -> Unit
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = "오류 신고 열기",
+            contentDescription = stringResource(R.string.accessibility_report),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
@@ -454,14 +469,14 @@ private fun sendDiagnosticEmail(
     try {
         context.startActivity(
             Intent.createChooser(
-                DiagnosticEmail.intent(report, userDescription),
-                "오류 신고 메일 보내기"
+                DiagnosticEmail.intent(context, report, userDescription),
+                context.getString(R.string.report_send_chooser)
             )
         )
     } catch (_: ActivityNotFoundException) {
         Toast.makeText(
             context,
-            "이메일을 보낼 수 있는 앱을 찾지 못했습니다.",
+            context.getString(R.string.report_no_email),
             Toast.LENGTH_LONG
         ).show()
     }
@@ -492,7 +507,7 @@ private fun HelpAccordionItem(item: HelpQuestion, expanded: Boolean, onToggle: (
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = item.question,
+                text = stringResource(item.question),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface
@@ -504,14 +519,14 @@ private fun HelpAccordionItem(item: HelpQuestion, expanded: Boolean, onToggle: (
                 } else {
                     Icons.Default.KeyboardArrowDown
                 },
-                contentDescription = if (expanded) "답변 접기" else "답변 펼치기",
+                contentDescription = if (expanded) stringResource(R.string.accessibility_collapse) else stringResource(R.string.accessibility_expand),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
         if (expanded) {
             Text(
-                text = item.answer,
+                text = stringResource(item.answer),
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

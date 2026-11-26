@@ -28,6 +28,15 @@ foreach ($source in @('sha512', 'spake2', 'secure_random')) {
         '-DSPAKE2_RANDOM_TESTING', '-I', "$hostTests/include", '-I', "$nativeSource/spake2-c/include", '-c',
         "$nativeSource/spake2-c/$source.c", '-o', "$outputPath/$source.o")
 }
+Invoke-Checked $ZigPath @('cc', '-target', 'x86_64-windows-gnu', '-D__linux__=1',
+    '-Dmalloc=spake2_test_malloc', '-Dfree=spake2_test_free',
+    '-I', "$hostTests/include", '-I', "$nativeSource/spake2-c/include", '-c',
+    "$nativeSource/spake2-c/spake2.c", '-o', "$outputPath/spake2-allocation.o")
+Invoke-Checked $ZigPath @('cc', '-target', 'x86_64-windows-gnu',
+    '-I', "$nativeSource/spake2-c/include", "$hostTests/spake2_context_allocation_test.c",
+    "$outputPath/spake2-allocation.o", "$outputPath/sha512.o", "$outputPath/secure_random.o",
+    '-lbcrypt', '-o', "$outputPath/context-allocation-test.exe")
+Invoke-Checked "$outputPath/context-allocation-test.exe" @()
 Invoke-Checked $ZigPath @('c++', '-target', 'x86_64-windows-gnu', '-shared',
     '-std=c++17', '-fno-exceptions', '-fno-rtti', '-nostdlib++',
     '-DSPAKE2_RANDOM_TESTING',

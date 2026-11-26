@@ -20,12 +20,14 @@ android {
         version = release(37) { minorApiLevel = 1 }
     }
     ndkVersion = "27.1.12297006"
+    // Keep the in-app language choices available offline in bundle installations too.
+    bundle.language.enableSplit = false
     defaultConfig {
         applicationId = "io.github.hoons1994.shuttersoundzero"
         minSdk = 30
         targetSdk = 37
-        versionCode = 170
-        versionName = "1.5.19"
+        versionCode = 171
+        versionName = "1.6.0"
         testInstrumentationRunner = "io.github.hoons1994.shuttersoundzero.testing.DisposableAndroidJUnitRunner"
     }
 

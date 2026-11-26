@@ -19,6 +19,11 @@ for source in sha512 spake2 secure_random; do
   gcc -fPIC -DSPAKE2_RANDOM_TESTING -I "$CPP/spake2-c/include" \
     -c "$CPP/spake2-c/$source.c" -o "$OUT/$source.o"
 done
+gcc -Dmalloc=spake2_test_malloc -Dfree=spake2_test_free -I "$CPP/spake2-c/include" \
+  -c "$CPP/spake2-c/spake2.c" -o "$OUT/spake2-allocation.o"
+gcc -I "$CPP/spake2-c/include" "$TESTS/spake2_context_allocation_test.c" \
+  "$OUT/spake2-allocation.o" "$OUT/sha512.o" "$OUT/secure_random.o" -o "$OUT/context-allocation-test"
+"$OUT/context-allocation-test"
 g++ -std=c++17 -shared -fPIC -DSPAKE2_RANDOM_TESTING \
   -I "$JAVA_HOME/include" -I "$JAVA_HOME/include/linux" -I "$CPP/spake2-c/include" \
   "$CPP/spake2_jni.cpp" "$TESTS/spake2_random_test.cpp" \

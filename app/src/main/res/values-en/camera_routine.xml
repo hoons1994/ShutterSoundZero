@@ -1,0 +1,15 @@
+<resources>
+    <string name="camera_routine_title">Camera sound mode routine</string>
+    <string name="camera_routine_summary">Use a Galaxy routine to switch to Mute or Vibrate only while the camera is open.</string>
+    <string name="camera_routine_mode_question">Which sound mode should the camera use?</string>
+    <string name="camera_routine_silent">Mute</string>
+    <string name="camera_routine_vibrate">Vibrate</string>
+    <string name="camera_routine_steps">1. In the Routines tab, tap +. Choose the condition for opening an app, then select Camera.\n\n2. Under sound and vibration actions, open the sound mode and volume settings and select %1$s.\n\n3. Set the routine to return to the previous settings when it ends, then save.</string>
+    <string name="camera_routine_open">Open routines</string>
+    <string name="camera_routine_add">Add routine</string>
+    <string name="camera_routine_manual">Set it up manually</string>
+    <string name="camera_routine_import_description">When you leave the camera, your previous sound mode returns. If you save both routines, enable only one at a time.</string>
+    <string name="camera_routine_open_settings">Open phone settings</string>
+    <string name="camera_routine_manual_path">The routines screen could not be opened. Look for Modes and Routines or Bixby Routines in your phone settings.</string>
+    <string name="camera_routine_close">Close</string>
+</resources>

@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero
 
+import android.content.Context
+import io.github.hoons1994.shuttersoundzero.data.applyLegacyLanguage
 import android.Manifest
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -58,21 +60,20 @@ class MainActivity : ComponentActivity() {
     private var authenticationInProgress = false
     private var authenticationRequest: AppLockAuthenticator.AuthenticationRequest? = null
     private var autoPromptPending = false
-    private var localNetworkPermissionRequestInProgress = false
-    private var localNetworkPermissionDeniedThisSession = false
+    private var pendingRuntimePermission: String? = null
+    private var localNetworkPermissionRequestedThisSession = false
     private var unlockErrorMessage by mutableStateOf<String?>(null)
     private var showInitialNotice by mutableStateOf(false)
 
-    private val requestNotificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
-            requestLocalNetworkPermissionForExistingLinkageIfNeeded()
-        }
-
-    private val requestLocalNetworkPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
-            localNetworkPermissionRequestInProgress = false
-            localNetworkPermissionDeniedThisSession = !LocalNetworkAccess.isGranted(this)
-            if (localNetworkPermissionDeniedThisSession) {
+    private val runtimePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            val permission = pendingRuntimePermission
+            pendingRuntimePermission = null
+            if (permission == Manifest.permission.POST_NOTIFICATIONS) {
+                requestLocalNetworkPermissionForExistingLinkageIfNeeded()
+            } else if (permission == LocalNetworkAccess.PERMISSION &&
+                result[permission] == false && !LocalNetworkAccess.isGranted(this)
+            ) {
                 android.widget.Toast.makeText(
                     this,
                     getString(R.string.main_local_network_reapply_prompt),
@@ -81,8 +82,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase)
+        applyLegacyLanguage()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingRuntimePermission = savedInstanceState?.getString("pendingRuntimePermission")
+        localNetworkPermissionRequestedThisSession =
+            savedInstanceState?.getBoolean("localNetworkPermissionRequestedThisSession") ?: false
 
         prefs = PreferencesRepository.getInstance(this)
         appLockPreferenceListener = prefs.registerAppLockChangeListener {
@@ -191,6 +200,12 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("pendingRuntimePermission", pendingRuntimePermission)
+        outState.putBoolean("localNetworkPermissionRequestedThisSession", localNetworkPermissionRequestedThisSession)
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onStop() {
         if (
             ::prefs.isInitialized &&
@@ -263,11 +278,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestRuntimePermissionsIfNeeded() {
+        if (pendingRuntimePermission != null) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) {
-            requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            launchRuntimePermission(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             requestLocalNetworkPermissionForExistingLinkageIfNeeded()
         }
@@ -276,8 +292,10 @@ class MainActivity : ComponentActivity() {
     private fun requestLocalNetworkPermissionForExistingLinkageIfNeeded() {
         if (
             !::prefs.isInitialized ||
-            localNetworkPermissionRequestInProgress ||
-            localNetworkPermissionDeniedThisSession
+            showInitialNotice ||
+            (prefs.isAppLockEnabled && !isAppUnlocked) ||
+            pendingRuntimePermission != null ||
+            localNetworkPermissionRequestedThisSession
         ) {
             return
         }
@@ -291,8 +309,13 @@ class MainActivity : ComponentActivity() {
         )
         if (!shouldRequest) return
 
-        localNetworkPermissionRequestInProgress = true
-        requestLocalNetworkPermissionLauncher.launch(LocalNetworkAccess.PERMISSION)
+        localNetworkPermissionRequestedThisSession = true
+        launchRuntimePermission(LocalNetworkAccess.PERMISSION)
+    }
+
+    private fun launchRuntimePermission(permission: String) {
+        pendingRuntimePermission = permission
+        runtimePermissionLauncher.launch(arrayOf(permission))
     }
 
     private fun updateWindowSecurity() {

@@ -108,7 +108,7 @@ private fun AppHeader(onSettingsClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "필요한 상태만 한눈에 확인하세요",
+                text = stringResource(R.string.home_overview),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -117,7 +117,7 @@ private fun AppHeader(onSettingsClick: () -> Unit) {
         IconButton(onClick = onSettingsClick) {
             Icon(
                 imageVector = Icons.Default.Settings,
-                contentDescription = "설정",
+                contentDescription = stringResource(R.string.action_settings),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

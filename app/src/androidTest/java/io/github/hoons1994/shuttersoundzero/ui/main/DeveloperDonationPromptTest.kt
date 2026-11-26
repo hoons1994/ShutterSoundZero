@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.main
 
+import io.github.hoons1994.shuttersoundzero.testing.targetString
+import io.github.hoons1994.shuttersoundzero.R
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
@@ -54,8 +56,8 @@ class DeveloperDonationPromptTest {
     @Test fun dialogShowsAgreedWordingAndOpensDonationOnlyOnExplicitClick() {
         var donated = false
         rule.setContent { AppTheme { DeveloperDonationPromptDialog(onDismiss = {}, onDonate = { donated = true }) } }
-        rule.onNodeWithText("셔터음 제거가\n완료되었습니다.").assertExists()
-        rule.onNodeWithText("셔터사운드제로가 도움이 되셨다면 후원으로 개발을 응원하실 수 있습니다.\n\n후원은 앱을 꾸준히 개선하는 데 큰 힘이 됩니다.").assertExists()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_title)).assertExists()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_message)).assertExists()
         assertFalse(donated)
         val screenshot = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         try {
@@ -63,7 +65,7 @@ class DeveloperDonationPromptTest {
                 assertTrue(screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
             }
         } finally { screenshot.recycle() }
-        rule.onNodeWithText("개발자 후원하기").performClick()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_action)).performClick()
         assertTrue(donated)
     }
 
@@ -71,15 +73,15 @@ class DeveloperDonationPromptTest {
         var enabled by mutableStateOf(false)
         prefs.recordCameraMuteSuccess(true)
         rule.setContent { DeveloperDonationPromptHost(prefs, enabled) }
-        rule.onNodeWithText("개발자 후원하기").assertDoesNotExist()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_action)).assertDoesNotExist()
         rule.runOnIdle { enabled = true }
-        rule.onNodeWithText("닫기").performClick()
+        rule.onNodeWithText(targetString(R.string.camera_routine_close)).performClick()
         rule.runOnIdle {
             prefs.recordCameraMuteSuccess(true)
             enabled = false
         }
         rule.runOnIdle { enabled = true }
-        rule.onNodeWithText("개발자 후원하기").assertDoesNotExist()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_action)).assertDoesNotExist()
         assertFalse(PreferencesRepository(context).claimDonationPrompt())
     }
 
@@ -88,20 +90,20 @@ class DeveloperDonationPromptTest {
         prefs.recordCameraMuteSuccess(true)
         val restoration = StateRestorationTester(rule)
         restoration.setContent { DeveloperDonationPromptHost(prefs, enabled = true) }
-        rule.onNodeWithText("개발자 후원하기").assertDoesNotExist()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_action)).assertDoesNotExist()
         rule.runOnIdle { prefs.hasSeenInitialNotice = true }
-        rule.onNodeWithText("개발자 후원하기").assertExists()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_action)).assertExists()
         restoration.emulateSavedInstanceStateRestore()
-        rule.onNodeWithText("닫기").performClick()
+        rule.onNodeWithText(targetString(R.string.camera_routine_close)).performClick()
         restoration.emulateSavedInstanceStateRestore()
-        rule.onNodeWithText("개발자 후원하기").assertDoesNotExist()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_action)).assertDoesNotExist()
     }
 
     @Test fun successfulRestoreCannotDisplayMuteInvitation() {
         prefs.recordCameraMuteSuccess(true)
         prefs.recordCameraMuteSuccess(false)
         rule.setContent { DeveloperDonationPromptHost(prefs, enabled = true) }
-        rule.onNodeWithText("개발자 후원하기").assertDoesNotExist()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_action)).assertDoesNotExist()
     }
 
     @Test fun resumedScreenCannotConsumeInvitationBeforeAppUnlock() {
@@ -110,12 +112,12 @@ class DeveloperDonationPromptTest {
         prefs.recordCameraMuteSuccess(true)
         AppLockSession.lock()
         rule.setContent { DeveloperDonationPromptHost(prefs, enabled) }
-        rule.onNodeWithText("개발자 후원하기").assertDoesNotExist()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_action)).assertDoesNotExist()
         rule.runOnIdle {
             AppLockSession.unlock()
             enabled = false
         }
         rule.runOnIdle { enabled = true }
-        rule.onNodeWithText("개발자 후원하기").assertExists()
+        rule.onNodeWithText(targetString(R.string.donation_prompt_action)).assertExists()
     }
 }

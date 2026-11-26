@@ -1,0 +1,7 @@
+<resources>
+    <string name="language_title">언어</string>
+    <string name="language_follow_system">시스템 설정 따르기</string>
+    <string name="language_korean" translatable="false">한국어</string>
+    <string name="language_japanese" translatable="false">日本語</string>
+    <string name="language_english" translatable="false">English</string>
+</resources>

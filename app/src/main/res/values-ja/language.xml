@@ -1,0 +1,4 @@
+<resources>
+    <string name="language_title">言語</string>
+    <string name="language_follow_system">システム設定に合わせる</string>
+</resources>

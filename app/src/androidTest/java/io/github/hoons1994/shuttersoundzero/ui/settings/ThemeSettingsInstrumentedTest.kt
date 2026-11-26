@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.settings
 
+import io.github.hoons1994.shuttersoundzero.testing.targetString
+import io.github.hoons1994.shuttersoundzero.R
 import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
@@ -63,14 +65,14 @@ class ThemeSettingsInstrumentedTest {
                 SettingsScreen(onBackClick = {})
             }
         }
-        rule.onNodeWithText("시스템 기본값").performScrollTo().assertIsSelected()
-        rule.onNodeWithText("다크 모드").performScrollTo().performClick().assertIsSelected()
-        rule.onNodeWithText("라이트 모드").assertIsNotSelected()
+        rule.onNodeWithText(targetString(R.string.app_theme_system)).performScrollTo().assertIsSelected()
+        rule.onNodeWithText(targetString(R.string.app_theme_dark)).performScrollTo().performClick().assertIsSelected()
+        rule.onNodeWithText(targetString(R.string.app_theme_light)).assertIsNotSelected()
         rule.runOnIdle {
             assertEquals(ScreenBgDark, background)
             assertEquals(AppThemeMode.DARK, PreferencesRepository(rule.activity).appThemeMode)
         }
-        rule.onNodeWithText("라이트 모드").performClick().assertIsSelected()
+        rule.onNodeWithText(targetString(R.string.app_theme_light)).performClick().assertIsSelected()
         rule.runOnIdle { assertEquals(ScreenBgLight, background) }
     }
 
@@ -92,12 +94,12 @@ class ThemeSettingsInstrumentedTest {
                 }
             }
         }
-        rule.onNodeWithText("다크 모드").assertIsSelected()
+        rule.onNodeWithText(targetString(R.string.app_theme_dark)).assertIsSelected()
         rule.runOnIdle {
             assertEquals(ScreenBgDark, background)
             generation.value++
         }
-        rule.onNodeWithText("다크 모드").assertIsSelected()
+        rule.onNodeWithText(targetString(R.string.app_theme_dark)).assertIsSelected()
         rule.runOnIdle { assertEquals(ScreenBgDark, background) }
     }
 
@@ -122,16 +124,16 @@ class ThemeSettingsInstrumentedTest {
             }
         }
         rule.runOnIdle { assertEquals(ScreenBgDark, background) }
-        rule.onNodeWithText("라이트 모드").performClick()
+        rule.onNodeWithText(targetString(R.string.app_theme_light)).performClick()
         rule.runOnIdle { assertEquals(ScreenBgLight, background) }
-        rule.onNodeWithText("다크 모드").performClick()
+        rule.onNodeWithText(targetString(R.string.app_theme_dark)).performClick()
         rule.runOnIdle {
             configuration.value = Configuration(configuration.value).apply {
                 uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or Configuration.UI_MODE_NIGHT_NO
             }
         }
         rule.runOnIdle { assertEquals(ScreenBgDark, background) }
-        rule.onNodeWithText("시스템 기본값").performClick().assertIsSelected()
+        rule.onNodeWithText(targetString(R.string.app_theme_system)).performClick().assertIsSelected()
         rule.runOnIdle { assertEquals(ScreenBgLight, background) }
     }
 
@@ -147,7 +149,7 @@ class ThemeSettingsInstrumentedTest {
                 }
             }
         }
-        listOf("시스템 기본값", "라이트 모드", "다크 모드").forEach { label ->
+        listOf(targetString(R.string.app_theme_system), targetString(R.string.app_theme_light), targetString(R.string.app_theme_dark)).forEach { label ->
             rule.onNodeWithText(label).performScrollTo().assertIsDisplayed().assertHasClickAction()
                 .performClick().assertIsSelected()
         }

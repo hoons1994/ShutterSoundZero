@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import io.github.hoons1994.shuttersoundzero.data.model.AppThemeMode
+import kotlinx.coroutines.CancellationException
 
 /**
  * 앱 환경설정 저장소.
@@ -165,12 +166,76 @@ class PreferencesRepository(context: Context) {
             else putString(KEY_LAST_SETUP_ISSUE, value.name)
         }
 
+    internal data class PairingSetupRequest(val revision: Long, val targetMuted: Boolean, val resetIdentity: Boolean)
+
+    internal val pairingSetupRevision: Long
+        get() = prefs.getLong(KEY_PAIRING_SETUP_REVISION, 0)
+
+    /** A replacement request and a local write from its predecessor must never interleave. */
+    internal fun withCurrentPairingSetup(revision: Long, action: () -> Unit = {}) {
+        synchronized(PAIRING_SETUP_LOCK) {
+            if (pairingSetupRevision != revision) {
+                throw CancellationException("Setup request superseded")
+            }
+            action()
+        }
+    }
+
+    internal fun pendingPairingSetup(): PairingSetupRequest? = synchronized(PAIRING_SETUP_LOCK) {
+        pendingPairingTarget?.let {
+            PairingSetupRequest(pairingSetupRevision, it, prefs.getBoolean(KEY_PAIRING_RESET_IDENTITY, false))
+        }
+    }
+
+    internal fun beginPairingSetup(targetMuted: Boolean, resetIdentity: Boolean = false): PairingSetupRequest =
+        synchronized(PAIRING_SETUP_LOCK) {
+            val revision = pairingSetupRevision + 1
+            prefs.edit {
+                putLong(KEY_PAIRING_SETUP_REVISION, revision)
+                putBoolean(KEY_PENDING_PAIRING_TARGET, targetMuted)
+                putBoolean(KEY_PAIRING_RESET_IDENTITY, resetIdentity)
+                if (resetIdentity) remove(KEY_LAST_SETUP_ISSUE)
+            }
+            PairingSetupRequest(revision, targetMuted, resetIdentity)
+        }
+
+    internal fun pairingIdentityReset(revision: Long) = synchronized(PAIRING_SETUP_LOCK) {
+        if (pairingSetupRevision == revision) prefs.edit { remove(KEY_PAIRING_RESET_IDENTITY) }
+    }
+
+    internal fun invalidatePairingAuthentication() = synchronized(PAIRING_SETUP_LOCK) {
+        prefs.edit {
+            putLong(KEY_PAIRING_SETUP_REVISION, pairingSetupRevision + 1)
+            if (lastSetupIssue == SetupIssue.CAMERA_APPLY) remove(KEY_LAST_SETUP_ISSUE)
+        }
+    }
+
+    internal fun finishPairingSetup(revision: Long) = synchronized(PAIRING_SETUP_LOCK) {
+        if (pairingSetupRevision == revision) prefs.edit { clearPairingSetup(revision) }
+    }
+
+    /** Persist verified camera state and retire only the setup request this operation superseded. */
+    internal fun recordVerifiedCameraTarget(muted: Boolean, supersededRevision: Long) =
+        synchronized(PAIRING_SETUP_LOCK) {
+            prefs.edit {
+                putBoolean(KEY_SHOULD_MUTE_ON_BOOT, muted)
+                if (pairingSetupRevision == supersededRevision) clearPairingSetup(supersededRevision)
+            }
+        }
+
+    private fun SharedPreferences.Editor.clearPairingSetup(revision: Long) {
+        putLong(KEY_PAIRING_SETUP_REVISION, revision + 1)
+        remove(KEY_PENDING_PAIRING_TARGET)
+        remove(KEY_PAIRING_RESET_IDENTITY)
+        remove(KEY_LAST_SETUP_ISSUE)
+    }
+
     /** Pending setup intent survives permission/settings round trips and apply recovery. */
     var pendingPairingTarget: Boolean?
         get() = if (prefs.contains(KEY_PENDING_PAIRING_TARGET)) prefs.getBoolean(KEY_PENDING_PAIRING_TARGET, true) else null
-        set(value) = prefs.edit {
-            if (value == null) remove(KEY_PENDING_PAIRING_TARGET)
-            else putBoolean(KEY_PENDING_PAIRING_TARGET, value)
+        set(value) {
+            if (value == null) finishPairingSetup(pairingSetupRevision)
+            else beginPairingSetup(value)
         }
 
     var isAppLockEnabled: Boolean
@@ -213,6 +278,9 @@ class PreferencesRepository(context: Context) {
         private const val KEY_PERMISSION_REVOKED_BY_USER = "permission_revoked_by_user"
         private const val KEY_LAST_SETUP_ISSUE = "last_setup_issue"
         private const val KEY_PENDING_PAIRING_TARGET = "pending_pairing_target"
+        private const val KEY_PAIRING_SETUP_REVISION = "pairing_setup_revision"
+        private const val KEY_PAIRING_RESET_IDENTITY = "pairing_reset_identity"
+        private val PAIRING_SETUP_LOCK = Any()
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_APP_THEME_MODE = "app_theme_mode"
         @Volatile

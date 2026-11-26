@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.main
 
+import io.github.hoons1994.shuttersoundzero.testing.targetString
+import io.github.hoons1994.shuttersoundzero.R
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -27,7 +29,7 @@ class CameraMuteFailureDialogTest {
                 onOpenSettings = { openedSettings = true }
             )
         }
-        composeTestRule.onNodeWithText("6자리 코드로 다시 연결").performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.recovery_reconnect)).performClick()
         assertTrue(dismissed)
         assertTrue(reconnected)
         assertFalse(openedSettings)
@@ -44,7 +46,7 @@ class CameraMuteFailureDialogTest {
                 onOpenSettings = { openedSettings = true }
             )
         }
-        composeTestRule.onNodeWithText("무선 디버깅 설정").performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.action_wireless_settings)).performClick()
         assertTrue(openedSettings)
         assertFalse(reconnected)
     }
@@ -53,8 +55,8 @@ class CameraMuteFailureDialogTest {
         composeTestRule.setContent {
             CameraMuteFailureDialog(CameraMuteFailure.APPLY, {}, {}, {})
         }
-        assertTrue(composeTestRule.onAllNodesWithText("6자리 코드로 다시 연결").fetchSemanticsNodes().isEmpty())
-        assertTrue(composeTestRule.onAllNodesWithText("무선 디버깅 설정").fetchSemanticsNodes().isEmpty())
-        composeTestRule.onNodeWithText("확인").performClick()
+        assertTrue(composeTestRule.onAllNodesWithText(targetString(R.string.recovery_reconnect)).fetchSemanticsNodes().isEmpty())
+        assertTrue(composeTestRule.onAllNodesWithText(targetString(R.string.action_wireless_settings)).fetchSemanticsNodes().isEmpty())
+        composeTestRule.onNodeWithText(targetString(R.string.action_ok)).performClick()
     }
 }

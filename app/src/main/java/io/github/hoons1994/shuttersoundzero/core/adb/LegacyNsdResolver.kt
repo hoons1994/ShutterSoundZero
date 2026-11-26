@@ -181,7 +181,7 @@ internal class LegacyNsdResolver private constructor(context: Context) : AdbNsdR
         }
     }
 
-    private fun key(info: NsdServiceInfo) = "${info.serviceName}|${info.serviceType}"
+    private fun key(info: NsdServiceInfo) = info.discoveryKey()
 
     companion object {
         private const val TAG = "LegacyNsdResolver"

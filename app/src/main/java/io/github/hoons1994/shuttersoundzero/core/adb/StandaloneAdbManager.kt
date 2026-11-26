@@ -71,9 +71,14 @@ class StandaloneAdbManager(context: Context) {
 
     // Accessed only inside operationRunner, including an explicitly confirmed identity reset.
     private var cachedIdentity: Pair<java.security.PrivateKey, java.security.cert.Certificate>? = null
+    private var cachedIdentityVersion = -1L
     private val keyPairAndCert: Pair<java.security.PrivateKey, java.security.cert.Certificate>
-        get() = cachedIdentity ?: AdbKeyHelper.getOrCreateKeyPairAndCertificate(context).also {
-            cachedIdentity = it
+        get() = synchronized(AdbKeyHelper) {
+            cachedIdentity?.takeIf { cachedIdentityVersion == AdbKeyHelper.identityVersion }
+                ?: AdbKeyHelper.getOrCreateKeyPairAndCertificate(context).also {
+                    cachedIdentity = it
+                    cachedIdentityVersion = AdbKeyHelper.identityVersion
+                }
         }
     private var connection: CancellableAdbConnection? = null // Accessed only inside operationRunner.
     private val operationRunner = AdbOperationRunner(
@@ -225,11 +230,15 @@ class StandaloneAdbManager(context: Context) {
         }
     }
 
-    suspend fun pairLocal(port: Int, pairingCode: String, resetIdentity: Boolean = false): Result<Unit> = operation(
+    suspend fun pairLocal(
+        port: Int, pairingCode: String, resetIdentity: Boolean = false,
+        isCurrent: () -> Boolean = { true }, onIdentityReset: () -> Unit = {}
+    ): Result<Unit> = operation(
         "페어링 중 오류가 발생했습니다. 무선 디버깅 상태와 코드를 확인해 주세요."
     ) {
         require(port in 1..65535) { "Invalid pairing port" }
         require(PairingCode.isValid(pairingCode)) { "Invalid pairing code" }
+        if (!isCurrent()) throw CancellationException("Setup request superseded")
         val host = LOCAL_ADB_HOST
         val identityStarted = System.nanoTime()
         val keys = try {
@@ -237,6 +246,7 @@ class StandaloneAdbManager(context: Context) {
                 diagnosed(DiagnosticLogger.Stage.PAIRING_IDENTITY_RESET) {
                     cachedIdentity = null
                     AdbKeyHelper.resetForFreshPairing(context)
+                    onIdentityReset()
                 }
             }
             keyPairAndCert.also {

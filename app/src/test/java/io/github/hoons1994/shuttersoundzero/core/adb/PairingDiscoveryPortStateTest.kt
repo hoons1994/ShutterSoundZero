@@ -7,6 +7,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PairingDiscoveryPortStateTest {
+    @Test fun losingSelectedNetworkKeepsTheOtherResolvedEndpointAvailable() {
+        val ports = PairingDiscoveryPortState()
+        val session = ports.begin()
+        ports.onPairingPort(session, 37123, "adb|_adb-tls-pairing._tcp|wifi") {}
+        ports.onPairingPort(session, 48123, "adb|_adb-tls-pairing._tcp|ethernet") {}
+        ports.onConnectPort(session, 37124, "adb|_adb-tls-connect._tcp|wifi") {}
+        ports.onConnectPort(session, 48124, "adb|_adb-tls-connect._tcp|ethernet") {}
+
+        assertTrue(ports.onPairingLost(session, "adb|_adb-tls-pairing._tcp|ethernet") { error("Wi-Fi remains") })
+        assertTrue(ports.onConnectLost(session, "adb|_adb-tls-connect._tcp|ethernet") { error("Wi-Fi remains") })
+        assertEquals(37123, ports.pairingPort)
+        assertEquals(37124, ports.connectPort)
+
+        assertTrue(ports.onPairingLost(session, "adb|_adb-tls-pairing._tcp|wifi") {})
+        assertTrue(ports.onConnectLost(session, "adb|_adb-tls-connect._tcp|wifi") {})
+        assertNull(ports.pairingPort)
+        assertNull(ports.connectPort)
+    }
+
     @Test fun onlyTheCurrentServiceLossInvalidatesItsPort() {
         val ports = PairingDiscoveryPortState()
         val session = ports.begin()

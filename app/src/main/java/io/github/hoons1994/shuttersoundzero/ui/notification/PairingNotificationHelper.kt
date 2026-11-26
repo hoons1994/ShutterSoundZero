@@ -1,5 +1,6 @@
 package io.github.hoons1994.shuttersoundzero.ui.notification
 
+import io.github.hoons1994.shuttersoundzero.data.withAppLanguage
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -54,12 +55,13 @@ object PairingNotificationHelper {
     }
 
     fun createNotificationChannel(context: Context) {
+        val strings = context.withAppLanguage().resources
         val channel = NotificationChannel(
             CHANNEL_ID,
-            context.getString(R.string.pairing_channel_name),
+            strings.getString(R.string.pairing_channel_name),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = context.getString(R.string.pairing_channel_description)
+            description = strings.getString(R.string.pairing_channel_description)
             setShowBadge(true)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 200, 100, 200)
@@ -84,10 +86,11 @@ object PairingNotificationHelper {
         state: PairingNotificationState? = null,
         isDevOptionsOff: Boolean = false
     ): Notification {
+        val strings = context.withAppLanguage().resources
         createNotificationChannel(context)
 
         val remoteInput = RemoteInput.Builder(KEY_PAIRING_CODE)
-            .setLabel(context.getString(R.string.pairing_code_input_hint))
+            .setLabel(strings.getString(R.string.pairing_code_input_hint))
             .setAllowFreeFormInput(true)
             .build()
 
@@ -106,7 +109,7 @@ object PairingNotificationHelper {
 
         val replyAction = NotificationCompat.Action.Builder(
             R.mipmap.ic_launcher,
-            context.getString(R.string.pairing_action_enter_code),
+            strings.getString(R.string.pairing_action_enter_code),
             submitPendingIntent
         )
             .addRemoteInput(remoteInput)
@@ -120,7 +123,7 @@ object PairingNotificationHelper {
         )
         val cancelAction = NotificationCompat.Action.Builder(
             R.mipmap.ic_launcher,
-            context.getString(R.string.action_cancel),
+            strings.getString(R.string.action_cancel),
             cancelPendingIntent
         ).build()
 
@@ -167,7 +170,7 @@ object PairingNotificationHelper {
                 SetupSettingsNavigator.appPermissionSettingsIntent(context),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             builder.setContentIntent(permissionSettings)
-            builder.addAction(R.mipmap.ic_launcher, context.getString(R.string.pairing_action_permission_settings), permissionSettings)
+            builder.addAction(R.mipmap.ic_launcher, strings.getString(R.string.pairing_action_permission_settings), permissionSettings)
         }
 
         val retryApply = state == PairingNotificationState.CONNECTION_RETRY ||
@@ -175,7 +178,7 @@ object PairingNotificationHelper {
         if (retryApply) {
             builder.addAction(NotificationCompat.Action.Builder(
                 R.mipmap.ic_launcher,
-                context.getString(R.string.pairing_action_retry_apply),
+                strings.getString(R.string.pairing_action_retry_apply),
                 PendingIntent.getService(context, 3, PairingForegroundService.retryApplyIntent(context, sessionId),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             ).build())
@@ -200,46 +203,47 @@ object PairingNotificationHelper {
         state: PairingNotificationState?,
         isDevOptionsOff: Boolean
     ): PairingNotificationCopy {
+        val strings = context.withAppLanguage().resources
         val defaultSummary = when {
-            isDevOptionsOff -> context.getString(R.string.pairing_default_dev_options_summary)
-            pairingPort != null -> context.getString(R.string.pairing_default_code_summary)
-            else -> context.getString(R.string.pairing_default_open_pairing_summary)
+            isDevOptionsOff -> strings.getString(R.string.pairing_default_dev_options_summary)
+            pairingPort != null -> strings.getString(R.string.pairing_default_code_summary)
+            else -> strings.getString(R.string.pairing_default_open_pairing_summary)
         }
         val defaultBigText = when {
-            isDevOptionsOff -> context.getString(R.string.pairing_default_dev_options_detail)
-            pairingPort != null -> context.getString(R.string.pairing_default_code_detail)
-            else -> context.getString(R.string.pairing_default_open_pairing_detail)
+            isDevOptionsOff -> strings.getString(R.string.pairing_default_dev_options_detail)
+            pairingPort != null -> strings.getString(R.string.pairing_default_code_detail)
+            else -> strings.getString(R.string.pairing_default_open_pairing_detail)
         }
 
         if (state == null) {
             val title = when {
-                isDevOptionsOff -> context.getString(R.string.pairing_title_setup_ready)
-                pairingPort != null -> context.getString(R.string.pairing_title_code_entry)
-                else -> context.getString(R.string.pairing_title_setup_in_progress)
+                isDevOptionsOff -> strings.getString(R.string.pairing_title_setup_ready)
+                pairingPort != null -> strings.getString(R.string.pairing_title_code_entry)
+                else -> strings.getString(R.string.pairing_title_setup_in_progress)
             }
             return PairingNotificationCopy(title, defaultSummary, defaultBigText)
         }
 
         val stateTitle = when (state) {
-            PairingNotificationState.DEVELOPER_OPTIONS_READY -> context.getString(R.string.pairing_state_developer_options_ready)
-            PairingNotificationState.WIRELESS_DEBUGGING_READY -> context.getString(R.string.pairing_state_wireless_debugging_ready)
-            PairingNotificationState.WIRELESS_DEBUGGING_STATE_UNKNOWN -> context.getString(R.string.wireless_debugging_state_unknown_title)
-            PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED -> context.getString(R.string.pairing_state_local_network_permission_required)
-            PairingNotificationState.DISCOVERY_START_FAILED -> context.getString(R.string.pairing_state_discovery_start_failed)
-            PairingNotificationState.INVALID_PAIRING_CODE -> context.getString(R.string.pairing_state_invalid_code)
-            PairingNotificationState.DISCOVERY_WAITING -> context.getString(R.string.pairing_state_discovery_waiting)
-            PairingNotificationState.CAMERA_APPLY_FAILED -> context.getString(R.string.pairing_state_camera_apply_failed)
-            PairingNotificationState.CONNECTION_RETRY -> context.getString(R.string.pairing_state_connection_retry)
-            PairingNotificationState.PAIRING_FAILED -> context.getString(R.string.pairing_state_failed)
-            PairingNotificationState.PAIRING_IDENTITY_FAILED -> context.getString(R.string.pairing_state_identity_failed)
-            PairingNotificationState.PAIRING_TLS_FAILED -> context.getString(R.string.pairing_state_tls_failed)
-            PairingNotificationState.PAIRING_AUTHENTICATION_FAILED -> context.getString(R.string.pairing_state_authentication_failed)
-            PairingNotificationState.PAIRING_TIMEOUT -> context.getString(R.string.pairing_state_timeout)
-            PairingNotificationState.PAIRING_ERROR -> context.getString(R.string.pairing_state_error)
+            PairingNotificationState.DEVELOPER_OPTIONS_READY -> strings.getString(R.string.pairing_state_developer_options_ready)
+            PairingNotificationState.WIRELESS_DEBUGGING_READY -> strings.getString(R.string.pairing_state_wireless_debugging_ready)
+            PairingNotificationState.WIRELESS_DEBUGGING_STATE_UNKNOWN -> strings.getString(R.string.wireless_debugging_state_unknown_title)
+            PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED -> strings.getString(R.string.pairing_state_local_network_permission_required)
+            PairingNotificationState.DISCOVERY_START_FAILED -> strings.getString(R.string.pairing_state_discovery_start_failed)
+            PairingNotificationState.INVALID_PAIRING_CODE -> strings.getString(R.string.pairing_state_invalid_code)
+            PairingNotificationState.DISCOVERY_WAITING -> strings.getString(R.string.pairing_state_discovery_waiting)
+            PairingNotificationState.CAMERA_APPLY_FAILED -> strings.getString(R.string.pairing_state_camera_apply_failed)
+            PairingNotificationState.CONNECTION_RETRY -> strings.getString(R.string.pairing_state_connection_retry)
+            PairingNotificationState.PAIRING_FAILED -> strings.getString(R.string.pairing_state_failed)
+            PairingNotificationState.PAIRING_IDENTITY_FAILED -> strings.getString(R.string.pairing_state_identity_failed)
+            PairingNotificationState.PAIRING_TLS_FAILED -> strings.getString(R.string.pairing_state_tls_failed)
+            PairingNotificationState.PAIRING_AUTHENTICATION_FAILED -> strings.getString(R.string.pairing_state_authentication_failed)
+            PairingNotificationState.PAIRING_TIMEOUT -> strings.getString(R.string.pairing_state_timeout)
+            PairingNotificationState.PAIRING_ERROR -> strings.getString(R.string.pairing_state_error)
         }
 
         if (state == PairingNotificationState.DEVELOPER_OPTIONS_READY) {
-            val nextStep = context.getString(R.string.pairing_state_next_step)
+            val nextStep = strings.getString(R.string.pairing_state_next_step)
             return PairingNotificationCopy(stateTitle, nextStep, nextStep)
         }
 
@@ -260,7 +264,7 @@ object PairingNotificationHelper {
             PairingNotificationState.PAIRING_TLS_FAILED -> R.string.pairing_help_tls
             PairingNotificationState.PAIRING_AUTHENTICATION_FAILED -> R.string.pairing_help_authentication
         }
-        val detail = context.getString(guidance)
+        val detail = strings.getString(guidance)
         return PairingNotificationCopy(stateTitle, detail, detail)
     }
 
@@ -285,6 +289,7 @@ object PairingNotificationHelper {
     }
 
     fun buildProgressNotification(context: Context): Notification {
+        val strings = context.withAppLanguage().resources
         createNotificationChannel(context)
 
         val contentIntent = Intent().setClass(context, MainActivity::class.java)
@@ -297,8 +302,8 @@ object PairingNotificationHelper {
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(context.getString(R.string.pairing_progress_title))
-            .setContentText(context.getString(R.string.pairing_progress_text))
+            .setContentTitle(strings.getString(R.string.pairing_progress_title))
+            .setContentText(strings.getString(R.string.pairing_progress_text))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -327,6 +332,7 @@ object PairingNotificationHelper {
         wirelessDebuggingDisabled: Boolean = false,
         targetMuted: Boolean = true
     ) {
+        val strings = context.withAppLanguage().resources
         createNotificationChannel(context)
 
         val contentIntent = Intent().setClass(context, MainActivity::class.java)
@@ -340,20 +346,20 @@ object PairingNotificationHelper {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(
-                context.getString(
+                strings.getString(
                     R.string.pairing_success_title,
-                    context.getString(R.string.app_name)
+                    strings.getString(R.string.app_name)
                 )
             )
             .setContentText(
                 if (!targetMuted && wirelessDebuggingDisabled) {
-                    context.getString(R.string.pairing_restore_success_wireless_disabled)
+                    strings.getString(R.string.pairing_restore_success_wireless_disabled)
                 } else if (!targetMuted) {
-                    context.getString(R.string.pairing_restore_success_disable_wireless_manually)
+                    strings.getString(R.string.pairing_restore_success_disable_wireless_manually)
                 } else if (wirelessDebuggingDisabled) {
-                    context.getString(R.string.pairing_success_wireless_disabled)
+                    strings.getString(R.string.pairing_success_wireless_disabled)
                 } else {
-                    context.getString(R.string.pairing_success_disable_wireless_manually)
+                    strings.getString(R.string.pairing_success_disable_wireless_manually)
                 }
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -371,16 +377,17 @@ object PairingNotificationHelper {
     }
 
     private fun buildRedactedPublicVersion(context: Context, completed: Boolean): Notification {
+        val strings = context.withAppLanguage().resources
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(
-                context.getString(
+                strings.getString(
                     if (completed) R.string.pairing_public_title_completed
                     else R.string.pairing_public_title_in_progress
                 )
             )
             .setContentText(
-                context.getString(
+                strings.getString(
                     if (completed) R.string.pairing_public_text_completed
                     else R.string.pairing_public_text_in_progress
                 )

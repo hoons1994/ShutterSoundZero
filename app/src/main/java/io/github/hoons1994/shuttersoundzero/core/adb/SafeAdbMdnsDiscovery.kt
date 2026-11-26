@@ -76,7 +76,7 @@ internal class SafeAdbMdnsDiscovery(
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
             resolver.cancel(resolutionOwner, serviceInfo)
-            val key = serviceKey(serviceInfo)
+            val key = serviceInfo.discoveryKey()
             services.lost(key) {
                 if (registration.shouldDeliverCallbacks()) onLost(key)
             }
@@ -120,7 +120,7 @@ internal class SafeAdbMdnsDiscovery(
     }
 
     private fun resolve(serviceInfo: NsdServiceInfo) {
-        val key = serviceKey(serviceInfo)
+        val key = serviceInfo.discoveryKey()
         val token = services.found(key)
         resolver.resolve(
             resolutionOwner,
@@ -146,5 +146,4 @@ internal class SafeAdbMdnsDiscovery(
         )
     }
 
-    private fun serviceKey(info: NsdServiceInfo) = "${info.serviceName}|${info.serviceType}"
 }

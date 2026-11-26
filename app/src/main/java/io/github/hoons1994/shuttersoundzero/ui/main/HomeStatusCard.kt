@@ -52,38 +52,38 @@ internal fun StatusHeroCard(
     val hasSetupIssue = status == HomeStatus.SETUP_REQUIRED && setupIssue != null
     val title = when (status) {
         HomeStatus.APPLYING -> stringResource(R.string.camera_settings_applying)
-        HomeStatus.READY -> "카메라 설정값 적용 완료"
-        HomeStatus.REAPPLY_REQUIRED -> "카메라 무음 다시 적용 필요"
+        HomeStatus.READY -> stringResource(R.string.home_applied)
+        HomeStatus.REAPPLY_REQUIRED -> stringResource(R.string.home_reapply_needed)
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_unknown_title)
         HomeStatus.SETUP_REQUIRED -> if (setupIssue == SetupIssue.CAMERA_APPLY) {
-            "연결·설정을 다시 시도해 주세요"
+            stringResource(R.string.home_retry_connection)
         } else if (hasSetupIssue) {
-            "1회 설정을 다시 시작해 주세요"
+            stringResource(R.string.home_restart_setup)
         } else {
-            "처음 한 번만 설정해 주세요"
+            stringResource(R.string.home_first_setup)
         }
     }
     val subtitle = when (status) {
-        HomeStatus.APPLYING -> "설정이 적용됐는지 확인하고 있습니다. 완료될 때까지 기다려 주세요."
+        HomeStatus.APPLYING -> stringResource(R.string.home_wait_apply)
         HomeStatus.READY -> stringResource(R.string.home_ready_description)
         HomeStatus.REAPPLY_REQUIRED -> when (isWirelessDebuggingEnabled) {
-            true -> "앱 권한은 그대로 있습니다. [다시 적용하기]를 눌러 주세요."
-            false -> "앱 권한은 그대로 있습니다. 무선 디버깅을 켠 뒤 [다시 적용하기]를 눌러 주세요."
+            true -> stringResource(R.string.home_reapply_granted)
+            false -> stringResource(R.string.home_reapply_enable)
             null -> stringResource(R.string.wireless_debugging_state_unknown_guidance)
         }
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_unknown_guidance)
         HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
-            "아래에서 문제가 생긴 단계를 확인하고 그 단계부터 다시 시도해 주세요."
+            stringResource(R.string.home_retry_step)
         } else {
-            "4단계 안내에 따라 연결해 주세요. 설정이 끝나면 앱을 닫아도 됩니다."
+            stringResource(R.string.home_connect_steps)
         }
     }
     val badgeText = when (status) {
-        HomeStatus.APPLYING -> "처리 중"
-        HomeStatus.READY -> "설정값 확인됨"
-        HomeStatus.REAPPLY_REQUIRED -> "조치 필요"
-        HomeStatus.STATE_UNKNOWN -> "확인 필요"
-        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) "확인 필요" else "설정 필요"
+        HomeStatus.APPLYING -> stringResource(R.string.home_busy)
+        HomeStatus.READY -> stringResource(R.string.home_verified)
+        HomeStatus.REAPPLY_REQUIRED -> stringResource(R.string.home_action_needed)
+        HomeStatus.STATE_UNKNOWN -> stringResource(R.string.home_check_needed)
+        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) stringResource(R.string.home_check_needed) else stringResource(R.string.home_setup_needed)
     }
     val badgeColor = when (status) {
         HomeStatus.APPLYING -> MaterialTheme.colorScheme.primary
@@ -95,12 +95,12 @@ internal fun StatusHeroCard(
     val primaryLabel = when (status) {
         HomeStatus.APPLYING -> stringResource(R.string.camera_settings_applying)
         HomeStatus.READY -> null
-        HomeStatus.REAPPLY_REQUIRED -> "다시 적용하기"
+        HomeStatus.REAPPLY_REQUIRED -> stringResource(R.string.home_reapply)
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_retry)
         HomeStatus.SETUP_REQUIRED -> when {
-            setupIssue == SetupIssue.CAMERA_APPLY -> "연결·설정 재시도"
-            hasSetupIssue -> "1회 설정 다시 시작"
-            else -> "1회 설정 시작"
+            setupIssue == SetupIssue.CAMERA_APPLY -> stringResource(R.string.pairing_action_retry_apply)
+            hasSetupIssue -> stringResource(R.string.home_restart)
+            else -> stringResource(R.string.home_start)
         }
     }
 
@@ -171,7 +171,7 @@ internal fun StatusHeroCard(
                 ) {
                     Icon(painterResource(R.drawable.ic_camera), contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(9.dp))
-                    Text("카메라 열어보기", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.home_open_camera), fontWeight = FontWeight.Bold)
                 }
             } else {
                 Spacer(modifier = Modifier.height(2.dp))

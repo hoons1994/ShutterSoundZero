@@ -106,7 +106,7 @@
     <string name="pairing_state_next_step">무선 디버깅을 켠 뒤 [페어링 코드로 기기 페어링]을 열어 주세요.</string>
     <string name="pairing_code_entry_detail">[코드 입력]을 눌러 화면에 표시된 6자리 코드를 입력해 주세요.</string>
     <string name="pairing_continue_setup_detail">홈 화면의 안내에 따라 1회 설정을 계속해 주세요.</string>
-    <string name="pairing_progress_title">카메라 무음 설정 적용 중</string>
+    <string name="pairing_progress_title">카메라 설정 적용 중</string>
     <string name="pairing_progress_text">기기 연결을 확인하고 카메라 설정을 적용하고 있습니다.</string>
     <string name="pairing_success_title">%1$s: 설정값 적용 완료</string>
     <string name="pairing_success_wireless_disabled">카메라 설정값을 적용했습니다. 실제 촬영음을 확인해 주세요. 앱은 종료해도 됩니다.</string>
