@@ -29,9 +29,12 @@
     <!-- One UI 버전에 따라 달라지는 삼성 설정의 소프트웨어 정보 Activity 조회 -->
     <queries>
         <package android:name="com.android.settings" />
+        <package android:name="com.samsung.android.app.routines" />
     </queries>
 
     <application
+        android:name=".ShutterSoundZeroApplication"
+        android:localeConfig="@xml/app_locales"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -71,6 +74,16 @@
             android:exported="true"
             android:permission="android.permission.DUMP"
             android:grantUriPermissions="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.routine-template"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/routine_template_paths" />
+        </provider>
 
         <!-- 상단바 빠른 설정(Quick Settings) 타일 -->
         <service

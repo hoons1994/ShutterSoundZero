@@ -52,6 +52,7 @@ internal fun SystemVolumeCard(
     onVolumeChange: (Int) -> Int?,
     onOpenSoundSettings: () -> Unit
 ) {
+    val sliderDescription = stringResource(R.string.volume_slider)
     val current = volume.current
     val canAdjust = current != null && !volume.isFixed && volume.max > volume.min
     val sliderEnabled = canAdjust && !volume.isRingerMuted && volume.requested == null
@@ -162,14 +163,14 @@ internal fun SystemVolumeCard(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics { contentDescription = "시스템 음량 조절" }
+                        .semantics { contentDescription = sliderDescription }
                 )
             } else {
                 Text(
                     text = if (volume.isFixed || (volume.max <= volume.min && current != null)) {
                         stringResource(R.string.system_volume_fixed)
                     } else {
-                        volume.error ?: stringResource(R.string.system_volume_loading)
+                        stringResource(volume.error ?: R.string.system_volume_loading)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -181,7 +182,7 @@ internal fun SystemVolumeCard(
                     text = when {
                         volume.isRingerMuted -> stringResource(R.string.system_volume_ringer_muted)
                         volume.requested != null -> stringResource(R.string.system_volume_applying)
-                        else -> volume.error ?: stringResource(R.string.system_volume_description)
+                        else -> stringResource(volume.error ?: R.string.system_volume_description)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     lineHeight = 18.sp,

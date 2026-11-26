@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.main
 
+import io.github.hoons1994.shuttersoundzero.testing.targetString
+import io.github.hoons1994.shuttersoundzero.R
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -22,16 +24,29 @@ import org.junit.Test
 
 /** UI smoke tests for the state-focused home flow. */
 class MainScreenTest {
+    @Test fun pendingRestoreShowsRestoreAsUnfinishedWhileCameraIsMuted() {
+        showHome(MainUiState(
+            isDeveloperOptionsEnabled = true,
+            isWirelessDebuggingEnabled = true,
+            hasCscPermission = true,
+            isCscMuted = true,
+            pendingPairingTarget = false
+        ))
+        composeTestRule.onNodeWithText(targetString(R.string.settings_restore)).assertExists()
+        composeTestRule.onNodeWithText(targetString(R.string.setup_apply_camera)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(targetString(R.string.setup_apply_automatic)).assertExists()
+    }
+
     @Test fun unreadableWirelessStateDoesNotAskToTurnItOnAgain() {
         showHome(MainUiState(
             isCscMuted = false,
             hasCscPermission = true,
             isWirelessDebuggingEnabled = null
         ))
-        composeTestRule.onNodeWithText("무선 디버깅 다시 켜기").assertDoesNotExist()
-        composeTestRule.onNodeWithText("무선 디버깅 설정 열기").assertHasClickAction()
+        composeTestRule.onNodeWithText(targetString(R.string.main_reenable_wireless_debugging)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(targetString(R.string.main_open_wireless_debugging_settings)).assertHasClickAction()
         composeTestRule.onNodeWithText(
-            "무선 디버깅 상태를 확인하지 못했습니다. 기기 설정에서 현재 상태를 확인한 뒤 앱으로 돌아와 다시 시도해 주세요."
+            targetString(R.string.wireless_debugging_state_unknown_guidance)
         ).assertExists()
     }
 
@@ -41,9 +56,9 @@ class MainScreenTest {
             hasCscPermission = true,
             isCscChangeInProgress = true
         ))
-        composeTestRule.onNodeWithText("카메라 설정값 적용 완료").assertDoesNotExist()
-        composeTestRule.onNodeWithText("카메라 열어보기").assertDoesNotExist()
-        composeTestRule.onNode(hasText("카메라 설정 변경 중") and hasClickAction()).assertIsNotEnabled()
+        composeTestRule.onNodeWithText(targetString(R.string.home_applied)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(targetString(R.string.home_open_camera)).assertDoesNotExist()
+        composeTestRule.onNode(hasText(targetString(R.string.camera_settings_applying)) and hasClickAction()).assertIsNotEnabled()
     }
 
 
@@ -60,17 +75,17 @@ class MainScreenTest {
     fun setupRequiredHome_focusesOnCurrentAction() {
         showHome(MainUiState(isWirelessDebuggingEnabled = false))
 
-        composeTestRule.onNodeWithText("셔터사운드 제로").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("처음 한 번만 설정해 주세요").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("1회 설정 시작").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("1회 설정 진행").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("개발자 옵션 켜기").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("휴대전화 정보 열기").assertHasClickAction()
-        composeTestRule.onNodeWithText("무선 디버깅 켜기").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("6자리 코드 입력").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("카메라 무음 적용").fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.app_name)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.home_first_setup)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.home_start)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.pairing_title_setup_in_progress)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.setup_enable_developer)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.setup_open_device_info)).assertHasClickAction()
+        composeTestRule.onNodeWithText(targetString(R.string.wireless_enable)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.pairing_title_code_entry)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.setup_apply_camera)).fetchSemanticsNode()
         assertTrue(
-            composeTestRule.onAllNodesWithText("알림 팝업 설정 열기").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.setup_open_popup)).fetchSemanticsNodes().isEmpty()
         )
     }
 
@@ -84,7 +99,7 @@ class MainScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("휴대전화 정보 열기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.setup_open_device_info)).performScrollTo().performClick()
         assertTrue(opened)
     }
 
@@ -92,9 +107,9 @@ class MainScreenTest {
     fun developerOptionsStep_isMarkedCompleteWhenEnabled() {
         showHome(MainUiState(isDeveloperOptionsEnabled = true))
 
-        composeTestRule.onNodeWithText("개발자 옵션 켜기").fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.setup_enable_developer)).fetchSemanticsNode()
         assertTrue(
-            composeTestRule.onAllNodesWithText("휴대전화 정보 열기").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.setup_open_device_info)).fetchSemanticsNodes().isEmpty()
         )
     }
 
@@ -107,21 +122,21 @@ class MainScreenTest {
             )
         )
 
-        composeTestRule.onNodeWithText("설정값 확인됨").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("카메라 설정값 적용 완료").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("카메라 열어보기").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("셔터음 강제 설정값이 해제되어 있습니다. 실제 촬영음은 카메라에서 확인해 주세요.").assertExists()
+        composeTestRule.onNodeWithText(targetString(R.string.home_verified)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.home_applied)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.home_open_camera)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.home_ready_description)).assertExists()
         assertTrue(
-            composeTestRule.onAllNodesWithText("다시 적용하기").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.home_reapply)).fetchSemanticsNodes().isEmpty()
         )
         assertTrue(
-            composeTestRule.onAllNodesWithText("1회 설정 시작").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.home_start)).fetchSemanticsNodes().isEmpty()
         )
         assertTrue(
-            composeTestRule.onAllNodesWithText("무선 디버깅 다시 켜기").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.main_reenable_wireless_debugging)).fetchSemanticsNodes().isEmpty()
         )
         assertTrue(
-            composeTestRule.onAllNodesWithText("알림 팝업 설정 열기").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.setup_open_popup)).fetchSemanticsNodes().isEmpty()
         )
     }
 
@@ -137,14 +152,14 @@ class MainScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("조치 필요").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("카메라 무음 다시 적용 필요").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("무선 디버깅 다시 켜기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.home_action_needed)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.home_reapply_needed)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.main_reenable_wireless_debugging)).performScrollTo().performClick()
         assertTrue(opened)
         assertTrue(!pairingStarted)
         assertEquals(
             1,
-            composeTestRule.onAllNodesWithText("다시 적용하기").fetchSemanticsNodes().size
+            composeTestRule.onAllNodesWithText(targetString(R.string.home_reapply)).fetchSemanticsNodes().size
         )
         assertTrue(
             composeTestRule.onAllNodesWithText("복구 안내").fetchSemanticsNodes().isEmpty()
@@ -161,13 +176,13 @@ class MainScreenTest {
             )
         )
 
-        composeTestRule.onNodeWithText("확인 필요").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("1회 설정을 다시 시작해 주세요").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("1회 설정 다시 시작").fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.home_check_needed)).fetchSemanticsNode()
+        composeTestRule.onNode(hasText(targetString(R.string.home_restart_setup)) and !hasClickAction()).assertExists()
+        composeTestRule.onNode(hasText(targetString(R.string.home_restart)) and hasClickAction()).assertIsEnabled()
         composeTestRule.onNodeWithText(
-            "숫자 6자리를 정확히 입력해 주세요. 연결 화면의 코드가 바뀌었다면 새 코드를 사용해 주세요."
+            targetString(R.string.step_code_invalid)
         ).fetchSemanticsNode()
-        composeTestRule.onNodeWithText("알림 팝업 설정 열기").assertHasClickAction()
+        composeTestRule.onNodeWithText(targetString(R.string.setup_open_popup)).assertHasClickAction()
     }
 
     @Test
@@ -181,7 +196,7 @@ class MainScreenTest {
         )
 
         assertTrue(
-            composeTestRule.onAllNodesWithText("무선 디버깅 설정 열기").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.main_open_wireless_debugging_settings)).fetchSemanticsNodes().isEmpty()
         )
     }
 
@@ -195,10 +210,10 @@ class MainScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("카메라 설정 상태 확인 불가").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("상태 다시 확인").performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.csc_state_unknown_title)).fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.csc_state_retry)).performClick()
         assertTrue(retried)
-        for (claim in listOf("설정값 확인됨", "카메라 설정값 적용 완료", "카메라 무음 다시 적용 필요", "다시 적용하기")) {
+        for (claim in listOf(targetString(R.string.home_verified), targetString(R.string.home_applied), targetString(R.string.home_reapply_needed), targetString(R.string.home_reapply))) {
             assertTrue(composeTestRule.onAllNodesWithText(claim).fetchSemanticsNodes().isEmpty())
         }
     }
@@ -206,10 +221,10 @@ class MainScreenTest {
     @Test
     fun reapplyInProgressDoesNotShowPrematureSuccessOrAllowRepeatedRequests() {
         showHome(MainUiState(hasCscPermission = true, isCscChangeInProgress = true, isWirelessDebuggingEnabled = false))
-        composeTestRule.onNode(hasText("카메라 설정 변경 중") and hasClickAction()).assertIsNotEnabled()
-        composeTestRule.onNodeWithText("무선 디버깅 다시 켜기").assertIsNotEnabled()
+        composeTestRule.onNode(hasText(targetString(R.string.camera_settings_applying)) and hasClickAction()).assertIsNotEnabled()
+        composeTestRule.onNodeWithText(targetString(R.string.main_reenable_wireless_debugging)).assertIsNotEnabled()
         assertTrue(
-            composeTestRule.onAllNodesWithText("카메라 설정값 적용 완료").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.home_applied)).fetchSemanticsNodes().isEmpty()
         )
     }
 
@@ -221,7 +236,7 @@ class MainScreenTest {
         ))
 
         composeTestRule.onNodeWithText(
-            "페어링 연결 화면을 찾지 못했습니다. Wi-Fi와 무선 디버깅을 확인하고 [페어링 코드로 기기 페어링] 화면을 다시 열고 창을 열어 둔 채 시도해 주세요."
+            targetString(R.string.step_discovery_failed)
         ).fetchSemanticsNode()
     }
 
@@ -233,7 +248,7 @@ class MainScreenTest {
         ))
 
         composeTestRule.onNodeWithText(
-            "기기에 연결하지 못했습니다. 페어링 창이 닫혔거나 연결 정보가 바뀌었을 수 있습니다. 창을 다시 열고 새 6자리 코드로 시도해 주세요."
+            targetString(R.string.step_connection_failed)
         ).fetchSemanticsNode()
     }
 
@@ -248,9 +263,9 @@ class MainScreenTest {
         }
 
         composeTestRule.onNodeWithText(
-            "Android 17에서 기기를 찾으려면 로컬 네트워크 권한이 필요합니다. 앱 설정에서 권한을 허용한 뒤 1회 설정을 다시 시작해 주세요."
+            targetString(R.string.setup_allow_network)
         ).fetchSemanticsNode()
-        composeTestRule.onNodeWithText("앱 권한 설정 열기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.setup_permissions_open)).performScrollTo().performClick()
         assertTrue(opened)
     }
 
@@ -264,10 +279,10 @@ class MainScreenTest {
         )
 
         composeTestRule.onNodeWithText(
-            "코드 인증은 완료됐지만 연결 또는 설정 적용을 마치지 못했습니다. 무선 디버깅을 켠 뒤 [연결·설정 재시도]를 눌러 주세요."
+            targetString(R.string.setup_code_accepted)
         ).fetchSemanticsNode()
         assertTrue(
-            composeTestRule.onAllNodesWithText("알림 팝업 설정 열기").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.setup_open_popup)).fetchSemanticsNodes().isEmpty()
         )
     }
 
@@ -293,11 +308,11 @@ class MainScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("시스템 음량 조절").performScrollTo().assertIsNotEnabled()
+        composeTestRule.onNodeWithContentDescription(targetString(R.string.volume_slider)).performScrollTo().assertIsNotEnabled()
         composeTestRule.onNodeWithText(
-            "진동·무음 모드에서는 시스템 소리가 음소거됩니다. 휴대전화를 소리 모드로 바꾼 뒤 조절해 주세요."
+            targetString(R.string.system_volume_ringer_muted)
         ).fetchSemanticsNode()
-        composeTestRule.onNodeWithText("휴대전화 음량 설정").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.system_volume_open_settings)).performScrollTo().performClick()
         assertTrue(opened)
     }
 
@@ -313,7 +328,7 @@ class MainScreenTest {
                 }
             )
         }
-        composeTestRule.onNodeWithContentDescription("시스템 음량 조절").performScrollTo().assertIsEnabled()
+        composeTestRule.onNodeWithContentDescription(targetString(R.string.volume_slider)).performScrollTo().assertIsEnabled()
             .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(4f) }
         composeTestRule.runOnIdle { assertEquals(listOf(4), requests) }
     }
@@ -322,9 +337,9 @@ class MainScreenTest {
     fun pendingVolumeChangeKeepsRequestedValueWithoutReportingCompletion() {
         showHome(MainUiState(systemVolume = SystemVolumeUiState(current = 2, max = 15, requested = 5)))
 
-        composeTestRule.onNodeWithContentDescription("시스템 음량 조절").performScrollTo().assertIsNotEnabled()
+        composeTestRule.onNodeWithContentDescription(targetString(R.string.volume_slider)).performScrollTo().assertIsNotEnabled()
         composeTestRule.onNodeWithText("5 / 15").fetchSemanticsNode()
-        composeTestRule.onNodeWithText("시스템 음량을 적용하고 있습니다.").fetchSemanticsNode()
+        composeTestRule.onNodeWithText(targetString(R.string.system_volume_applying)).fetchSemanticsNode()
     }
 
     @Test
@@ -332,10 +347,10 @@ class MainScreenTest {
         showHome(MainUiState(systemVolume = SystemVolumeUiState(
             current = 2,
             max = 15,
-            error = "기기에서 음량 변경을 적용하지 않았습니다. 휴대전화 음량 설정에서 직접 조절해 주세요."
+            error = R.string.system_volume_not_applied
         )))
 
-        composeTestRule.onNodeWithText("휴대전화 음량 설정").performScrollTo().assertHasClickAction()
+        composeTestRule.onNodeWithText(targetString(R.string.system_volume_open_settings)).performScrollTo().assertHasClickAction()
         composeTestRule.onNodeWithText("2 / 15").fetchSemanticsNode()
     }
 }

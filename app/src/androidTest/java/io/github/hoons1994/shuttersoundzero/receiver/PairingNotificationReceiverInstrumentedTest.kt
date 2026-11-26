@@ -3,11 +3,11 @@ package io.github.hoons1994.shuttersoundzero.receiver
 import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
+import io.github.hoons1994.shuttersoundzero.testing.localizedTestContext
 import android.content.ContextWrapper
 import android.content.Intent
 import android.os.Bundle
 import androidx.core.app.RemoteInput
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.hoons1994.shuttersoundzero.service.PairingForegroundService
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
@@ -25,7 +25,7 @@ class PairingNotificationReceiverInstrumentedTest {
     private val sessionId = "test-session"
 
     @Test fun discoveryTimeoutExplainsThatTheCodeMustBeSubmittedAgain() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        val context = baseContext
         val notification = PairingNotificationHelper.buildPairingNotification(
             context, sessionId = sessionId, state = PairingNotificationState.DISCOVERY_WAITING
         )
@@ -41,7 +41,7 @@ class PairingNotificationReceiverInstrumentedTest {
     }
 
     @Test fun inFlightNotificationShowsProgressAndDoesNotAcceptAnotherCode() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        val context = baseContext
         val notification = PairingNotificationHelper.buildProgressNotification(context)
         assertTrue(notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("적용하고 있습니다"))
         assertTrue(notification.actions.isNullOrEmpty())
@@ -146,7 +146,7 @@ class PairingNotificationReceiverInstrumentedTest {
         assertFalse(notification.actions.orEmpty().any { it.title.toString() == "코드 입력" })
     }
 
-    private val baseContext: Context = ApplicationProvider.getApplicationContext()
+    private val baseContext = localizedTestContext(java.util.Locale.KOREAN)
 
     @Test
     fun remoteInput_trimsCodeAndForwardsSubmitCommand() {
@@ -322,7 +322,7 @@ class PairingNotificationReceiverInstrumentedTest {
         val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
         val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
 
-        assertEquals("카메라 무음 설정 적용 중", title)
+        assertEquals("카메라 설정 적용 중", title)
         assertFalse(text.contains("권한 연동"))
         assertTrue(text.contains("카메라 설정"))
     }

@@ -1,11 +1,13 @@
 # 셔터사운드 제로 (Shutter Sound Zero)
 
+[日本語](README.ja.md) · [English](README.en.md)
+
 > 삼성 갤럭시폰을 위한 카메라 셔터음 설정 도구
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2011+-green.svg)](https://developer.android.com)
 [![Samsung Galaxy](https://img.shields.io/badge/Device-Samsung%20Galaxy-0c7cd5.svg)](https://www.samsung.com)
-[![Version](https://img.shields.io/badge/Version-1.5.19-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
+[![Version](https://img.shields.io/badge/Version-1.6.0-orange.svg)](https://github.com/hoons1994/ShutterSoundZero/releases/latest)
 
 <div align="center">
   <img src="ShutterSoundZero_Infographic.png" alt="셔터사운드 제로 안내 인포그래픽" width="720" />
@@ -19,7 +21,7 @@
 
 접근성 서비스를 이용해 화면이나 카메라 실행을 상시 감시하지 않습니다. 최초 1회 로컬 무선 ADB로 `WRITE_SECURE_SETTINGS` 권한을 연동한 뒤, 필요할 때만 무선 디버깅을 켜서 실제 CSC 값을 변경합니다.
 
-현재 앱 버전은 **v1.5.19**입니다. 설정 완료·재시도와 촬영음 복원 안내의 정확성을 높이고, 진단 기록·오류 신고 및 페어링 예외 처리를 보완한 안정화 버전입니다. 자세한 변경 사항은 [v1.5.19 릴리즈 노트](.github/release-notes/v1.5.19.md)를 확인해 주세요.
+**v1.6.0**에서는 설정에서 한국어·일본어·영어를 선택할 수 있습니다. 카메라를 열면 휴대전화가 무음 또는 진동 모드로 바뀌고, 닫으면 이전 소리 모드로 돌아오는 갤럭시 루틴도 추가할 수 있습니다. [v1.6.0 릴리스 노트](.github/release-notes/v1.6.0.md)
 
 ## 📱 다운로드
 
@@ -27,6 +29,8 @@
 - 지원 환경: 삼성 갤럭시 / Android 11 이상
 - v1.5.4 이상에서 업데이트: 같은 패키지 ID와 서명키를 사용하는 정식 APK는 기존 앱 위에 설치할 수 있습니다. v1.5.5 배포는 철회되었습니다.
 - v1.5.3 이하에서 전환: v1.5.4부터 새 패키지 ID와 새 서명키를 사용하므로 기존 앱 위에 설치할 수 없습니다. 기존 앱을 삭제한 뒤 최신 버전을 새로 설치하고 1회 설정을 다시 진행해 주세요.
+
+설정 → 앱 화면 → 언어에서 **시스템 설정 따르기**, **한국어**, **日本語**, **English** 중 하나를 선택할 수 있습니다. 처음에는 휴대전화의 언어를 따르며 지원하지 않는 언어에서는 한국어로 표시합니다.
 
 ## ✨ 주요 기능
 

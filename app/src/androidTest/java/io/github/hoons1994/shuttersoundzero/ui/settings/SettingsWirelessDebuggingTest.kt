@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.settings
 
+import io.github.hoons1994.shuttersoundzero.testing.targetString
+import io.github.hoons1994.shuttersoundzero.R
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
@@ -64,9 +66,9 @@ class SettingsWirelessDebuggingTest {
             shell("settings put system ${CscMuteManager.CSC_KEY} ${if (muted) 0 else 1}")
             composeTestRule.runOnIdle { showSettings.value = true }
             composeTestRule.onNodeWithText(
-                if (muted) "카메라 셔터음 원래대로 복원" else "카메라 무음 다시 적용"
+                if (muted) targetString(R.string.settings_restore) else targetString(R.string.settings_reapply)
             ).performClick()
-            composeTestRule.onNodeWithText("무선 디버깅을 켜 주세요").assertExists()
+            composeTestRule.onNodeWithText(targetString(R.string.wireless_enable_title)).assertExists()
 
             val resumeEvents = AtomicInteger()
             val lifecycleObserver = LifecycleEventObserver { _, event ->
@@ -80,13 +82,13 @@ class SettingsWirelessDebuggingTest {
                 // A provider notification must close the prompt without a lifecycle refresh.
                 shell("settings put global adb_wifi_enabled 1")
                 composeTestRule.waitUntil(timeoutMillis = 10_000) {
-                    val settingsVisible = composeTestRule.onAllNodesWithText("설정")
+                    val settingsVisible = composeTestRule.onAllNodesWithText(targetString(R.string.action_settings))
                         .fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
-                    val promptGone = composeTestRule.onAllNodesWithText("무선 디버깅을 켜 주세요")
+                    val promptGone = composeTestRule.onAllNodesWithText(targetString(R.string.wireless_enable_title))
                         .fetchSemanticsNodes(atLeastOneRootRequired = false).isEmpty()
                     settingsVisible && promptGone
                 }
-                composeTestRule.onNodeWithText("설정").assertExists()
+                composeTestRule.onNodeWithText(targetString(R.string.action_settings)).assertExists()
                 assertTrue(DeveloperOptionsManager.readWirelessDebuggingEnabled(context) == true)
                 assertEquals("The observer must work without ON_RESUME", 0, resumeEvents.get())
             } finally {

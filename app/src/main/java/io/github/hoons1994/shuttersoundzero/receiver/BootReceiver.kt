@@ -1,5 +1,6 @@
 package io.github.hoons1994.shuttersoundzero.receiver
 
+import io.github.hoons1994.shuttersoundzero.data.withAppLanguage
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -142,6 +143,8 @@ class BootReceiver : BroadcastReceiver() {
         try {
             // 업데이트 경계에서 기존 연동 흔적은 있는데 권한이 실제로 사라졌다면,
             // 다음 1회 설정이 재설치와 동일하게 새 로컬 ADB identity로 페어링되게 한다.
+            // Even a partial deletion can invalidate the identity used by an apply-only retry.
+            prefs.invalidatePairingAuthentication()
             AdbKeyHelper.resetIdentity(context)
             Log.i(TAG, "Reset local ADB identity after unexpected permission loss ($reason)")
         } catch (e: Exception) {
@@ -153,6 +156,7 @@ class BootReceiver : BroadcastReceiver() {
         context: Context,
         prefs: PreferencesRepository
     ) {
+        val strings = context.withAppLanguage().resources
         if (!prefs.shouldMuteOnBoot) {
             Log.i(TAG, "Software update detected; camera mute is not in use")
             return
@@ -162,14 +166,14 @@ class BootReceiver : BroadcastReceiver() {
             Log.i(TAG, "Permission linkage was revoked by user")
             showNotification(
                 context,
-                context.getString(R.string.boot_software_updated_linkage_revoked)
+                strings.getString(R.string.boot_software_updated_linkage_revoked)
             )
             return
         }
 
         val mutedState = CscMuteManager.readCscMutedState(context)
         if (mutedState == null) {
-            showNotification(context, context.getString(R.string.csc_state_unknown_guidance))
+            showNotification(context, strings.getString(R.string.csc_state_unknown_guidance))
             return
         }
         if (mutedState) {
@@ -182,9 +186,9 @@ class BootReceiver : BroadcastReceiver() {
         showNotification(
             context,
             if (hasPermission) {
-                context.getString(R.string.boot_software_updated_mute_reset_permission_present)
+                strings.getString(R.string.boot_software_updated_mute_reset_permission_present)
             } else {
-                context.getString(R.string.boot_software_updated_mute_reset_permission_missing)
+                strings.getString(R.string.boot_software_updated_mute_reset_permission_missing)
             }
         )
     }
@@ -202,6 +206,7 @@ class BootReceiver : BroadcastReceiver() {
         linkageExpected: Boolean,
         hasWritePermission: Boolean
     ) {
+        val strings = context.withAppLanguage().resources
         if (prefs.isPermissionRevokedByUser) {
             Log.i(TAG, "App updated; permission linkage was already revoked by user")
             return
@@ -220,7 +225,7 @@ class BootReceiver : BroadcastReceiver() {
         Log.w(TAG, "App updated; expected WRITE_SECURE_SETTINGS permission is missing")
         showNotification(
             context,
-            context.getString(R.string.boot_app_update_linkage_lost)
+            strings.getString(R.string.boot_app_update_linkage_lost)
         )
     }
 
@@ -228,10 +233,11 @@ class BootReceiver : BroadcastReceiver() {
         context: Context,
         prefs: PreferencesRepository
     ) {
+        val strings = context.withAppLanguage().resources
         if (!prefs.shouldMuteOnBoot || prefs.isPermissionRevokedByUser) return
         val mutedState = CscMuteManager.readCscMutedState(context)
         if (mutedState == null) {
-            showNotification(context, context.getString(R.string.csc_state_unknown_guidance))
+            showNotification(context, strings.getString(R.string.csc_state_unknown_guidance))
             return
         }
         if (mutedState) return
@@ -241,9 +247,9 @@ class BootReceiver : BroadcastReceiver() {
         showNotification(
             context,
             if (hasPermission) {
-                context.getString(R.string.boot_reboot_mute_reset_permission_present)
+                strings.getString(R.string.boot_reboot_mute_reset_permission_present)
             } else {
-                context.getString(R.string.boot_reboot_mute_reset_permission_missing)
+                strings.getString(R.string.boot_reboot_mute_reset_permission_missing)
             }
         )
     }
@@ -259,6 +265,7 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     private fun showNotification(context: Context, message: String) {
+        val strings = context.withAppLanguage().resources
         try {
             createNotificationChannel(context)
 
@@ -274,7 +281,7 @@ class BootReceiver : BroadcastReceiver() {
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_qs_camera_mute)
-                .setContentTitle(context.getString(R.string.app_name))
+                .setContentTitle(strings.getString(R.string.app_name))
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -299,12 +306,13 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     private fun createNotificationChannel(context: Context) {
+        val strings = context.withAppLanguage().resources
         val channel = NotificationChannel(
             CHANNEL_ID,
-            context.getString(R.string.boot_notification_channel_name),
+            strings.getString(R.string.boot_notification_channel_name),
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = context.getString(R.string.boot_notification_channel_description)
+            description = strings.getString(R.string.boot_notification_channel_description)
         }
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         manager?.createNotificationChannel(channel)

@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.settings
 
+import io.github.hoons1994.shuttersoundzero.testing.targetString
+import io.github.hoons1994.shuttersoundzero.R
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
@@ -9,6 +11,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -48,13 +51,13 @@ class SettingsHelpSectionInstrumentedTest {
         }
         openReport()
         composeTestRule.waitUntil(timeoutMillis = 10000) {
-            composeTestRule.onAllNodesWithText("진단 기록을 읽지 못했습니다", substring = true)
+            composeTestRule.onAllNodesWithText(targetString(R.string.diag_read_failed), substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("직접 적은 설명은 그대로 전달됩니다. 페어링 코드나 개인정보는 적지 마세요.").assertExists()
+        composeTestRule.onNodeWithText(targetString(R.string.report_privacy)).assertExists()
         composeTestRule.onNode(hasSetTextAction()).performTextInput("한글 & + ? # % =\n다음 줄")
         composeTestRule.runOnIdle { assertEquals(0, opened.size) }
-        composeTestRule.onNodeWithText("이메일로 보내기").performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.report_send)).performClick()
         composeTestRule.runOnIdle {
             assertEquals(1, builds)
             assertEquals(1, opened.size)
@@ -67,12 +70,12 @@ class SettingsHelpSectionInstrumentedTest {
             }
             org.junit.Assert.assertTrue(query.getValue("body").contains("한글 & + ? # % =\n다음 줄"))
             org.junit.Assert.assertTrue(query.getValue("body").contains("2026-11-01T21:30:15+09:00 [Asia/Seoul]"))
-            org.junit.Assert.assertTrue(query.getValue("body").contains("진단 기록을 읽지 못했습니다"))
+            org.junit.Assert.assertTrue(query.getValue("body").contains(targetString(R.string.diag_read_failed)))
         }
     }
 
     private fun openReport() {
-        composeTestRule.onNodeWithText("문제가 해결되지 않나요?").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.support_unresolved)).performScrollTo().performClick()
     }
 
     private fun waitForText(text: String) {
@@ -93,21 +96,22 @@ class SettingsHelpSectionInstrumentedTest {
             }
         }
         openReport()
-        composeTestRule.onNodeWithText("진단 정보를 불러오는 중입니다.").assertExists()
-        composeTestRule.onNodeWithText("사용 문의").performScrollTo().assertIsEnabled()
+        composeTestRule.onNodeWithText(targetString(R.string.report_loading)).assertExists()
+        composeTestRule.onNodeWithText(targetString(R.string.support_contact)).performScrollTo().assertIsEnabled()
         composeTestRule.runOnIdle { assertEquals(1, builds) }
         composeTestRule.runOnIdle {
             report.complete(DiagnosticReportBuilder.Report("제목", "합성 진단 정보"))
         }
         waitForText("합성 진단 정보")
-        composeTestRule.onNodeWithText("이메일로 보내기").assertIsEnabled()
+        composeTestRule.onNodeWithText(targetString(R.string.report_send)).assertIsEnabled()
     }
 
     @Test fun slowClearDisablesSendingUntilRefreshedAndPreservesUserInput() {
         val clearStarted = CompletableDeferred<Unit>()
         val clearMayFinish = CompletableDeferred<Unit>()
         var builds = 0
-        composeTestRule.setContent {
+        val restoration = StateRestorationTester(composeTestRule)
+        restoration.setContent {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 SettingsHelpSection(
                     buildDiagnosticReport = {
@@ -125,16 +129,17 @@ class SettingsHelpSectionInstrumentedTest {
         openReport()
         waitForText("이전 진단 정보")
         composeTestRule.onNode(hasSetTextAction()).performTextInput("설명을 보존합니다")
-        composeTestRule.onNodeWithText("진단 로그 지우기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.report_delete)).performScrollTo().performClick()
         composeTestRule.waitUntil(timeoutMillis = 10000) { clearStarted.isCompleted }
-        composeTestRule.onNodeWithText("진단 로그를 지우는 중...").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("이메일로 보내기").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("닫기").assertIsEnabled()
+        restoration.emulateSavedInstanceStateRestore()
+        composeTestRule.onNodeWithText(targetString(R.string.report_deleting)).assertIsNotEnabled()
+        composeTestRule.onNodeWithText(targetString(R.string.report_send)).assertIsNotEnabled()
+        composeTestRule.onNodeWithText(targetString(R.string.camera_routine_close)).assertIsEnabled()
 
         composeTestRule.runOnIdle { clearMayFinish.complete(Unit) }
         waitForText("새 진단 정보")
         composeTestRule.onNode(hasSetTextAction()).assertTextContains("설명을 보존합니다")
-        composeTestRule.onNodeWithText("이메일로 보내기").assertIsEnabled()
+        composeTestRule.onNodeWithText(targetString(R.string.report_send)).assertIsEnabled()
         composeTestRule.runOnIdle { assertEquals(2, builds) }
     }
 
@@ -155,16 +160,16 @@ class SettingsHelpSectionInstrumentedTest {
         }
         openReport()
         waitForText("이전 진단 정보")
-        composeTestRule.onNodeWithText("진단 로그 지우기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.report_delete)).performScrollTo().performClick()
         composeTestRule.waitUntil(timeoutMillis = 10000) { clearStarted.isCompleted }
-        composeTestRule.onNodeWithText("닫기").performClick()
-        composeTestRule.onNodeWithText("오류 신고").assertDoesNotExist()
+        composeTestRule.onNodeWithText(targetString(R.string.camera_routine_close)).performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.report_error)).assertDoesNotExist()
         composeTestRule.runOnIdle { clearMayFinish.complete(Unit) }
         composeTestRule.waitUntil(timeoutMillis = 10000) {
-            composeTestRule.onAllNodesWithText("문제가 해결되지 않나요?").fetchSemanticsNodes()
+            composeTestRule.onAllNodesWithText(targetString(R.string.support_unresolved)).fetchSemanticsNodes()
                 .any { !it.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Disabled) }
         }
-        composeTestRule.onNodeWithText("오류 신고").assertDoesNotExist()
+        composeTestRule.onNodeWithText(targetString(R.string.report_error)).assertDoesNotExist()
     }
 
     @Test fun refreshFailureAfterClearCannotLeaveOldLogAvailableForSending() {
@@ -182,10 +187,10 @@ class SettingsHelpSectionInstrumentedTest {
         }
         openReport()
         waitForText("이전 진단 정보")
-        composeTestRule.onNodeWithText("진단 로그 지우기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.report_delete)).performScrollTo().performClick()
         composeTestRule.waitUntil(timeoutMillis = 10000) {
-            composeTestRule.onAllNodesWithText("오류 신고").fetchSemanticsNodes().isEmpty()
+            composeTestRule.onAllNodesWithText(targetString(R.string.report_error)).fetchSemanticsNodes().isEmpty()
         }
-        composeTestRule.onNodeWithText("이메일로 보내기").assertDoesNotExist()
+        composeTestRule.onNodeWithText(targetString(R.string.report_send)).assertDoesNotExist()
     }
 }

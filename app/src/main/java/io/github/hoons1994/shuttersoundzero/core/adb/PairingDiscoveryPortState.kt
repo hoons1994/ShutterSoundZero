@@ -4,8 +4,8 @@ package io.github.hoons1994.shuttersoundzero.core.adb
 internal class PairingDiscoveryPortState {
     private val monitor = Any()
     private var activeSession: Any? = null
-    private var pairingService: String? = null
-    private var connectService: String? = null
+    private val pairingServices = linkedMapOf<String, Int>()
+    private val connectServices = linkedMapOf<String, Int>()
 
     @Volatile var pairingPort: Int? = null
         private set
@@ -17,8 +17,8 @@ internal class PairingDiscoveryPortState {
         activeSession = session
         pairingPort = null
         connectPort = null
-        pairingService = null
-        connectService = null
+        pairingServices.clear()
+        connectServices.clear()
         session
     }
 
@@ -29,8 +29,8 @@ internal class PairingDiscoveryPortState {
     fun clearPorts() = synchronized(monitor) {
         pairingPort = null
         connectPort = null
-        pairingService = null
-        connectService = null
+        pairingServices.clear()
+        connectServices.clear()
     }
 
     fun rememberConnectedPort(port: Int) = synchronized(monitor) {
@@ -39,7 +39,8 @@ internal class PairingDiscoveryPortState {
 
     fun onPairingPort(session: Any, port: Int, service: String = "", notify: (Int) -> Unit): Boolean = synchronized(monitor) {
         if (activeSession !== session) return@synchronized false
-        pairingService = service
+        pairingServices.remove(service)
+        pairingServices[service] = port
         pairingPort = port
         notify(port)
         true
@@ -47,25 +48,30 @@ internal class PairingDiscoveryPortState {
 
     fun onConnectPort(session: Any, port: Int, service: String = "", notify: (Int) -> Unit): Boolean = synchronized(monitor) {
         if (activeSession !== session) return@synchronized false
-        connectService = service
+        connectServices.remove(service)
+        connectServices[service] = port
         connectPort = port
         notify(port)
         true
     }
 
     fun onPairingLost(session: Any, service: String, notify: () -> Unit): Boolean = synchronized(monitor) {
-        if (activeSession !== session || pairingService != service) return@synchronized false
-        pairingPort = null
-        pairingService = null
-        notify()
+        if (activeSession !== session) return@synchronized false
+        val wasSelected = pairingServices.keys.lastOrNull() == service
+        pairingServices.remove(service)
+        if (!wasSelected) return@synchronized false
+        pairingPort = pairingServices.values.lastOrNull()
+        if (pairingPort == null) notify()
         true
     }
 
     fun onConnectLost(session: Any, service: String, notify: () -> Unit): Boolean = synchronized(monitor) {
-        if (activeSession !== session || connectService != service) return@synchronized false
-        connectPort = null
-        connectService = null
-        notify()
+        if (activeSession !== session) return@synchronized false
+        val wasSelected = connectServices.keys.lastOrNull() == service
+        connectServices.remove(service)
+        if (!wasSelected) return@synchronized false
+        connectPort = connectServices.values.lastOrNull()
+        if (connectPort == null) notify()
         true
     }
 }

@@ -34,7 +34,7 @@ class SetupSettingsNavigatorInstrumentedTest {
                 assertEquals(43210, prefs.lastConnectPort)
                 assertEquals(SetupIssue.CAMERA_APPLY, prefs.lastSetupIssue)
                 assertTrue(context.serviceIntent!!.getBooleanExtra("resume_apply", false))
-                assertFalse(viewModel.uiState.value.infoMessage.orEmpty().contains("[코드 입력]"))
+                assertFalse(viewModel.uiState.value.infoMessage?.let(application::getString).orEmpty().contains(application.getString(R.string.pairing_action_enter_code)))
             } finally {
                 prefs.lastConnectPort = savedPort
                 prefs.lastSetupIssue = savedIssue
@@ -100,13 +100,13 @@ class SetupSettingsNavigatorInstrumentedTest {
                 if (shouldStart) {
                     assertEquals(listOf("settings", "service"), context.events)
                     assertEquals(1, context.serviceStarts)
-                    assertEquals(application.getString(R.string.main_pairing_code_entry_guidance), viewModel.uiState.value.infoMessage)
+                    assertEquals(application.getString(R.string.main_pairing_code_entry_guidance), viewModel.uiState.value.infoMessage?.let(application::getString))
                     assertNull(viewModel.uiState.value.errorMessage)
                     assertEquals(-1, prefs.lastConnectPort)
                 } else {
                     assertEquals(0, context.serviceStarts)
                     assertNull(viewModel.uiState.value.infoMessage)
-                    assertEquals(application.getString(R.string.settings_launch_failed), viewModel.uiState.value.errorMessage)
+                    assertEquals(application.getString(R.string.settings_launch_failed), viewModel.uiState.value.errorMessage?.let(application::getString))
                     assertEquals(43210, prefs.lastConnectPort)
                     assertEquals(SetupIssue.PAIRING_DISCOVERY, prefs.lastSetupIssue)
                 }

@@ -4,7 +4,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
-import androidx.test.core.app.ApplicationProvider
+import io.github.hoons1994.shuttersoundzero.testing.localizedTestContext
+import java.util.Locale
 import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 import java.io.File
 import java.io.IOException
@@ -15,8 +16,41 @@ import org.junit.Test
 
 /** Builds real reports and intents without launching an email app or touching the real log. */
 class DiagnosticReportInstrumentedTest {
-    private val context: Context = ApplicationProvider.getApplicationContext()
+    private val context = localizedTestContext(Locale.KOREAN)
     private val time = ZonedDateTime.parse("2026-11-01T21:30:15+09:00[Asia/Seoul]")
+
+    @Test fun localizedDraftsPreserveReviewedEventsTimestampAndDescription() = runBlocking {
+        val events = (0..204).map { "$it | ADB_CONNECT | SUCCESS | &=+" }
+        val description = "  한글・日本語 & + ? # %\nSecond line  "
+        for ((locale, heading) in listOf(
+            Locale.KOREAN to "ShutterSoundZero 오류 진단 정보",
+            Locale.JAPANESE to "ShutterSoundZero 診断レポート",
+            Locale.ENGLISH to "ShutterSoundZero diagnostic report"
+        )) {
+            val localized = localizedTestContext(locale)
+            val report = DiagnosticReportBuilder.build(localized, { Result.success(events) }, { time })
+            assertEquals(heading, report.diagnosticText.lineSequence().first())
+            assertTrue(report.diagnosticText.contains("2026-11-01T21:30:15+09:00 [Asia/Seoul]"))
+            assertTrue(report.diagnosticText.contains("WRITE_SECURE_SETTINGS:"))
+            assertEquals(events.takeLast(100), report.diagnosticText.lines().filter { "| ADB_CONNECT |" in it })
+
+            val draft = DiagnosticEmail.intent(localized, report, description)
+            assertEquals(Intent.ACTION_SENDTO, draft.action)
+            val uri = requireNotNull(draft.data)
+            assertEquals("mailto", uri.scheme)
+            val address = uri.encodedSchemeSpecificPart.substringBefore('?')
+            assertEquals(DiagnosticReportBuilder.SUPPORT_EMAIL, Uri.decode(address))
+            val fields = uri.encodedSchemeSpecificPart.substringAfter('?').split('&').associate {
+                Uri.decode(it.substringBefore('=')) to Uri.decode(it.substringAfter('='))
+            }
+            assertEquals(setOf("subject", "body"), fields.keys)
+            assertEquals(report.subject, fields["subject"])
+            assertTrue(fields.getValue("body").endsWith("$description\n\n${report.diagnosticText}\n"))
+            val otherLocale = if (locale == Locale.ENGLISH) Locale.JAPANESE else Locale.ENGLISH
+            val afterSwitch = DiagnosticEmail.intent(localizedTestContext(otherLocale), report, description)
+            assertEquals("An open draft must keep its original language", draft.data, afterSwitch.data)
+        }
+    }
 
     @Test fun actualBuilderIncludesFieldsTimestampRangeAndReadFailureWithoutExceptionText() = runBlocking {
         val report = DiagnosticReportBuilder.build(context, { Result.failure(IOException("private failure details")) }, { time })
@@ -67,7 +101,7 @@ class DiagnosticReportInstrumentedTest {
         val report = DiagnosticReportBuilder.build(context, { Result.success(events) }, { time })
         assertTrue(report.diagnosticText.length <= DiagnosticReportBuilder.MAX_DIAGNOSTIC_CHARS)
         val description = "  한글 & + ? # % = 😀\n다음 줄  "
-        val intent = DiagnosticEmail.intent(report, description)
+        val intent = DiagnosticEmail.intent(context, report, description)
         assertEquals(Intent.ACTION_SENDTO, intent.action)
         assertEquals("mailto", intent.data!!.scheme)
         val parts = intent.data!!.encodedSchemeSpecificPart.substringAfter('?').split('&').associate {
@@ -76,7 +110,7 @@ class DiagnosticReportInstrumentedTest {
         }
         assertEquals(setOf("subject", "body"), parts.keys)
         assertEquals(report.subject, parts["subject"])
-        assertEquals(DiagnosticEmail.body(report, description), parts["body"])
+        assertEquals(DiagnosticEmail.body(report, description, context::getString), parts["body"])
         assertFalse(intent.hasExtra(Intent.EXTRA_STREAM))
         assertTrue(parts.getValue("body").endsWith(report.diagnosticText + "\n"))
     }

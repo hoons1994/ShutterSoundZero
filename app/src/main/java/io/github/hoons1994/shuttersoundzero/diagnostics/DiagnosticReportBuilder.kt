@@ -1,5 +1,8 @@
 package io.github.hoons1994.shuttersoundzero.diagnostics
 
+import android.content.res.Configuration
+import io.github.hoons1994.shuttersoundzero.data.withAppLanguage
+import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.logging.DiagnosticLogger
 
 import android.content.Context
@@ -21,7 +24,8 @@ object DiagnosticReportBuilder {
 
     data class Report(
         val subject: String,
-        val diagnosticText: String
+        val diagnosticText: String,
+        val languageTags: String = ""
     ) {
         init {
             require(diagnosticText.length <= MAX_DIAGNOSTIC_CHARS) { "Diagnostic report exceeds text limit" }
@@ -35,6 +39,8 @@ object DiagnosticReportBuilder {
         readEvents: suspend (Context) -> Result<List<String>>,
         now: () -> ZonedDateTime = { ZonedDateTime.now() }
     ): Report = withContext(Dispatchers.IO) {
+        val locales = context.withAppLanguage().resources.configuration.locales
+        val strings = context.createConfigurationContext(Configuration().apply { setLocales(locales) }).resources
         val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.packageManager.getPackageInfo(
                 context.packageName,
@@ -44,7 +50,7 @@ object DiagnosticReportBuilder {
             @Suppress("DEPRECATION")
             context.packageManager.getPackageInfo(context.packageName, 0)
         }
-        val versionName = (packageInfo.versionName ?: "알 수 없음").take(128)
+        val versionName = (packageInfo.versionName ?: strings.getString(R.string.diag_unknown)).take(128)
         val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             packageInfo.longVersionCode
         } else {
@@ -58,70 +64,67 @@ object DiagnosticReportBuilder {
         val generatedAt = now()
         val model = Build.MODEL.take(128)
 
+        fun yesNo(value: Boolean?) = strings.getString(diagnosticBooleanResource(value))
+
         val diagnosticText = buildString {
-            appendLine("ShutterSoundZero 오류 진단 정보")
+            appendLine(strings.getString(R.string.diag_title))
             appendLine()
-            appendLine("생성 시각: ${generatedAt.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)} [${generatedAt.zone.id}]")
-            appendLine("현재 상태는 보고서를 만들 때 조회한 값입니다. 오류 발생 당시 상태를 재현한 값은 아닙니다.")
-            appendLine("진단 이벤트는 과거 작업 기록입니다. 보내기 직전에 자동으로 갱신하지 않습니다.")
+            appendLine(strings.getString(R.string.diag_generated, generatedAt.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME), generatedAt.zone.id))
+            appendLine(strings.getString(R.string.diag_current_hint))
+            appendLine(strings.getString(R.string.diag_history_hint))
             appendLine()
-            appendLine("[앱 / 기기]")
-            appendLine("앱 버전: $versionName ($versionCode)")
-            appendLine("기기: ${Build.MANUFACTURER.take(128)} $model")
+            appendLine(strings.getString(R.string.diag_device_section))
+            appendLine(strings.getString(R.string.diag_version, versionName, versionCode))
+            appendLine(strings.getString(R.string.diag_device, Build.MANUFACTURER.take(128), model))
             appendLine("Android: ${Build.VERSION.RELEASE.take(128)} (SDK ${Build.VERSION.SDK_INT})")
-            appendLine("One UI: ${detectOneUiVersion()}")
-            appendLine("보안 패치: ${Build.VERSION.SECURITY_PATCH.ifBlank { "알 수 없음" }.take(128)}")
-            appendLine("소프트웨어 빌드: ${Build.DISPLAY.take(128)}")
+            appendLine("One UI: ${detectOneUiVersion() ?: strings.getString(R.string.diag_unknown)}")
+            appendLine(strings.getString(R.string.diag_patch, Build.VERSION.SECURITY_PATCH.ifBlank { strings.getString(R.string.diag_unknown) }.take(128)))
+            appendLine(strings.getString(R.string.diag_build, Build.DISPLAY.take(128)))
             appendLine()
-            appendLine("[현재 상태]")
+            appendLine(strings.getString(R.string.diag_state_section))
             appendLine("WRITE_SECURE_SETTINGS: ${yesNo(CscMuteManager.hasWritePermission(context))}")
-            appendLine("CSC 카메라 무음 설정값: ${yesNo(CscMuteManager.readCscMutedState(context))}")
-            appendLine("실제 촬영음: 앱에서 자동 확인하지 않음")
-            appendLine("개발자 옵션: ${yesNo(DeveloperOptionsManager.isDeveloperOptionsEnabled(context))}")
-            appendLine("무선 디버깅: ${yesNo(DeveloperOptionsManager.readWirelessDebuggingEnabled(context))}")
-            appendLine("로컬 네트워크 접근: ${yesNo(LocalNetworkAccess.isGranted(context))}")
-            appendLine("마지막 ADB 연결 포트: ${if (prefs.lastConnectPort in 1..65535) "저장됨" else "저장 안 됨"}")
+            appendLine(strings.getString(R.string.diag_csc, yesNo(CscMuteManager.readCscMutedState(context))))
+            appendLine(strings.getString(R.string.diag_shutter))
+            appendLine(strings.getString(R.string.diag_developer, yesNo(DeveloperOptionsManager.isDeveloperOptionsEnabled(context))))
+            appendLine(strings.getString(R.string.diag_wireless, yesNo(DeveloperOptionsManager.readWirelessDebuggingEnabled(context))))
+            appendLine(strings.getString(R.string.diag_network, yesNo(LocalNetworkAccess.isGranted(context))))
+            appendLine(strings.getString(R.string.diag_port, strings.getString(if (prefs.lastConnectPort in 1..65535) R.string.diag_saved else R.string.diag_not_saved)))
             appendLine()
-            appendLine(AudioDiagnosticSnapshot.read(context).format())
+            appendLine(AudioDiagnosticSnapshot.read(context).format(strings::getString))
             appendLine()
-            appendLine("[최근 진단 이벤트]")
-            appendLine("기록 범위: 최근 최대 ${DiagnosticLogger.MAX_EVENTS}개 보관 / 마지막 최대 ${MAX_EMAIL_EVENTS}개 포함")
+            appendLine(strings.getString(R.string.diag_events))
+            appendLine(strings.getString(R.string.diag_capacity, DiagnosticLogger.MAX_EVENTS, MAX_EMAIL_EVENTS))
             if (retainedEvents == null) {
-                appendLine("진단 기록을 읽지 못했습니다. 기록 유무와 포함 범위를 확인할 수 없습니다.")
+                appendLine(strings.getString(R.string.diag_read_failed))
             } else if (events.isEmpty()) {
-                appendLine("기록된 진단 이벤트가 없습니다.")
+                appendLine(strings.getString(R.string.diag_empty))
             } else {
-                appendLine("포함 범위: 보관된 ${retainedEvents.size}개 중 마지막 ${events.size}개 (이벤트 시각은 UTC)")
+                appendLine(strings.getString(R.string.diag_included, retainedEvents.size, events.size))
                 events.forEach(::appendLine)
             }
             appendLine()
-            appendLine("[개인정보 안내]")
-            appendLine("이 진단 정보에는 페어링 코드, IP 주소, Wi-Fi SSID/BSSID, IMEI, 일련번호, ADB 개인키/인증서를 기록하지 않습니다.")
+            appendLine(strings.getString(R.string.diag_privacy))
+            appendLine(strings.getString(R.string.diag_privacy_detail))
         }.trimEnd()
 
         Report(
-            subject = "ShutterSoundZero 오류 신고 - v$versionName / ${model}",
-            diagnosticText = diagnosticText
+            subject = strings.getString(R.string.diag_subject, versionName, model),
+            diagnosticText = diagnosticText,
+            languageTags = locales.toLanguageTags()
         )
-    }
-
-    private fun yesNo(value: Boolean?): String = when (value) {
-        true -> "예"
-        false -> "아니요"
-        null -> "알 수 없음"
     }
 
     /**
      * 삼성의 SEM_PLATFORM_INT는 One UI 세대별 플랫폼 번호가 10000씩 증가한다.
      * 값을 읽을 수 없는 기기에서는 추측하지 않고 '알 수 없음'으로 둔다.
      */
-    private fun detectOneUiVersion(): String {
+    private fun detectOneUiVersion(): String? {
         val semPlatformInt = runCatching {
             Build.VERSION::class.java.getField("SEM_PLATFORM_INT").getInt(null)
-        }.getOrNull() ?: return "알 수 없음"
+        }.getOrNull() ?: return null
 
         val major = semPlatformInt / 10_000 - 9
         val minor = (semPlatformInt % 10_000) / 100
-        return if (major in 1..20 && minor in 0..9) "$major.$minor" else "알 수 없음"
+        return if (major in 1..20 && minor in 0..9) "$major.$minor" else null
     }
 }

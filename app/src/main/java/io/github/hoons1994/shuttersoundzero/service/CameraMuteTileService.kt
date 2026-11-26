@@ -1,5 +1,6 @@
 package io.github.hoons1994.shuttersoundzero.service
 
+import io.github.hoons1994.shuttersoundzero.data.withAppLanguage
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
@@ -115,7 +116,7 @@ class CameraMuteTileService : TileService() {
     private fun authenticateKnownTarget() {
         val currentMuted = CscMuteManager.readCscMutedState(applicationContext)
         if (currentMuted == null) {
-            Toast.makeText(this, getString(R.string.csc_state_unknown_guidance), Toast.LENGTH_LONG).show()
+            Toast.makeText(this, withAppLanguage().getString(R.string.csc_state_unknown_guidance), Toast.LENGTH_LONG).show()
             updateTileState()
             return
         }
@@ -126,7 +127,7 @@ class CameraMuteTileService : TileService() {
         qsTile?.let { tile ->
             tile.icon = Icon.createWithResource(this, R.drawable.ic_qs_camera_mute)
             tile.state = Tile.STATE_UNAVAILABLE
-            tile.subtitle = getString(R.string.camera_settings_applying)
+            tile.subtitle = withAppLanguage().getString(R.string.camera_settings_applying)
             tile.updateTile()
         }
     }
@@ -151,12 +152,12 @@ class CameraMuteTileService : TileService() {
             isMuted == true -> Tile.STATE_ACTIVE
             else -> Tile.STATE_INACTIVE
         }
-        tile.label = getString(R.string.tile_name)
+        tile.label = withAppLanguage().getString(R.string.tile_name)
         tile.subtitle = when {
-            !hasUsablePermission -> getString(R.string.tile_permission_required)
-            isMuted == null -> getString(R.string.csc_state_unknown_title)
-            isMuted -> getString(R.string.tile_muted)
-            else -> getString(R.string.tile_unmuted)
+            !hasUsablePermission -> withAppLanguage().getString(R.string.tile_permission_required)
+            isMuted == null -> withAppLanguage().getString(R.string.csc_state_unknown_title)
+            isMuted -> withAppLanguage().getString(R.string.tile_muted)
+            else -> withAppLanguage().getString(R.string.tile_unmuted)
         }
         tile.updateTile()
     }

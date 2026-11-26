@@ -1,5 +1,9 @@
 package io.github.hoons1994.shuttersoundzero.service
 
+import android.content.Context
+import io.github.hoons1994.shuttersoundzero.data.applyLegacyLanguage
+import androidx.compose.ui.res.stringResource
+import io.github.hoons1994.shuttersoundzero.R
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Toast
@@ -14,7 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,7 +40,12 @@ class TileAuthenticationActivity : ComponentActivity() {
 
     private lateinit var viewModel: TileAuthenticationViewModel
     private var authenticationRequest: AppLockAuthenticator.AuthenticationRequest? = null
-    private var statusMessage by mutableStateOf("빠른 설정 타일을 인증하는 중입니다.")
+    private var statusMessage by mutableIntStateOf(R.string.tile_auth_pending)
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase)
+        applyLegacyLanguage()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,7 +67,7 @@ class TileAuthenticationActivity : ComponentActivity() {
                     ) {
                         CircularProgressIndicator()
                         Text(
-                            text = statusMessage,
+                            text = stringResource(statusMessage),
                             modifier = Modifier.padding(top = 20.dp),
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -104,8 +113,8 @@ class TileAuthenticationActivity : ComponentActivity() {
 
         authenticationRequest = AppLockAuthenticator.authenticate(
             activity = this,
-            title = "빠른 설정 타일 인증",
-            subtitle = "카메라 셔터음 설정을 변경하려면 본인 확인해 주세요.",
+            title = getString(R.string.tile_auth_title),
+            subtitle = getString(R.string.tile_auth_reason),
             onSuccess = { viewModel.runAuthorizedAction(targetMuted) },
             onCancelled = viewModel::cancelAuthentication,
             onError = { viewModel.authenticationError() }
@@ -119,15 +128,15 @@ class TileAuthenticationActivity : ComponentActivity() {
                     when (state) {
                         TileAuthenticationFlowState.IDLE,
                         TileAuthenticationFlowState.AUTHENTICATING ->
-                            statusMessage = "빠른 설정 타일을 인증하는 중입니다."
+                            statusMessage = R.string.tile_auth_pending
                         TileAuthenticationFlowState.RUNNING ->
-                            statusMessage = "카메라 셔터음 설정을 변경하는 중입니다."
+                            statusMessage = R.string.tile_change_pending
                         TileAuthenticationFlowState.COMPLETED,
                         TileAuthenticationFlowState.CANCELLED -> finish()
                         TileAuthenticationFlowState.AUTHENTICATION_UNAVAILABLE -> {
                             Toast.makeText(
                                 this@TileAuthenticationActivity,
-                                "기기에 지문 또는 PIN·패턴·비밀번호를 설정한 뒤 다시 시도해 주세요.",
+                                getString(R.string.app_lock_unconfigured_message),
                                 Toast.LENGTH_LONG
                             ).show()
                             finish()
@@ -135,7 +144,7 @@ class TileAuthenticationActivity : ComponentActivity() {
                         TileAuthenticationFlowState.AUTHENTICATION_ERROR -> {
                             Toast.makeText(
                                 this@TileAuthenticationActivity,
-                                "인증을 완료할 수 없습니다. 잠금 방식을 확인한 뒤 다시 시도해 주세요.",
+                                getString(R.string.app_lock_authentication_unavailable),
                                 Toast.LENGTH_LONG
                             ).show()
                             finish()

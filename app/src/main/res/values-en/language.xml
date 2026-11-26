@@ -1,0 +1,4 @@
+<resources>
+    <string name="language_title">Language</string>
+    <string name="language_follow_system">Follow system settings</string>
+</resources>

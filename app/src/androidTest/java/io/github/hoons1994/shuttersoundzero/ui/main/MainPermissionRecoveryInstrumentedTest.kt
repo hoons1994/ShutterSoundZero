@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.ui.main
 
+import io.github.hoons1994.shuttersoundzero.testing.targetString
+import io.github.hoons1994.shuttersoundzero.R
 import android.app.Activity
 import android.app.Application
 import android.content.ActivityNotFoundException
@@ -142,7 +144,7 @@ class MainPermissionRecoveryInstrumentedTest {
     }
 
     @Test fun existingPermissionReapplyOpensAppSettingsAndResumesWithoutAnotherCode() {
-        composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.home_reapply)).performScrollTo().performClick()
         assertPermissionRepairAvailable()
         openPermissionSettings()
         assertEquals(43210, prefs.lastConnectPort)
@@ -155,7 +157,7 @@ class MainPermissionRecoveryInstrumentedTest {
             assertEquals(listOf(true), appliedTargets)
             assertEquals(43210, prefs.lastConnectPort)
             assertEquals(0, context.serviceStarts)
-            assertFalse(viewModel.uiState.value.infoMessage.orEmpty().contains("코드 입력"))
+            assertFalse(viewModel.uiState.value.infoMessage?.let(::targetString).orEmpty().contains(targetString(R.string.pairing_action_enter_code)))
         }
     }
 
@@ -187,8 +189,8 @@ class MainPermissionRecoveryInstrumentedTest {
         permissionGranted = true
         wirelessEnabled = false
         returnFromPermissionSettings()
-        composeTestRule.onNodeWithText("무선 디버깅을 켜 주세요").assertExists()
-        composeTestRule.onNodeWithText("무선 디버깅 켜기").performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.wireless_enable_title)).assertExists()
+        composeTestRule.onNodeWithText(targetString(R.string.wireless_enable)).performClick()
         assertEquals(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS, context.settingsIntents.single().action)
         wirelessEnabled = true
         composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
@@ -202,7 +204,7 @@ class MainPermissionRecoveryInstrumentedTest {
     @Test fun unavailablePermissionSettingsKeepsTheRestoreRecoveryAction() {
         beginRestore()
         registry.failNextLaunch = true
-        composeTestRule.onNodeWithText("앱 권한 설정").performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.pairing_action_permission_settings)).performClick()
         assertPermissionRepairAvailable()
         composeTestRule.runOnIdle {
             assertEquals(false, viewModel.uiState.value.pendingCameraMuteTarget)
@@ -215,7 +217,7 @@ class MainPermissionRecoveryInstrumentedTest {
     }
 
     @Test fun newManualRequestCancelsTheOlderPermissionSettingsRequest() {
-        composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.home_reapply)).performScrollTo().performClick()
         openPermissionSettings()
         permissionGranted = true
         composeTestRule.runOnIdle { viewModel.toggleCscMute(false) }
@@ -225,15 +227,27 @@ class MainPermissionRecoveryInstrumentedTest {
 
     @Test fun pairingPermissionReturnKeepsItsOriginalRestoreTargetAndRunsOnce() {
         composeTestRule.runOnIdle {
-            prefs.pendingPairingTarget = false
+            prefs.beginPairingSetup(false, resetIdentity = true)
             viewModel.prepareAfterPermissionSettings(resumePairing = true)
-            prefs.pendingPairingTarget = true
             permissionGranted = true
             viewModel.resumeAfterPermissionSettings(context)
             viewModel.resumeAfterPermissionSettings(context)
             assertEquals(false, prefs.pendingPairingTarget)
             assertEquals(1, context.serviceStarts)
             assertEquals(1, context.settingsIntents.size)
+            assertTrue(requireNotNull(context.lastServiceIntent).getBooleanExtra("reset_identity", false))
+        }
+    }
+
+    @Test fun supersededPermissionReturnCannotStartAnOlderIdentityReset() {
+        composeTestRule.runOnIdle {
+            prefs.beginPairingSetup(false, resetIdentity = true)
+            viewModel.prepareAfterPermissionSettings(resumePairing = true)
+            prefs.beginPairingSetup(true)
+            permissionGranted = true
+            viewModel.resumeAfterPermissionSettings(context)
+            assertEquals(0, context.serviceStarts)
+            assertEquals(true, prefs.pendingPairingTarget)
         }
     }
 
@@ -280,12 +294,27 @@ class MainPermissionRecoveryInstrumentedTest {
         }
     }
 
+    @Test fun invalidatedAuthenticationRequiresCodeWithoutChangingTheRestoreGoal() {
+        composeTestRule.runOnIdle {
+            prefs.pendingPairingTarget = false
+            prefs.lastSetupIssue = SetupIssue.CAMERA_APPLY
+            prefs.invalidatePairingAuthentication()
+
+            viewModel.startNotificationPairing(context)
+
+            val intent = requireNotNull(context.lastServiceIntent)
+            assertFalse(intent.getBooleanExtra("target_muted", true))
+            assertFalse(intent.getBooleanExtra("resume_apply", true))
+            assertFalse(intent.getBooleanExtra("reset_identity", true))
+        }
+    }
+
     @Test fun unavailableWirelessSettingsDoesNotLeaveAnAutomaticApplyQueued() {
         permissionGranted = true
         wirelessEnabled = false
-        composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.home_reapply)).performScrollTo().performClick()
         context.failSettingsLaunch = true
-        composeTestRule.onNodeWithText("무선 디버깅 켜기").performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.wireless_enable)).performClick()
         wirelessEnabled = true
         composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
         composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
@@ -295,12 +324,12 @@ class MainPermissionRecoveryInstrumentedTest {
     @Test fun returningWithWirelessStillOffCanRetryTheSameGoalOnce() {
         permissionGranted = true
         wirelessEnabled = false
-        composeTestRule.onNodeWithText("다시 적용하기").performScrollTo().performClick()
-        composeTestRule.onNodeWithText("무선 디버깅 켜기").performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.home_reapply)).performScrollTo().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.wireless_enable)).performClick()
         composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
         composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         composeTestRule.runOnIdle { assertTrue(appliedTargets.isEmpty()) }
-        composeTestRule.onNodeWithText("무선 디버깅 켜기").performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.wireless_enable)).performClick()
         wirelessEnabled = true
         composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
         composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
@@ -318,12 +347,12 @@ class MainPermissionRecoveryInstrumentedTest {
     }
 
     private fun assertPermissionRepairAvailable() {
-        composeTestRule.onNodeWithText("앱 권한을 확인해 주세요").assertExists()
-        composeTestRule.onNodeWithText("앱 권한 설정").assertHasClickAction()
+        composeTestRule.onNodeWithText(targetString(R.string.failure_permission_title)).assertExists()
+        composeTestRule.onNodeWithText(targetString(R.string.pairing_action_permission_settings)).assertHasClickAction()
     }
 
     private fun openPermissionSettings() {
-        composeTestRule.onNodeWithText("앱 권한 설정").performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.pairing_action_permission_settings)).performClick()
         val intent = registry.intents.last()
         assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, intent.action)
         assertEquals("com.android.settings", intent.`package`)

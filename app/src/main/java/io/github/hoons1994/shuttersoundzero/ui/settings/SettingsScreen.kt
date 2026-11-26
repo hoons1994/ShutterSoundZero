@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +77,7 @@ fun SettingsScreen(
     onIdentityRecoveryRequested: (Boolean) -> Unit = onPairingRecoveryRequested
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val settingsLaunchFailureMessage = stringResource(R.string.settings_launch_failed)
     fun handleSettingsLaunch(result: Result<Unit>): Boolean {
@@ -114,13 +116,15 @@ fun SettingsScreen(
     var showDeveloperOptionsFallback by remember { mutableStateOf(false) }
     var developerOptionsResultMessage by remember { mutableStateOf<String?>(null) }
     var showLicenseDialog by remember { mutableStateOf(false) }
+    var showCameraRoutine by rememberSaveable { mutableStateOf(false) }
+    var showLanguagePicker by rememberSaveable { mutableStateOf(false) }
 
     var showRestoreConfirm by remember { mutableStateOf(false) }
     var showReapplyWirelessDebuggingHelp by remember { mutableStateOf(false) }
     var showRestoreWirelessDebuggingHelp by remember { mutableStateOf(false) }
     val cameraState = rememberCameraSettingsState()
-    var restoreResultMessage by remember { mutableStateOf<String?>(null) }
-    var cameraMuteFailure by remember { mutableStateOf<CameraMuteFailure?>(null) }
+    var restoreResultMessage by rememberSaveable { mutableStateOf<Int?>(null) }
+    var cameraMuteFailure by rememberSaveable { mutableStateOf<CameraMuteFailure?>(null) }
     var failedCameraMuteTarget by rememberSaveable { mutableStateOf(true) }
     var deniedLocalNetworkAction by rememberSaveable { mutableStateOf<CameraAction?>(null) }
     val recoveryRestoreConfirm = permissionRecovery == SettingsPermissionRecovery.CONFIRM_RESTORE
@@ -148,7 +152,7 @@ fun SettingsScreen(
     val runReapply: () -> Unit = {
         if (!operationState.isReapplyInProgress) {
             if (!CscMuteManager.hasWritePermission(context)) {
-                restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 눌러 주세요."
+                restoreResultMessage = R.string.require_first_setup
             } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
                 showReapplyWirelessDebuggingHelp = true
             } else if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
@@ -162,7 +166,7 @@ fun SettingsScreen(
     val resumeCameraAction: (CameraAction) -> Unit = { action ->
         cameraState.refresh()
         if (!CscMuteManager.hasWritePermission(context)) {
-            restoreResultMessage = "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 눌러 주세요."
+            restoreResultMessage = R.string.require_first_setup
         } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
             if (action == CameraAction.REAPPLY) showReapplyWirelessDebuggingHelp = true
             else showRestoreWirelessDebuggingHelp = true
@@ -211,7 +215,7 @@ fun SettingsScreen(
             permissionRecovery == null && deniedLocalNetworkAction == null &&
             !showRestoreConfirm && !recoveryRestoreConfirm && !showReapplyWirelessDebuggingHelp && !showRestoreWirelessDebuggingHelp &&
             !showDeveloperOptionsConfirm && !showDeveloperOptionsFallback && developerOptionsResultMessage == null &&
-            !showLicenseDialog && !isLockSetupInProgress && lockErrorMessage == null
+            !showLicenseDialog && !showCameraRoutine && !showLanguagePicker && !isLockSetupInProgress && lockErrorMessage == null
     )
 
     Scaffold(
@@ -219,7 +223,7 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "설정",
+                        text = stringResource(R.string.action_settings),
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 22.sp
@@ -230,7 +234,7 @@ fun SettingsScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "뒤로가기",
+                            contentDescription = stringResource(R.string.action_back),
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -251,7 +255,7 @@ fun SettingsScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            GroupLabel("카메라 설정")
+            GroupLabel(stringResource(R.string.settings_camera))
             SettingsCard {
                 if (cameraState.isCscMuted == null) {
                     ClickableRow(
@@ -261,14 +265,13 @@ fun SettingsScreen(
                     )
                 } else if (cameraState.isCscMuted == true) {
                     ClickableRow(
-                        title = "카메라 셔터음 원래대로 복원",
-                        subtitle = "셔터음 강제 설정값을 해제한 상태입니다.",
+                        title = stringResource(R.string.settings_restore),
+                        subtitle = stringResource(R.string.settings_force_off),
                         onClick = {
                             cameraSettingsViewModel.cancelPermissionRecovery()
                             cameraState.refresh()
                             if (!CscMuteManager.hasWritePermission(context)) {
-                                restoreResultMessage =
-                                    "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 눌러 주세요."
+                                restoreResultMessage = R.string.require_first_setup
                             } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
                                 showRestoreWirelessDebuggingHelp = true
                             } else if (!cameraSettingsViewModel.isLocalNetworkGranted(context)) {
@@ -280,14 +283,13 @@ fun SettingsScreen(
                     )
                 } else {
                     ClickableRow(
-                        title = if (operationState.isReapplyInProgress) "카메라 무음 다시 적용 중…" else "카메라 무음 다시 적용",
-                        subtitle = "카메라 설정이 기본 상태로 돌아왔다면 다시 적용해 주세요.",
+                        title = if (operationState.isReapplyInProgress) stringResource(R.string.settings_reapplying) else stringResource(R.string.settings_reapply),
+                        subtitle = stringResource(R.string.settings_reapply_hint),
                         onClick = {
                             cameraSettingsViewModel.cancelPermissionRecovery()
                             cameraState.refresh()
                             if (!CscMuteManager.hasWritePermission(context)) {
-                                restoreResultMessage =
-                                    "1회 설정이 필요합니다. 홈 화면에서 [1회 설정 시작]을 먼저 눌러 주세요."
+                                restoreResultMessage = R.string.require_first_setup
                             } else if (cameraSettingsViewModel.isWirelessDebuggingEnabled(context) == false) {
                                 showReapplyWirelessDebuggingHelp = true
                             } else if (!operationState.isReapplyInProgress) {
@@ -302,23 +304,35 @@ fun SettingsScreen(
                 }
                 RowDivider()
                 InfoRow(
-                    title = "사용 방법",
-                    subtitle = "카메라 설정을 바꿀 때만 무선 디버깅을 잠시 켜면 됩니다. 작업이 끝나면 앱이 다시 끄려고 시도합니다."
+                    title = stringResource(R.string.settings_usage),
+                    subtitle = stringResource(R.string.settings_wireless_hint)
                 )
+                if (CscMuteManager.isSamsungDevice()) {
+                    RowDivider()
+                    ClickableRow(
+                        title = stringResource(R.string.camera_routine_title),
+                        subtitle = stringResource(R.string.camera_routine_summary),
+                        onClick = { showCameraRoutine = true }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             GroupLabel(stringResource(R.string.app_appearance_title))
-            SettingsCard { ThemeSettingsSection(prefs) }
+            SettingsCard {
+                ThemeSettingsSection(prefs)
+                RowDivider()
+                LanguageSettingsRow(showLanguagePicker) { showLanguagePicker = it }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("보안")
+            GroupLabel(stringResource(R.string.settings_security))
             SettingsCard {
                 SwitchRow(
-                    title = "앱 잠금",
-                    subtitle = "앱 실행 시 지문 또는 화면 잠금으로 확인",
+                    title = stringResource(R.string.settings_lock),
+                    subtitle = stringResource(R.string.settings_lock_summary),
                     checked = isAppLockEnabled,
                     onCheckedChange = { enabled ->
                         if (isLockSetupInProgress) return@SwitchRow
@@ -326,18 +340,18 @@ fun SettingsScreen(
                         val activity = context.findActivity()
                         if (activity == null || !AppLockAuthenticator.canAuthenticate(context)) {
                             lockErrorMessage =
-                                "기기에 지문 또는 PIN·패턴·비밀번호를 먼저 설정한 뒤 다시 시도해 주세요."
+                                resources.getString(R.string.lock_setup_required)
                             return@SwitchRow
                         }
 
                         isLockSetupInProgress = true
                         lockAuthenticationRequest = AppLockAuthenticator.authenticate(
                             activity = activity,
-                            title = if (enabled) "앱 잠금 설정" else "앱 잠금 해제",
+                            title = if (enabled) resources.getString(R.string.lock_enable_title) else resources.getString(R.string.lock_disable_title),
                             subtitle = if (enabled) {
-                                "지문 또는 화면 잠금으로 본인 확인해 주세요."
+                                resources.getString(R.string.lock_enable_reason)
                             } else {
-                                "앱 잠금을 해제하려면 본인 확인해 주세요."
+                                resources.getString(R.string.lock_disable_reason)
                             },
                             onSuccess = {
                                 isLockSetupInProgress = false
@@ -356,7 +370,7 @@ fun SettingsScreen(
                             onError = {
                                 isLockSetupInProgress = false
                                 lockErrorMessage =
-                                    "인증을 사용할 수 없습니다. 기기의 화면 잠금 설정을 확인해 주세요."
+                                    resources.getString(R.string.lock_not_available)
                             }
                         )
                     }
@@ -365,11 +379,11 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("상태 확인 및 업데이트")
+            GroupLabel(stringResource(R.string.settings_status_updates))
             SettingsCard {
                 SwitchRow(
-                    title = "소프트웨어 업데이트 후 상태 확인",
-                    subtitle = "다시 설정이 필요한 경우에만 알림",
+                    title = stringResource(R.string.settings_check_update),
+                    subtitle = stringResource(R.string.settings_notify_if_needed),
                     checked = isSoftwareUpdateCheck,
                     onCheckedChange = { enabled ->
                         isSoftwareUpdateCheck = enabled
@@ -385,15 +399,15 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("기기 설정")
+            GroupLabel(stringResource(R.string.settings_device))
             SettingsCard {
                 NotificationPopupSettingsRow(
                     onClick = { PairingNotificationHelper.openNotificationSettings(context) }
                 )
                 RowDivider()
                 ClickableRow(
-                    title = "개발자 옵션 전체 끄기",
-                    subtitle = "선택 사항 · 개발자 옵션을 더 이상 사용하지 않을 때",
+                    title = stringResource(R.string.settings_disable_developer),
+                    subtitle = stringResource(R.string.settings_disable_developer_hint),
                     onClick = {
                         if (DeveloperOptionsManager.canDisableDirectly(context)) {
                             showDeveloperOptionsConfirm = true
@@ -417,20 +431,20 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            GroupLabel("앱 정보")
+            GroupLabel(stringResource(R.string.settings_about))
             SettingsCard {
                 InfoRow(
-                    title = "버전",
+                    title = stringResource(R.string.settings_version),
                     subtitle = versionName
                 )
                 RowDivider()
                 InfoRow(
-                    title = "개발자",
+                    title = stringResource(R.string.settings_developer),
                     subtitle = "charmingcolor"
                 )
                 RowDivider()
                 ClickableRow(
-                    title = "오픈소스 라이선스",
+                    title = stringResource(R.string.settings_licenses),
                     subtitle = "GNU General Public License v3.0 (GPL-3.0)",
                     onClick = { showLicenseDialog = true }
                 )
@@ -444,13 +458,12 @@ fun SettingsScreen(
                 onDismissRequest = { showReapplyWirelessDebuggingHelp = false },
                 title = { Text(if (cameraState.wirelessDebuggingEnabled == null) {
                     stringResource(R.string.wireless_debugging_state_unknown_title)
-                } else "무선 디버깅을 켜 주세요") },
+                } else stringResource(R.string.wireless_enable_title)) },
                 text = {
                     Text(
                         (if (cameraState.wirelessDebuggingEnabled == null) {
                             stringResource(R.string.wireless_debugging_state_unknown_guidance)
-                        } else "카메라 무음 설정을 다시 적용하는 동안에만 필요합니다.\n\n" +
-                            "무선 디버깅을 켠 뒤 앱으로 돌아와 [카메라 무음 다시 적용]을 다시 눌러 주세요.") +
+                        } else stringResource(R.string.wireless_reapply_help)) +
                             "\n\n" + stringResource(R.string.wireless_debugging_auto_blocker_guidance),
                         modifier = Modifier.verticalScroll(rememberScrollState())
                     )
@@ -463,12 +476,12 @@ fun SettingsScreen(
                             }
                         }
                     ) {
-                        Text("설정 열기")
+                        Text(stringResource(R.string.action_open_settings))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showReapplyWirelessDebuggingHelp = false }) {
-                        Text("취소")
+                        Text(stringResource(R.string.action_cancel))
                     }
                 },
                 shape = RoundedCornerShape(20.dp),
@@ -481,13 +494,12 @@ fun SettingsScreen(
                 onDismissRequest = { showRestoreWirelessDebuggingHelp = false },
                 title = { Text(if (cameraState.wirelessDebuggingEnabled == null) {
                     stringResource(R.string.wireless_debugging_state_unknown_title)
-                } else "무선 디버깅을 켜 주세요") },
+                } else stringResource(R.string.wireless_enable_title)) },
                 text = {
                     Text(
                         (if (cameraState.wirelessDebuggingEnabled == null) {
                             stringResource(R.string.wireless_debugging_state_unknown_guidance)
-                        } else "카메라 셔터음을 원래대로 복원하는 동안에만 필요합니다.\n\n" +
-                            "무선 디버깅을 켠 뒤 앱으로 돌아와 [카메라 셔터음 원래대로 복원]을 다시 눌러 주세요.") +
+                        } else stringResource(R.string.wireless_restore_help)) +
                             "\n\n" + stringResource(R.string.wireless_debugging_auto_blocker_guidance),
                         modifier = Modifier.verticalScroll(rememberScrollState())
                     )
@@ -500,12 +512,12 @@ fun SettingsScreen(
                             }
                         }
                     ) {
-                        Text("설정 열기")
+                        Text(stringResource(R.string.action_open_settings))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showRestoreWirelessDebuggingHelp = false }) {
-                        Text("취소")
+                        Text(stringResource(R.string.action_cancel))
                     }
                 },
                 shape = RoundedCornerShape(20.dp),
@@ -521,10 +533,10 @@ fun SettingsScreen(
                         cameraSettingsViewModel.cancelPermissionRecovery()
                     }
                 },
-                title = { Text("카메라 셔터음을 원래대로 복원할까요?") },
+                title = { Text(stringResource(R.string.restore_confirm)) },
                 text = {
                     Text(
-                        "진동·무음 모드에서도 카메라 셔터음이 나오는 기본 상태로 되돌립니다."
+                        stringResource(R.string.restore_confirm_body)
                     )
                 },
                 confirmButton = {
@@ -542,7 +554,7 @@ fun SettingsScreen(
                             cameraSettingsViewModel.setCameraMute(false)
                         }
                     ) {
-                        Text(if (operationState.isRestoreInProgress) "복원 중…" else "원래대로 복원")
+                        Text(if (operationState.isRestoreInProgress) stringResource(R.string.restore_busy) else stringResource(R.string.restore_action))
                     }
                 },
                 dismissButton = {
@@ -553,7 +565,7 @@ fun SettingsScreen(
                             cameraSettingsViewModel.cancelPermissionRecovery()
                         }
                     ) {
-                        Text("취소")
+                        Text(stringResource(R.string.action_cancel))
                     }
                 },
                 shape = RoundedCornerShape(20.dp),
@@ -596,11 +608,11 @@ fun SettingsScreen(
         restoreResultMessage?.let { message ->
             AlertDialog(
                 onDismissRequest = { restoreResultMessage = null },
-                title = { Text("카메라 설정") },
-                text = { Text(message) },
+                title = { Text(stringResource(R.string.settings_camera)) },
+                text = { Text(stringResource(message)) },
                 confirmButton = {
                     TextButton(onClick = { restoreResultMessage = null }) {
-                        Text("확인")
+                        Text(stringResource(R.string.action_ok))
                     }
                 },
                 shape = RoundedCornerShape(20.dp),
@@ -611,11 +623,11 @@ fun SettingsScreen(
         lockErrorMessage?.let { message ->
             AlertDialog(
                 onDismissRequest = { lockErrorMessage = null },
-                title = { Text("앱 잠금") },
+                title = { Text(stringResource(R.string.settings_lock)) },
                 text = { Text(message) },
                 confirmButton = {
                     TextButton(onClick = { lockErrorMessage = null }) {
-                        Text("확인")
+                        Text(stringResource(R.string.action_ok))
                     }
                 },
                 shape = RoundedCornerShape(20.dp),
@@ -626,11 +638,10 @@ fun SettingsScreen(
         if (showDeveloperOptionsConfirm) {
             AlertDialog(
                 onDismissRequest = { showDeveloperOptionsConfirm = false },
-                title = { Text("개발자 옵션 끄기") },
+                title = { Text(stringResource(R.string.developer_disable_title)) },
                 text = {
                     Text(
-                        "개발자 옵션과 USB·무선 디버깅을 모두 끕니다.\n\n" +
-                            "이미 연결된 ShutterSoundZero 권한과 적용된 카메라 설정은 그대로 유지됩니다."
+                        stringResource(R.string.developer_disable_body)
                     )
                 },
                 confirmButton = {
@@ -640,18 +651,18 @@ fun SettingsScreen(
                             val result = DeveloperOptionsManager.disableDeveloperOptions(context)
                             if (result.isSuccess) {
                                 developerOptionsResultMessage =
-                                    "개발자 옵션과 USB·무선 디버깅을 껐습니다."
+                                    resources.getString(R.string.developer_disabled)
                             } else {
                                 showDeveloperOptionsFallback = true
                             }
                         }
                     ) {
-                        Text("끄기")
+                        Text(stringResource(R.string.action_turn_off))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDeveloperOptionsConfirm = false }) {
-                        Text("취소")
+                        Text(stringResource(R.string.action_cancel))
                     }
                 },
                 shape = RoundedCornerShape(20.dp),
@@ -662,11 +673,10 @@ fun SettingsScreen(
         if (showDeveloperOptionsFallback) {
             AlertDialog(
                 onDismissRequest = { showDeveloperOptionsFallback = false },
-                title = { Text("개발자 옵션 끄기") },
+                title = { Text(stringResource(R.string.developer_disable_title)) },
                 text = {
                     Text(
-                        "이 기기에서는 앱이 개발자 옵션을 직접 끌 수 없습니다.\n\n" +
-                            "개발자 옵션 화면을 연 뒤 화면 상단의 사용 스위치를 꺼 주세요."
+                        stringResource(R.string.developer_manual_body)
                     )
                 },
                 confirmButton = {
@@ -677,12 +687,12 @@ fun SettingsScreen(
                             }
                         }
                     ) {
-                        Text("개발자 옵션 열기")
+                        Text(stringResource(R.string.developer_open))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDeveloperOptionsFallback = false }) {
-                        Text("취소")
+                        Text(stringResource(R.string.action_cancel))
                     }
                 },
                 shape = RoundedCornerShape(20.dp),
@@ -693,11 +703,11 @@ fun SettingsScreen(
         developerOptionsResultMessage?.let { message ->
             AlertDialog(
                 onDismissRequest = { developerOptionsResultMessage = null },
-                title = { Text("완료") },
+                title = { Text(stringResource(R.string.status_done)) },
                 text = { Text(message) },
                 confirmButton = {
                     TextButton(onClick = { developerOptionsResultMessage = null }) {
-                        Text("확인")
+                        Text(stringResource(R.string.action_ok))
                     }
                 },
                 shape = RoundedCornerShape(20.dp),
@@ -705,12 +715,16 @@ fun SettingsScreen(
             )
         }
 
+        if (showCameraRoutine) {
+            CameraRoutineDialog(onDismiss = { showCameraRoutine = false })
+        }
+
         if (showLicenseDialog) {
             AlertDialog(
                 onDismissRequest = { showLicenseDialog = false },
                 title = {
                     Text(
-                        text = "오픈소스 라이선스",
+                        text = stringResource(R.string.settings_licenses),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                 },
@@ -722,12 +736,12 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "Shutter Sound Zero (셔터사운드 제로)\nCopyright (C) 2026 charmingcolor",
+                            text = stringResource(R.string.license_copyright),
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "본 프로그램은 자유 소프트웨어입니다. 자유 소프트웨어 재단이 공표한 GNU General Public License 버전 3 (GPL-3.0)의 조건에 따라 재배포하거나 수정할 수 있습니다.\n\n이 프로그램은 유용하게 사용되기를 바라는 목적으로 배포되지만, 특정한 목적에 대한 적합성이나 상업성에 대한 묵시적 보증을 포함하여 어떠한 형태의 보증도 제공되지 않습니다.",
+                            text = stringResource(R.string.license_terms),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 18.sp
@@ -737,12 +751,12 @@ fun SettingsScreen(
                             thickness = 0.5.dp
                         )
                         Text(
-                            text = "사용된 오픈소스 라이브러리:",
+                            text = stringResource(R.string.license_libraries),
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "• Android Jetpack / Compose (Apache 2.0)\n• libadb-android (GPL-3.0 / Apache 2.0)\n• SPAKE2 (Muntashir Al-Islam, LGPL-3.0, 수정된 소스 포함)\n• Bouncy Castle (Bouncy Castle Licence)\n• Conscrypt (Apache 2.0)",
+                            text = stringResource(R.string.license_list),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 18.sp
@@ -751,7 +765,7 @@ fun SettingsScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showLicenseDialog = false }) {
-                        Text("확인")
+                        Text(stringResource(R.string.action_ok))
                     }
                 },
                 shape = RoundedCornerShape(20.dp),

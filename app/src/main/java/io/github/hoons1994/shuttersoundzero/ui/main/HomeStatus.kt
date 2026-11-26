@@ -10,6 +10,9 @@ internal enum class HomeStatus {
 
 internal fun resolveHomeStatus(uiState: MainUiState): HomeStatus = when {
     uiState.isCscChangeInProgress -> HomeStatus.APPLYING
+    uiState.pendingPairingIdentityReset || (uiState.pendingPairingTarget != null &&
+        (uiState.setupIssue != null || uiState.pendingPairingTarget != uiState.isCscMuted)) ->
+        HomeStatus.SETUP_REQUIRED
     uiState.isCscMuted == true && uiState.hasCscPermission -> HomeStatus.READY
     uiState.isCscMuted == null && uiState.hasCscPermission -> HomeStatus.STATE_UNKNOWN
     uiState.hasCscPermission -> HomeStatus.REAPPLY_REQUIRED

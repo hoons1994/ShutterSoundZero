@@ -60,12 +60,15 @@ class MainScreenViewModel internal constructor(
         val app = getApplication<Application>()
         val hasPermission = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
         val isMuted = CscMuteManager.readCscMutedState(app)
+        val pendingSetup = prefs.pendingPairingSetup()
         return MainUiState(
             isCscMuted = isMuted,
             hasCscPermission = hasPermission,
             isDeveloperOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(app),
             isWirelessDebuggingEnabled = wirelessDebuggingState(app),
             setupIssue = prefs.lastSetupIssue,
+            pendingPairingTarget = pendingSetup?.targetMuted,
+            pendingPairingIdentityReset = pendingSetup?.resetIdentity == true,
             systemVolume = readSystemVolume()
         )
     }
@@ -75,8 +78,12 @@ class MainScreenViewModel internal constructor(
         val perm = !prefs.isPermissionRevokedByUser && CscMuteManager.hasWritePermission(app)
         val isMuted = CscMuteManager.readCscMutedState(app)
         val wirelessDebuggingEnabled = wirelessDebuggingState(app)
+        val pendingSetup = prefs.pendingPairingSetup()
+        val issue = prefs.lastSetupIssue
 
-        if (isSetupTargetApplied(perm, isMuted, prefs.pendingPairingTarget) && prefs.lastSetupIssue != null) {
+        if (issue != null && (pendingSetup == null || issue == SetupIssue.CAMERA_APPLY) &&
+            pendingSetup?.resetIdentity != true && isSetupTargetApplied(perm, isMuted, pendingSetup?.targetMuted)
+        ) {
             prefs.lastSetupIssue = null
         }
 
@@ -86,6 +93,8 @@ class MainScreenViewModel internal constructor(
                 hasCscPermission = perm,
                 isDeveloperOptionsEnabled = DeveloperOptionsManager.isDeveloperOptionsEnabled(app),
                 setupIssue = prefs.lastSetupIssue,
+                pendingPairingTarget = pendingSetup?.targetMuted,
+                pendingPairingIdentityReset = pendingSetup?.resetIdentity == true,
                 systemVolume = readSystemVolume().copy(requested = current.systemVolume.requested)
             )
         }
@@ -101,7 +110,7 @@ class MainScreenViewModel internal constructor(
             isStreamMuted = audioManager.isStreamMute(AudioManager.STREAM_SYSTEM)
         )
     } catch (_: RuntimeException) {
-        SystemVolumeUiState(error = getApplication<Application>().getString(R.string.system_volume_read_failed))
+        SystemVolumeUiState(error = R.string.system_volume_read_failed)
     }
 
     fun setSystemVolume(index: Int): Int? {
@@ -131,7 +140,7 @@ class MainScreenViewModel internal constructor(
                 DiagnosticLogger.Outcome.FAILURE, DiagnosticLogger.VolumeReason.SECURITY_BLOCKED,
                 SystemClock.elapsedRealtime() - started)
             _uiState.update { it.copy(systemVolume = volume.copy(
-                error = getApplication<Application>().getString(R.string.system_volume_permission_blocked)
+                error = R.string.system_volume_permission_blocked
             )) }
             return volume.current
         } catch (_: RuntimeException) {
@@ -139,7 +148,7 @@ class MainScreenViewModel internal constructor(
                 DiagnosticLogger.Outcome.FAILURE, DiagnosticLogger.VolumeReason.CHANGE_FAILED,
                 SystemClock.elapsedRealtime() - started)
             _uiState.update { it.copy(systemVolume = volume.copy(
-                error = getApplication<Application>().getString(R.string.system_volume_change_failed)
+                error = R.string.system_volume_change_failed
             )) }
             return volume.current
         }
@@ -166,13 +175,12 @@ class MainScreenViewModel internal constructor(
                 if (reason == DiagnosticLogger.VolumeReason.INDEX_APPLIED) DiagnosticLogger.Outcome.SUCCESS
                 else DiagnosticLogger.Outcome.FAILURE, reason, SystemClock.elapsedRealtime() - started)
             val updated = if (actual.current != null && actual.current != requested && !actual.isRingerMuted) {
-                actual.copy(error = getApplication<Application>().getString(
-                    if (actual.isStreamMuted && isDoNotDisturbEnabled()) {
-                        R.string.system_volume_dnd_blocked
-                    } else {
-                        R.string.system_volume_not_applied
-                    }
-                ))
+                val error = if (actual.isStreamMuted && isDoNotDisturbEnabled()) {
+                    R.string.system_volume_dnd_blocked
+                } else {
+                    R.string.system_volume_not_applied
+                }
+                actual.copy(error = error)
             } else {
                 actual
             }
@@ -199,8 +207,13 @@ class MainScreenViewModel internal constructor(
     fun startNotificationPairing(context: Context, targetMuted: Boolean = prefs.pendingPairingTarget ?: true,
                                  resetIdentity: Boolean = false) {
         cancelAfterPermissionSettings()
-        prefs.pendingPairingTarget = targetMuted
-        val resumeApply = !resetIdentity && prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY
+        val pending = prefs.pendingPairingSetup()
+        val request = if (pending?.targetMuted == targetMuted && (!resetIdentity || pending.resetIdentity)) {
+            pending
+        } else {
+            prefs.beginPairingSetup(targetMuted, resetIdentity)
+        }
+        val resumeApply = !request.resetIdentity && prefs.lastSetupIssue == SetupIssue.CAMERA_APPLY
         val devOptionsOff = !DeveloperOptionsManager.isDeveloperOptionsEnabled(context)
         if (!handleSettingsLaunch(SetupSettingsNavigator.openPairingSetupScreen(context))) return
         if (!resumeApply) {
@@ -211,17 +224,19 @@ class MainScreenViewModel internal constructor(
         _uiState.update {
             it.copy(
                 setupIssue = if (resumeApply) SetupIssue.CAMERA_APPLY else null,
+                pendingPairingTarget = targetMuted,
+                pendingPairingIdentityReset = request.resetIdentity,
                 cameraMuteFailure = null,
                 pendingCameraMuteTarget = null,
                 showSwitchFailureHelp = false,
                 showWirelessDebuggingCleanupHelp = false
             )
         }
-        PairingForegroundService.start(context, devOptionsOff, resumeApply, targetMuted, resetIdentity)
+        PairingForegroundService.start(context, devOptionsOff, resumeApply, targetMuted, request.resetIdentity, request.revision)
         _uiState.update {
             it.copy(
-                infoMessage = context.getString(if (resumeApply) R.string.pairing_help_connection_retry
-                    else R.string.main_pairing_code_entry_guidance),
+                infoMessage = if (resumeApply) R.string.pairing_help_connection_retry
+                    else R.string.main_pairing_code_entry_guidance,
                 errorMessage = null
             )
         }
@@ -237,7 +252,7 @@ class MainScreenViewModel internal constructor(
             _uiState.update {
                 it.copy(
                     infoMessage = null,
-                    errorMessage = getApplication<Application>().getString(R.string.settings_launch_failed)
+                    errorMessage = R.string.settings_launch_failed
                 )
             }
         }
@@ -253,14 +268,14 @@ class MainScreenViewModel internal constructor(
 
         if (!isSamsungDevice()) {
             _uiState.update {
-                it.copy(errorMessage = app.getString(R.string.main_non_samsung_device_error))
+                it.copy(errorMessage = R.string.main_non_samsung_device_error)
             }
             return
         }
 
         if (!CscMuteManager.hasWritePermission(app)) {
             _uiState.update {
-                it.copy(errorMessage = app.getString(R.string.main_write_secure_settings_required))
+                it.copy(errorMessage = R.string.main_write_secure_settings_required)
             }
             return
         }
@@ -301,23 +316,22 @@ class MainScreenViewModel internal constructor(
             try {
                 val adbResult = changeCameraMute(enableMute)
                 if (adbResult.isSuccess) {
-                    if (enableMute) {
-                        prefs.lastSetupIssue = null
-                    }
                     val wirelessCleanup = adbResult.getOrThrow().wirelessCleanup
                     _uiState.update {
                         it.copy(
                             isWirelessDebuggingEnabled = wirelessDebuggingState(app),
                             setupIssue = prefs.lastSetupIssue,
+                            pendingPairingTarget = prefs.pendingPairingTarget,
+                            pendingPairingIdentityReset = prefs.pendingPairingSetup()?.resetIdentity == true,
                             infoMessage = when {
                                 enableMute && wirelessCleanup.isSuccess ->
-                                    app.getString(R.string.main_mute_applied_wireless_disabled)
+                                    R.string.main_mute_applied_wireless_disabled
                                 !enableMute && wirelessCleanup.isSuccess ->
-                                    app.getString(R.string.main_restore_applied_wireless_disabled)
+                                    R.string.main_restore_applied_wireless_disabled
                                 enableMute ->
-                                    app.getString(R.string.main_mute_applied_disable_wireless_manually)
+                                    R.string.main_mute_applied_disable_wireless_manually
                                 else ->
-                                    app.getString(R.string.main_restore_applied_disable_wireless_manually)
+                                    R.string.main_restore_applied_disable_wireless_manually
                             },
                             errorMessage = null,
                             showWirelessDebuggingCleanupHelp = wirelessCleanup.isFailure
@@ -377,6 +391,7 @@ class MainScreenViewModel internal constructor(
 
     fun prepareAfterPermissionSettings(cameraTarget: Boolean? = null, resumePairing: Boolean = false) {
         cancelCameraMuteAfterWirelessSettings()
+        savedStateHandle[PERMISSION_PAIR_REVISION] = if (resumePairing) prefs.pairingSetupRevision else null
         savedStateHandle[PERMISSION_SETTINGS_REQUEST] = when {
             cameraTarget == true -> PERMISSION_MUTE
             cameraTarget == false -> PERMISSION_RESTORE
@@ -388,16 +403,19 @@ class MainScreenViewModel internal constructor(
 
     fun cancelAfterPermissionSettings() {
         savedStateHandle.remove<String>(PERMISSION_SETTINGS_REQUEST)
+        savedStateHandle.remove<Long>(PERMISSION_PAIR_REVISION)
     }
 
     fun resumeAfterPermissionSettings(context: Context) {
         if (prefs.isAppLockEnabled && !AppLockSession.isUnlocked) return
         if (_uiState.value.isCscChangeInProgress) return
         val request = savedStateHandle.remove<String>(PERMISSION_SETTINGS_REQUEST) ?: return
+        val revision = savedStateHandle.remove<Long>(PERMISSION_PAIR_REVISION)
         when (request) {
             PERMISSION_MUTE -> toggleCscMute(true)
             PERMISSION_RESTORE -> toggleCscMute(false)
             PERMISSION_PAIR_MUTE, PERMISSION_PAIR_RESTORE -> {
+                if (revision != prefs.pairingSetupRevision) return
                 if (localNetworkGranted(context)) startNotificationPairing(context, request == PERMISSION_PAIR_MUTE)
                 else reportLocalNetworkPermissionDenied()
             }
@@ -407,6 +425,7 @@ class MainScreenViewModel internal constructor(
     private companion object {
         const val WIRELESS_SETTINGS_TARGET = "cameraMuteAfterWirelessSettings"
         const val PERMISSION_SETTINGS_REQUEST = "permissionSettingsRequest"
+        const val PERMISSION_PAIR_REVISION = "permissionPairingRevision"
         const val PERMISSION_MUTE = "mute"
         const val PERMISSION_RESTORE = "restore"
         const val PERMISSION_PAIR_MUTE = "pair_mute"
@@ -427,7 +446,7 @@ class MainScreenViewModel internal constructor(
             _uiState.update {
                 it.copy(
                     infoMessage = null,
-                    errorMessage = app.getString(R.string.main_reset_local_network_permission_required)
+                    errorMessage = R.string.main_reset_local_network_permission_required
                 )
             }
             return
@@ -435,21 +454,18 @@ class MainScreenViewModel internal constructor(
 
         viewModelScope.launch {
             val result = cameraSettings.revokePermissionViaAdb()
-            if (result.isSuccess) {
-                prefs.lastSetupIssue = null
-            }
             refreshState()
             _uiState.update {
                 if (result.isSuccess) {
                     it.copy(
                         setupIssue = null,
-                        infoMessage = app.getString(R.string.main_permission_reset_success),
+                        infoMessage = R.string.main_permission_reset_success,
                         errorMessage = null
                     )
                 } else {
                     it.copy(
                         infoMessage = null,
-                        errorMessage = app.getString(R.string.main_permission_reset_failed)
+                        errorMessage = R.string.main_permission_reset_failed
                     )
                 }
             }

@@ -1,24 +1,25 @@
 package io.github.hoons1994.shuttersoundzero.core.adb
 
-internal const val PAIRING_RECOVERY_LABEL = "6자리 코드로 다시 연결"
+import androidx.annotation.StringRes
+import io.github.hoons1994.shuttersoundzero.R
 
 /** Actionable failure categories shared by home, settings and the quick-settings tile. */
-enum class CameraMuteFailure(val title: String, val message: String) {
+enum class CameraMuteFailure(@StringRes val titleRes: Int, @StringRes val messageRes: Int) {
     LOCAL_NETWORK_PERMISSION(
-        "앱 권한을 확인해 주세요",
-        "카메라 설정을 바꾸려면 로컬 네트워크 권한이 필요합니다. [앱 권한 설정]에서 [근처 기기]를 허용해 주세요. 기기에 따라 [로컬 네트워크]로 표시될 수 있습니다."
+        R.string.failure_permission_title,
+        R.string.failure_permission_body
     ),
     DISCOVERY(
-        "무선 디버깅 연결을 찾지 못했어요",
-        "Wi-Fi가 연결됐는지, 무선 디버깅 화면에서 연결을 허용했는지 확인해 주세요. 무선 디버깅을 껐다 켠 뒤 다시 시도하고, 계속 실패하면 앱의 연결 오류 안내에서 [$PAIRING_RECOVERY_LABEL]을 눌러 새 코드로 연결해 주세요."
+        R.string.failure_discovery_title,
+        R.string.failure_discovery_body
     ),
     CONNECTION(
-        "기기에 연결하지 못했어요",
-        "기존 페어링이 만료되거나 해제됐을 수 있습니다. 앱의 연결 오류 안내에서 [$PAIRING_RECOVERY_LABEL]을 눌러 새 코드로 연결해 주세요. 무선 디버깅을 켜는 것만으로는 연결이 복구되지 않을 수 있습니다."
+        R.string.failure_connection_title,
+        R.string.failure_connection_body
     ),
     APPLY(
-        "카메라 설정을 변경하지 못했어요",
-        "설정을 적용하거나 확인하는 중에 오류가 발생했습니다. 다시 시도해도 실패하면 설정 → 도움말의 오류 신고에 진단 정보를 포함해 주세요."
+        R.string.failure_apply_title,
+        R.string.failure_apply_body
     );
 
     val canReconnect: Boolean get() = this == DISCOVERY || this == CONNECTION

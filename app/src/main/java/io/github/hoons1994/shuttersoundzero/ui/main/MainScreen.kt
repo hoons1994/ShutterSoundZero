@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -76,16 +77,16 @@ fun MainScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val prefs = remember(context) { PreferencesRepository.getInstance(context) }
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    var showWifiRequiredDialog by remember { mutableStateOf(false) }
-    var resetIdentityForSetup by rememberSaveable { mutableStateOf(false) }
+    var wifiDialogRevision by rememberSaveable { mutableStateOf<Long?>(null) }
+    var permissionRequestRevision by rememberSaveable { mutableStateOf<Long?>(null) }
 
     val startPairing = {
-        viewModel.startNotificationPairing(context, prefs.pendingPairingTarget ?: true, resetIdentityForSetup)
-        resetIdentityForSetup = false
+        prefs.pendingPairingSetup()?.let { viewModel.startNotificationPairing(context, it.targetMuted) }
     }
 
     val permissionSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -97,14 +98,16 @@ fun MainScreen(
     val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ ->
+        val revision = permissionRequestRevision
+        permissionRequestRevision = null
+        if (revision != prefs.pairingSetupRevision) return@rememberLauncherForActivityResult
         if (LocalNetworkAccess.isGranted(context)) {
             startPairing()
         } else {
-            resetIdentityForSetup = false
             viewModel.reportLocalNetworkPermissionDenied()
             Toast.makeText(
                 context,
-                "기기 연결을 위해 [앱 설정 → 권한 → 근처 기기]를 허용해 주세요. 기기에 따라 [로컬 네트워크]로 표시될 수 있습니다.",
+                resources.getString(R.string.setup_network_permission),
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -118,7 +121,10 @@ fun MainScreen(
                 AccessLocalNetworkPermission
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            localNetworkPermissionLauncher.launch(AccessLocalNetworkPermission)
+            if (permissionRequestRevision == null) {
+                permissionRequestRevision = prefs.pairingSetupRevision
+                localNetworkPermissionLauncher.launch(AccessLocalNetworkPermission)
+            }
         } else {
             startPairing()
         }
@@ -127,13 +133,15 @@ fun MainScreen(
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        val revision = permissionRequestRevision
+        permissionRequestRevision = null
+        if (revision != prefs.pairingSetupRevision) return@rememberLauncherForActivityResult
         if (isGranted) {
             requestLocalNetworkAccess()
         } else {
-            resetIdentityForSetup = false
             Toast.makeText(
                 context,
-                "6자리 코드를 입력하려면 알림 권한이 필요합니다. [앱 설정]에서 알림을 켜 주세요.",
+                resources.getString(R.string.setup_notification_permission),
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -141,7 +149,7 @@ fun MainScreen(
 
     val requestPairingNotification: () -> Unit = {
         if (!WifiConnectionStatus.isWifiConnected(context)) {
-            showWifiRequiredDialog = true
+            wifiDialogRevision = prefs.pairingSetupRevision
         } else if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
@@ -149,12 +157,14 @@ fun MainScreen(
                 Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            if (permissionRequestRevision == null) {
+                permissionRequestRevision = prefs.pairingSetupRevision
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         } else if (!PairingNotificationHelper.areNotificationsEnabled(context)) {
-            resetIdentityForSetup = false
             Toast.makeText(
                 context,
-                "알림이 꺼져 있습니다. 코드를 입력하려면 알림을 켜 주세요.",
+                resources.getString(R.string.setup_notifications_off),
                 Toast.LENGTH_LONG
             ).show()
             PairingNotificationHelper.openNotificationSettings(context)
@@ -223,11 +233,11 @@ fun MainScreen(
 
     LaunchedEffect(uiState.infoMessage, uiState.errorMessage) {
         uiState.infoMessage?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(resources.getString(it))
             viewModel.dismissMessages()
         }
         uiState.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(resources.getString(it))
             viewModel.dismissMessages()
         }
     }
@@ -239,7 +249,7 @@ fun MainScreen(
             }
             context.startActivity(cameraIntent)
         } catch (_: Exception) {
-            Toast.makeText(context, "기본 카메라 앱을 실행할 수 없습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, resources.getString(R.string.camera_launch_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -247,21 +257,27 @@ fun MainScreen(
         viewModel.toggleCscMute(true)
     }
     val startSetup: (Boolean, Boolean) -> Unit = { targetMuted, resetIdentity ->
-        resetIdentityForSetup = resetIdentity
         viewModel.cancelAfterPermissionSettings()
         if (!CscMuteManager.isSamsungDevice()) {
             Toast.makeText(
                 context,
-                "이 앱은 삼성 갤럭시 전용 앱입니다.",
+                resources.getString(R.string.galaxy_only),
                 Toast.LENGTH_LONG
             ).show()
         } else {
-            prefs.pendingPairingTarget = targetMuted
+            prefs.beginPairingSetup(targetMuted, resetIdentity)
+            viewModel.refreshState()
             requestPairingNotification()
         }
     }
 
-    val setupAction: () -> Unit = { startSetup(prefs.pendingPairingTarget ?: true, false) }
+    val setupAction: () -> Unit = {
+        if (prefs.pendingPairingSetup() == null) startSetup(true, false)
+        else {
+            viewModel.cancelAfterPermissionSettings()
+            requestPairingNotification()
+        }
+    }
 
     LaunchedEffect(pairingRecoveryTarget) {
         if (pairingRecoveryTarget != null) {
@@ -275,7 +291,7 @@ fun MainScreen(
         prefs = prefs,
         enabled = !uiState.isCscChangeInProgress && uiState.infoMessage == null && uiState.errorMessage == null &&
             !uiState.showWirelessDebuggingCleanupHelp && !uiState.showSwitchFailureHelp &&
-            uiState.cameraMuteFailure == null && !showWifiRequiredDialog
+            uiState.cameraMuteFailure == null && wifiDialogRevision == null
     )
 
     Scaffold(
@@ -319,19 +335,24 @@ fun MainScreen(
         )
     }
 
-    if (showWifiRequiredDialog) {
+    wifiDialogRevision?.let { revision ->
+        val cancelSetup = {
+            wifiDialogRevision = null
+            prefs.finishPairingSetup(revision)
+            viewModel.refreshState()
+        }
         io.github.hoons1994.shuttersoundzero.ui.components.ModernPromptDialog(
-            eyebrow = "연결 확인",
-            title = "Wi-Fi 연결이 필요해요",
-            message = "1회 설정을 하려면 Wi-Fi에 연결해 주세요.\n\nWi-Fi에 연결한 뒤 다시 [1회 설정 시작]을 눌러 주세요.",
-            primaryLabel = "Wi-Fi 설정 열기",
+            eyebrow = stringResource(R.string.connection_check),
+            title = stringResource(R.string.wifi_needed),
+            message = stringResource(R.string.wifi_setup_message),
+            primaryLabel = stringResource(R.string.wifi_open),
             onPrimary = {
-                showWifiRequiredDialog = false
+                wifiDialogRevision = null
                 viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWifiSettings(context))
             },
-            secondaryLabel = "닫기",
-            onSecondary = { showWifiRequiredDialog = false; resetIdentityForSetup = false },
-            onDismissRequest = { showWifiRequiredDialog = false; resetIdentityForSetup = false }
+            secondaryLabel = stringResource(R.string.camera_routine_close),
+            onSecondary = cancelSetup,
+            onDismissRequest = cancelSetup
         )
     }
 
@@ -363,16 +384,14 @@ fun MainScreen(
         AlertDialog(
             onDismissRequest = { viewModel.dismissSwitchFailureHelp() },
             shape = RoundedCornerShape(24.dp),
-            title = { Text("무선 디버깅을 켜 주세요") },
+            title = { Text(stringResource(R.string.wireless_enable_title)) },
             text = {
                 Text(
-                    "카메라 설정을 바꾸는 동안에만 무선 디버깅이 필요합니다.\n\n" +
+                    stringResource(R.string.wireless_during_change) +
                         (if (cameraMuteTarget != null) {
-                            "무선 디버깅을 켠 뒤 앱으로 돌아오면 " +
-                                (if (cameraMuteTarget) "다시 적용을" else "원래대로 복원을") +
-                                " 계속합니다. 완료 후에는 앱이 다시 끄려고 시도합니다."
+                            stringResource(if (cameraMuteTarget) R.string.wireless_resume_apply else R.string.wireless_resume_restore)
                         } else {
-                            "무선 디버깅을 켠 뒤 앱으로 돌아와 [다시 적용하기]를 눌러 주세요. 완료 후에는 앱이 다시 끄려고 시도합니다."
+                            stringResource(R.string.wireless_retry_from_home)
                         }) + "\n\n" + stringResource(R.string.wireless_debugging_auto_blocker_guidance),
                     modifier = Modifier.verticalScroll(rememberScrollState())
                 )
@@ -387,12 +406,12 @@ fun MainScreen(
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("무선 디버깅 켜기")
+                    Text(stringResource(R.string.wireless_enable))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissSwitchFailureHelp() }) {
-                    Text("나중에")
+                    Text(stringResource(R.string.action_later))
                 }
             }
         )
@@ -402,11 +421,10 @@ fun MainScreen(
         AlertDialog(
             onDismissRequest = { viewModel.dismissWirelessDebuggingCleanupHelp() },
             shape = RoundedCornerShape(24.dp),
-            title = { Text("무선 디버깅을 꺼 주세요") },
+            title = { Text(stringResource(R.string.wireless_disable_title)) },
             text = {
                 Text(
-                    "카메라 무음 설정은 완료됐지만 이 기기에서는 무선 디버깅을 자동으로 끄지 못했습니다.\n\n" +
-                        "기기 설정에서 무선 디버깅을 직접 꺼 주세요."
+                    stringResource(R.string.wireless_cleanup_failed)
                 )
             },
             confirmButton = {
@@ -417,12 +435,12 @@ fun MainScreen(
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("설정 열기")
+                    Text(stringResource(R.string.action_open_settings))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissWirelessDebuggingCleanupHelp() }) {
-                    Text("나중에")
+                    Text(stringResource(R.string.action_later))
                 }
             }
         )
