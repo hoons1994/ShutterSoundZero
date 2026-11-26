@@ -12,14 +12,16 @@ const shaPattern = /^[0-9a-f]{40}$/;
 const checkFields = `checkSuites(first:30) { pageInfo { hasNextPage } nodes {
   app { slug } checkRuns(first:100) { pageInfo { hasNextPage } nodes { name status conclusion } }
 } }`;
-export const query = `query($owner:String!, $name:String!) {
+const pageSize = 5;
+const historyLimit = 30;
+export const query = `query($owner:String!, $name:String!, $after:String, $firstPage:Boolean!) {
   repository(owner:$owner,name:$name) {
-    defaultBranchRef { target { ... on Commit { history(first:30) { totalCount nodes {
+    defaultBranchRef { target { ... on Commit { oid history(first:${pageSize},after:$after) { totalCount pageInfo { hasNextPage endCursor } nodes {
       oid associatedPullRequests(first:1) { nodes {
         number mergedAt headRefOid commits(last:1) { nodes { commit { oid ${checkFields} } } }
       } }
     } } } } }
-    baseline:object(oid:"${baseline}") { ... on Commit { oid ${checkFields} } }
+    baseline:object(oid:"${baseline}") @include(if:$firstPage) { ... on Commit { oid ${checkFields} } }
   }
 }`;
 
@@ -62,18 +64,38 @@ export async function verifySastCoverage({ repository, token, request = fetch })
     return response.json();
   }
   const [owner, name] = repository.split('/');
-  const result = await json('https://api.github.com/graphql', {
-    method: 'POST', body: JSON.stringify({ query, variables: { owner, name } }),
-  });
-  const repo = result?.data?.repository;
-  const history = repo?.defaultBranchRef?.target?.history;
-  const commits = history?.nodes;
-  if (result.errors?.length || !Number.isSafeInteger(history?.totalCount) ||
-      history.totalCount < 1 || !Array.isArray(commits) ||
-      commits.length !== Math.min(30, history.totalCount) ||
-      new Set(commits.map(commit => commit.oid)).size !== commits.length) {
-    throw new Error('Incomplete SAST history response');
-  }
+  const commits = [];
+  const cursors = new Set();
+  let after = null, tip, totalCount, baselineCommit;
+  do {
+    const firstPage = after === null;
+    const result = await json('https://api.github.com/graphql', {
+      method: 'POST', body: JSON.stringify({ query, variables: { owner, name, after, firstPage } }),
+    });
+    const repo = result?.data?.repository;
+    const target = repo?.defaultBranchRef?.target;
+    const history = target?.history;
+    if (result?.errors?.length || !shaPattern.test(target?.oid ?? '') ||
+        !Number.isSafeInteger(history?.totalCount) || history.totalCount < 1 ||
+        !Array.isArray(history.nodes) || history.nodes.length !== Math.min(pageSize, history.totalCount - commits.length)) {
+      throw new Error('Incomplete SAST history response');
+    }
+    if (firstPage) {
+      tip = target.oid;
+      totalCount = history.totalCount;
+      baselineCommit = repo.baseline;
+      if (history.nodes[0]?.oid !== tip) throw new Error('Incomplete SAST history at branch tip');
+    } else if (tip !== target.oid || totalCount !== history.totalCount) {
+      throw new Error('SAST history changed during pagination');
+    }
+    commits.push(...history.nodes);
+    if (history.pageInfo?.hasNextPage !== (commits.length < totalCount)) throw new Error('Incomplete SAST history page');
+    if (commits.length >= Math.min(historyLimit, totalCount)) break;
+    after = history.pageInfo.endCursor;
+    if (typeof after !== 'string' || !after || cursors.has(after)) throw new Error('Incomplete SAST history cursor');
+    cursors.add(after);
+  } while (true);
+  if (new Set(commits.map(commit => commit.oid)).size !== commits.length) throw new Error('Duplicate SAST history entry');
   const comparisons = new Map();
   let direct = 0, inherited = 0, total = 0;
   for (const commit of commits) {
@@ -86,7 +108,7 @@ export async function verifySastCoverage({ repository, token, request = fetch })
     if (!head || head.oid !== pr.headRefOid) throw new Error('PR head does not match SAST evidence');
     total++;
     if (checked(head)) { direct++; continue; }
-    if (legacyHeads.get(pr.number) !== head.oid || repo.baseline?.oid !== baseline || !checked(repo.baseline)) {
+    if (legacyHeads.get(pr.number) !== head.oid || baselineCommit?.oid !== baseline || !checked(baselineCommit)) {
       throw new Error(`Missing successful SAST for PR #${pr.number} at ${head.oid}`);
     }
     if (!comparisons.has(head.oid)) {
