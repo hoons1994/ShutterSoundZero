@@ -49,7 +49,7 @@ internal class PairingSessionState(
     }
 
     fun dismissNotification(sessionId: String?) {
-        if (sessionId != null && sessionId == id && !hasPaired) {
+        if (sessionId != null && sessionId == id && !hasPaired && codePrompt.value?.submitting == false) {
             notificationDismissed = true
             finishNotificationRecovery(sessionId)
         }
@@ -81,6 +81,12 @@ internal class PairingSessionState(
     }
 
     fun setSubmitting(submitting: Boolean) {
+        if (submitting) {
+            // Progress replaces the dismissed code notification. Its old delete callback must
+            // not suppress discovery refresh or recovery of a later failure notification.
+            notificationDismissed = false
+            recoveryConfirmationShown = false
+        }
         codePrompt.value = if (hasPaired && !submitting) null else codePrompt.value?.copy(submitting = submitting)
     }
 
