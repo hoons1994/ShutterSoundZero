@@ -31,16 +31,23 @@ class MainScreenTest {
         val activity = composeTestRule.activity
         val visibility = io.github.hoons1994.shuttersoundzero.core.AppVisibility
         val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun recoveryState(): Pair<Boolean, Boolean> {
+            var state = false to false
+            composeTestRule.runOnUiThread {
+                state = visibility.isVisible to visibility.canOfferRecovery(activity)
+            }
+            return state
+        }
         try {
             composeTestRule.runOnUiThread {
                 io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
                     .openWirelessDebuggingOrDevOptions(activity).getOrThrow()
             }
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                !visibility.isVisible && visibility.canOfferRecovery(activity)
+                recoveryState() == (false to true)
             }
-            automation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
-            composeTestRule.waitUntil(timeoutMillis = 5_000) { !visibility.canOfferRecovery(activity) }
+            assertTrue(automation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME))
+            composeTestRule.waitUntil(timeoutMillis = 5_000) { !recoveryState().second }
         } finally {
             composeTestRule.runOnUiThread {
                 activity.startActivity(android.content.Intent(activity, activity.javaClass).apply {
