@@ -129,7 +129,10 @@ class SettingsHelpSectionInstrumentedTest {
         openReport()
         waitForText("이전 진단 정보")
         composeTestRule.onNode(hasSetTextAction()).performTextInput("설명을 보존합니다")
-        composeTestRule.onNodeWithText(targetString(R.string.report_delete)).performScrollTo().performClick()
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText(targetString(R.string.report_delete))
+            .performScrollTo().assertIsEnabled().performClick()
         composeTestRule.waitUntil(timeoutMillis = 10000) { clearStarted.isCompleted }
         restoration.emulateSavedInstanceStateRestore()
         composeTestRule.onNodeWithText(targetString(R.string.report_deleting)).assertIsNotEnabled()
