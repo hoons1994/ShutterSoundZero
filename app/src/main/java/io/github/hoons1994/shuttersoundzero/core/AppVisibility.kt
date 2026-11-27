@@ -7,6 +7,7 @@ import android.os.Build
 /** Main-thread visibility of SSZ screens, independent of the pairing foreground service. */
 internal object AppVisibility {
     private val startedScreens = mutableSetOf<Any>()
+    private var legacyUserLeft = false
     val isVisible: Boolean get() = startedScreens.isNotEmpty()
 
     @Suppress("DEPRECATION")
@@ -30,9 +31,14 @@ internal object AppVisibility {
     }
 
     internal fun canOfferRecovery(settingsTaskVisible: () -> Boolean): Boolean =
-        isVisible || settingsTaskVisible()
+        isVisible || (!legacyUserLeft && settingsTaskVisible())
+
+    fun userLeftTask() {
+        legacyUserLeft = true
+    }
 
     fun started(screen: Any) {
+        legacyUserLeft = false
         startedScreens.add(screen)
     }
 

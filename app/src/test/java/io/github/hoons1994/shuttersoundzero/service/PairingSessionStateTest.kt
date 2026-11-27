@@ -21,11 +21,14 @@ class PairingSessionStateTest {
             assertFalse(visibility.isVisible)
             assertTrue(visibility.canOfferRecovery { true })
             assertFalse(visibility.canOfferRecovery { false })
+            visibility.userLeftTask()
+            assertFalse(visibility.canOfferRecovery { true })
             session.dismissNotification(id)
             session.requestDismissalConfirmation(id, 7, { visibility.isVisible }) {
                 fail("A minimized app must not publish a recovery question")
             }
             visibility.started(first)
+            assertTrue(visibility.canOfferRecovery { false })
             session.requestDismissalConfirmation(id, 7, { visibility.isVisible }) {
                 fail("Returning home must not replay a background dismissal")
             }

@@ -36,13 +36,20 @@ class MainScreenTest {
                 io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
                     .openWirelessDebuggingOrDevOptions(activity).getOrThrow()
             }
-            composeTestRule.waitUntil(timeoutMillis = 5_000) { visibility.canOfferRecovery(activity) }
+            composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                !visibility.isVisible && visibility.canOfferRecovery(activity)
+            }
             automation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
             composeTestRule.waitUntil(timeoutMillis = 5_000) { !visibility.canOfferRecovery(activity) }
         } finally {
-            activity.startActivity(android.content.Intent(activity, activity.javaClass).apply {
-                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            })
+            composeTestRule.runOnUiThread {
+                activity.startActivity(android.content.Intent(activity, activity.javaClass).apply {
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                })
+            }
+            composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+            }
         }
     }
 
