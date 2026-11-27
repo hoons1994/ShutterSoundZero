@@ -29,6 +29,27 @@ import io.github.hoons1994.shuttersoundzero.update.UpdateCheckFailure
 import io.github.hoons1994.shuttersoundzero.update.UpdateStatus
 
 @Composable
+internal fun AvailableUpdateNotice(state: AppUpdateUiState) {
+    val result = state.result?.takeIf { it.status == UpdateStatus.AVAILABLE } ?: return
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(stringResource(R.string.app_update_available, result.release.tag))
+        TextButton(onClick = {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(result.release.pageUrl)))
+            } catch (_: Exception) {
+                Toast.makeText(context, R.string.app_update_open_failed, Toast.LENGTH_SHORT).show()
+            }
+        }) {
+            Text(stringResource(R.string.app_update_view_release))
+        }
+    }
+}
+
+@Composable
 internal fun AppUpdateSection(currentVersion: String) {
     val context = LocalContext.current
     val factory = remember(currentVersion) {

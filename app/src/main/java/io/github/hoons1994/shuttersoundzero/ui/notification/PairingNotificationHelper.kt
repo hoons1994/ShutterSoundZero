@@ -2,11 +2,13 @@ package io.github.hoons1994.shuttersoundzero.ui.notification
 
 import io.github.hoons1994.shuttersoundzero.data.withAppLanguage
 import android.app.Notification
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
@@ -41,14 +43,21 @@ object PairingNotificationHelper {
     fun areNotificationsEnabled(context: Context): Boolean {
         createNotificationChannel(context)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelEnabled = manager.getNotificationChannel(CHANNEL_ID)?.importance !=
-            NotificationManager.IMPORTANCE_NONE
-        return NotificationManagerCompat.from(context).areNotificationsEnabled() && channelEnabled
+        val channel = manager.getNotificationChannel(CHANNEL_ID) ?: return false
+        return appNotificationsEnabled(context) && channel.importance != NotificationManager.IMPORTANCE_NONE
     }
 
+    private fun appNotificationsEnabled(context: Context): Boolean =
+        (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
+            NotificationManagerCompat.from(context).areNotificationsEnabled()
+
     fun openNotificationSettings(context: Context) {
-        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+        val channel = context.getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL_ID)
+        val channelBlocked = appNotificationsEnabled(context) &&
+            channel?.importance == NotificationManager.IMPORTANCE_NONE
+        val intent = Intent(if (channelBlocked) Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS else Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
             putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            if (channelBlocked) putExtra(Settings.EXTRA_CHANNEL_ID, CHANNEL_ID)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
@@ -73,6 +82,36 @@ object PairingNotificationHelper {
         // Notification channel behavior is immutable after first creation. Move existing installs
         // away from the legacy PUBLIC channel so pairing details are private by default as well.
         manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
+    }
+
+    internal fun showRecoveryConfirmation(context: Context, sessionId: String) {
+        if (!io.github.hoons1994.shuttersoundzero.core.AppVisibility.canOfferRecovery(context) || !areNotificationsEnabled(context)) return
+        val strings = context.withAppLanguage()
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val restore = PendingIntent.getService(
+            context, 6, PairingForegroundService.recoverNotificationIntent(context, sessionId), flags
+        )
+        val cancel = PendingIntent.getService(
+            context, 2, PairingForegroundService.stopIntent(context, sessionId), flags
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(strings.getString(R.string.pairing_recovery_question))
+            .setContentText(strings.getString(R.string.pairing_recovery_question_detail))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(strings.getString(R.string.pairing_recovery_question_detail)))
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(buildRedactedPublicVersion(context, completed = false))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .addAction(R.mipmap.ic_launcher, strings.getString(R.string.pairing_recovery_confirm), restore)
+            .addAction(R.mipmap.ic_launcher, strings.getString(R.string.pairing_recovery_cancel), cancel)
+            .build()
+        try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {
+            // Notification permission can be revoked after the availability check.
+        }
     }
 
     /**
@@ -144,8 +183,11 @@ object PairingNotificationHelper {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(buildRedactedPublicVersion(context, completed = false))
             .setOngoing(true)
+            .setDeleteIntent(PendingIntent.getService(context, 5,
+                PairingForegroundService.dismissNotificationIntent(context, sessionId),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
             .setAutoCancel(false)
-            .setOnlyAlertOnce(false)
+            .setOnlyAlertOnce(!io.github.hoons1994.shuttersoundzero.core.AppVisibility.canOfferRecovery(context))
 
         // Plain setup notifications intentionally stay on the standard template so One UI can
         // expose the RemoteInput action naturally. State/error messages use expanded text.

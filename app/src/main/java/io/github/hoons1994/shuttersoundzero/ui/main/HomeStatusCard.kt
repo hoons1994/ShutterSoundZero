@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
+import io.github.hoons1994.shuttersoundzero.service.NotificationRecovery
 import io.github.hoons1994.shuttersoundzero.theme.BrandBlueLight
 import io.github.hoons1994.shuttersoundzero.theme.StatusAmber
 import io.github.hoons1994.shuttersoundzero.theme.StatusGreen
@@ -47,7 +48,9 @@ internal fun StatusHeroCard(
     isWirelessDebuggingEnabled: Boolean?,
     onOpenWirelessDebugging: () -> Unit,
     onPrimaryAction: (() -> Unit)?,
-    onCameraAction: () -> Unit
+    onCameraAction: () -> Unit,
+    waitingForCode: Boolean = false,
+    recovery: NotificationRecovery = NotificationRecovery.IDLE
 ) {
     val hasSetupIssue = status == HomeStatus.SETUP_REQUIRED && setupIssue != null
     val title = when (status) {
@@ -72,7 +75,13 @@ internal fun StatusHeroCard(
             null -> stringResource(R.string.wireless_debugging_state_unknown_guidance)
         }
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_unknown_guidance)
-        HomeStatus.SETUP_REQUIRED -> if (hasSetupIssue) {
+        HomeStatus.SETUP_REQUIRED -> if (waitingForCode) {
+            when (recovery) {
+                NotificationRecovery.SEARCHING -> stringResource(R.string.pairing_restore_searching)
+                NotificationRecovery.CODE_AVAILABLE -> stringResource(R.string.pairing_restore_code_available)
+                NotificationRecovery.IDLE -> stringResource(R.string.pairing_restore_notification_hint)
+            }
+        } else if (hasSetupIssue) {
             stringResource(R.string.home_retry_step)
         } else {
             stringResource(R.string.home_connect_steps)
@@ -98,6 +107,8 @@ internal fun StatusHeroCard(
         HomeStatus.REAPPLY_REQUIRED -> stringResource(R.string.home_reapply)
         HomeStatus.STATE_UNKNOWN -> stringResource(R.string.csc_state_retry)
         HomeStatus.SETUP_REQUIRED -> when {
+            waitingForCode -> stringResource(R.string.pairing_restore_notification)
+            isInProgress -> stringResource(R.string.home_busy)
             setupIssue == SetupIssue.CAMERA_APPLY -> stringResource(R.string.pairing_action_retry_apply)
             hasSetupIssue -> stringResource(R.string.home_restart)
             else -> stringResource(R.string.home_start)
@@ -177,7 +188,7 @@ internal fun StatusHeroCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Button(
                     onClick = { onPrimaryAction?.invoke() },
-                    enabled = !isInProgress,
+                    enabled = !isInProgress && recovery == NotificationRecovery.IDLE,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandBlueLight)

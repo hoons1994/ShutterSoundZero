@@ -29,6 +29,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.MutableCreationExtras
 import io.github.hoons1994.shuttersoundzero.core.CscMuteManager
+import io.github.hoons1994.shuttersoundzero.core.AppVisibility
 import io.github.hoons1994.shuttersoundzero.core.adb.LocalNetworkAccess
 import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.security.AppLockAuthenticator
@@ -194,6 +195,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        AppVisibility.started(this)
+    }
+
     override fun onPause() {
         // 앱 잠금이 방금 켜진 경우에도 최근 앱 스냅샷을 만들기 전에 FLAG_SECURE를 반영한다.
         updateWindowSecurity()
@@ -207,6 +213,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        AppVisibility.stopped(this)
         if (
             ::prefs.isInitialized &&
             prefs.isAppLockEnabled &&
@@ -225,6 +232,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        AppVisibility.stopped(this)
         authenticationRequest?.cancel()
         authenticationRequest = null
         if (::prefs.isInitialized) {

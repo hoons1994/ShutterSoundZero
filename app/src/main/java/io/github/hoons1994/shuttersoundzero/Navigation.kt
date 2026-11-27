@@ -21,12 +21,23 @@ import io.github.hoons1994.shuttersoundzero.ui.main.MainScreenViewModel
 import io.github.hoons1994.shuttersoundzero.ui.settings.SettingsScreen
 import io.github.hoons1994.shuttersoundzero.ui.settings.CameraSettingsOperationViewModel
 import io.github.hoons1994.shuttersoundzero.ui.settings.SettingsPermissionRecovery
+import io.github.hoons1994.shuttersoundzero.ui.settings.AppUpdateViewModel
+import io.github.hoons1994.shuttersoundzero.ui.settings.AvailableUpdateNotice
+import io.github.hoons1994.shuttersoundzero.ui.settings.currentVersionName
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 internal fun MainNavigation(
   mainScreenViewModel: MainScreenViewModel,
   cameraSettingsViewModel: CameraSettingsOperationViewModel
 ) {
+  val context = LocalContext.current
+  val updateFactory = remember(context) { AppUpdateViewModel.factory(currentVersionName(context), AppDependencies.appUpdates()::check) }
+  val updates: AppUpdateViewModel = viewModel(factory = updateFactory)
+  val updateState by updates.uiState.collectAsStateWithLifecycle()
+  LaunchedEffect(updates) { updates.checkOnLaunch() }
   val permissionRecovery by cameraSettingsViewModel.permissionRecovery.collectAsState()
   val initialEntries = remember {
     if (shouldRestoreSettings(cameraSettingsViewModel.permissionRecovery.value)) {
@@ -53,6 +64,7 @@ internal fun MainNavigation(
       entryProvider {
         entry<Main> {
           MainScreen(
+            updateNotice = { AvailableUpdateNotice(updateState) },
             viewModel = mainScreenViewModel,
             onItemClick = { navKey -> backStack.add(navKey) },
             modifier = Modifier.safeDrawingPadding(),

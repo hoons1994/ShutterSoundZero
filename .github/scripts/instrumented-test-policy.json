@@ -224,6 +224,8 @@
       "connectionFailure_explainsChangedPairingPort",
       "developerOptionsStep_isMarkedCompleteWhenEnabled",
       "developerOptionsStep_opensDeviceInfo",
+      "existingSetupButtonRestoresOnlyWhileWaitingForCode",
+      "pairingRecoveryAllowsOurSettingsTaskButStopsAfterHome",
       "discoveryFailure_showsWirelessDebuggingRecovery",
       "home_doesNotShowDetailedLegalNotice",
       "localNetworkPermissionFailure_opensAppSettings",

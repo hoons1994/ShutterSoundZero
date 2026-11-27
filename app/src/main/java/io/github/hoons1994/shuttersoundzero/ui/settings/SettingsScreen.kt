@@ -776,7 +776,7 @@ fun SettingsScreen(
 }
 
 @Suppress("DEPRECATION")
-private fun currentVersionName(context: Context): String {
+internal fun currentVersionName(context: Context): String {
     val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         context.packageManager.getPackageInfo(
             context.packageName,

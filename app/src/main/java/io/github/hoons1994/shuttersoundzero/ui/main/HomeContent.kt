@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.hoons1994.shuttersoundzero.R
 import io.github.hoons1994.shuttersoundzero.Settings
+import io.github.hoons1994.shuttersoundzero.service.PairingCodePrompt
+import io.github.hoons1994.shuttersoundzero.service.NotificationRecovery
 
 internal val CardRadius = 24.dp
 internal val ScreenPadding = 20.dp
@@ -45,9 +47,11 @@ internal fun HomeContent(
     modifier: Modifier = Modifier,
     onOpenSoundSettings: () -> Unit = {},
     onOpenWirelessDebugging: () -> Unit = {},
-    onRefreshCscState: () -> Unit = {}
+    onRefreshCscState: () -> Unit = {},
+    codePrompt: PairingCodePrompt? = null,
+    updateNotice: @Composable () -> Unit = {}
 ) {
-    val homeStatus = resolveHomeStatus(uiState)
+    val homeStatus = if (codePrompt != null && !uiState.isCscChangeInProgress) HomeStatus.SETUP_REQUIRED else resolveHomeStatus(uiState)
 
     Column(
         modifier = modifier
@@ -55,12 +59,15 @@ internal fun HomeContent(
             .verticalScroll(rememberScrollState())
     ) {
         AppHeader(onSettingsClick = onSettingsClick)
+        updateNotice()
         Spacer(modifier = Modifier.height(10.dp))
 
         StatusHeroCard(
             status = homeStatus,
             setupIssue = uiState.setupIssue,
-            isInProgress = uiState.isCscChangeInProgress,
+            isInProgress = uiState.isCscChangeInProgress || codePrompt?.submitting == true,
+            recovery = codePrompt?.recovery ?: NotificationRecovery.IDLE,
+            waitingForCode = codePrompt != null && !codePrompt.submitting,
             isWirelessDebuggingEnabled = uiState.isWirelessDebuggingEnabled,
             onOpenWirelessDebugging = onOpenWirelessDebugging,
             onPrimaryAction = when (homeStatus) {

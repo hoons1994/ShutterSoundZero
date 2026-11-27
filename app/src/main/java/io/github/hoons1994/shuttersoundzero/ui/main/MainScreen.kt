@@ -63,6 +63,7 @@ import io.github.hoons1994.shuttersoundzero.data.PreferencesRepository
 import io.github.hoons1994.shuttersoundzero.ui.components.CameraMuteFailureDialog
 import io.github.hoons1994.shuttersoundzero.ui.components.DeveloperDonationPromptHost
 import io.github.hoons1994.shuttersoundzero.ui.notification.PairingNotificationHelper
+import io.github.hoons1994.shuttersoundzero.service.PairingForegroundService
 
 private const val AccessLocalNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
 
@@ -73,12 +74,18 @@ fun MainScreen(
     viewModel: MainScreenViewModel = viewModel(),
     pairingRecoveryTarget: Boolean? = null,
     pairingRecoveryResetIdentity: Boolean = false,
-    onPairingRecoveryHandled: () -> Unit = {}
+    onPairingRecoveryHandled: () -> Unit = {},
+    updateNotice: @Composable () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val resources = LocalResources.current
     val prefs = remember(context) { PreferencesRepository.getInstance(context) }
+    val livePrompt by PairingForegroundService.codePrompt.collectAsStateWithLifecycle()
+    val codePrompt = livePrompt?.takeIf {
+        it.revision == prefs.pairingSetupRevision && (it.submitting ||
+            (uiState.setupIssue != SetupIssue.LOCAL_NETWORK_PERMISSION && uiState.setupIssue != SetupIssue.PAIRING_IDENTITY))
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -272,7 +279,21 @@ fun MainScreen(
     }
 
     val setupAction: () -> Unit = {
-        if (prefs.pendingPairingSetup() == null) startSetup(true, false)
+        if (codePrompt != null) {
+            if (!codePrompt.submitting && codePrompt == PairingForegroundService.codePrompt.value &&
+                codePrompt.revision == prefs.pairingSetupRevision) {
+                if (PairingNotificationHelper.areNotificationsEnabled(context)) {
+                    runCatching { PairingForegroundService.recoverNotification(context, codePrompt) }
+                        .onFailure { viewModel.reportNotificationRecoveryFailure() }
+                        .onSuccess {
+                            viewModel.handleSettingsLaunch(SetupSettingsNavigator.openWirelessDebuggingOrDevOptions(context))
+                        }
+                } else {
+                    Toast.makeText(context, R.string.setup_notifications_off, Toast.LENGTH_LONG).show()
+                    viewModel.handleSettingsLaunch(runCatching { PairingNotificationHelper.openNotificationSettings(context) })
+                }
+            }
+        } else if (prefs.pendingPairingSetup() == null) startSetup(true, false)
         else {
             viewModel.cancelAfterPermissionSettings()
             requestPairingNotification()
@@ -300,9 +321,11 @@ fun MainScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         HomeContent(
+            updateNotice = updateNotice,
             uiState = uiState,
             onSettingsClick = { onItemClick(Settings) },
             onSetup = setupAction,
+            codePrompt = codePrompt,
             onReapply = reapplyAction,
             onRefreshCscState = viewModel::refreshState,
             onOpenCamera = openCamera,

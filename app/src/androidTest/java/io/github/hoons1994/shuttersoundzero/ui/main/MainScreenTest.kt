@@ -17,6 +17,9 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
 import io.github.hoons1994.shuttersoundzero.data.SetupIssue
+import io.github.hoons1994.shuttersoundzero.service.PairingCodePrompt
+import io.github.hoons1994.shuttersoundzero.service.NotificationRecovery
+import androidx.compose.runtime.mutableStateOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -24,6 +27,52 @@ import org.junit.Test
 
 /** UI smoke tests for the state-focused home flow. */
 class MainScreenTest {
+    @Test fun pairingRecoveryAllowsOurSettingsTaskButStopsAfterHome() {
+        val activity = composeTestRule.activity
+        val visibility = io.github.hoons1994.shuttersoundzero.core.AppVisibility
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        try {
+            composeTestRule.runOnUiThread {
+                io.github.hoons1994.shuttersoundzero.core.SetupSettingsNavigator
+                    .openWirelessDebuggingOrDevOptions(activity).getOrThrow()
+            }
+            composeTestRule.waitUntil(timeoutMillis = 5_000) { visibility.canOfferRecovery(activity) }
+            automation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+            composeTestRule.waitUntil(timeoutMillis = 5_000) { !visibility.canOfferRecovery(activity) }
+        } finally {
+            activity.startActivity(android.content.Intent(activity, activity.javaClass).apply {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            })
+        }
+    }
+
+    @Test fun existingSetupButtonRestoresOnlyWhileWaitingForCode() {
+        val prompt = mutableStateOf<PairingCodePrompt?>(null)
+        var clicks = 0
+        composeTestRule.setContent {
+            HomeContent(uiState = MainUiState(), codePrompt = prompt.value, onSetup = { clicks++ })
+        }
+        val restore = composeTestRule.onNodeWithText(targetString(R.string.pairing_restore_notification))
+        restore.assertDoesNotExist()
+        composeTestRule.runOnIdle { prompt.value = PairingCodePrompt("current", 3) }
+        restore.assertIsEnabled().performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.home_start)).assertDoesNotExist()
+        composeTestRule.runOnIdle { prompt.value = prompt.value!!.copy(recovery = NotificationRecovery.SEARCHING) }
+        restore.assertIsNotEnabled()
+        composeTestRule.onNodeWithText(targetString(R.string.pairing_restore_searching)).assertExists()
+        composeTestRule.runOnIdle { prompt.value = prompt.value!!.copy(recovery = NotificationRecovery.CODE_AVAILABLE) }
+        restore.assertIsNotEnabled()
+        composeTestRule.onNodeWithText(targetString(R.string.pairing_restore_code_available)).assertExists()
+        composeTestRule.runOnIdle { prompt.value = prompt.value!!.copy(recovery = NotificationRecovery.IDLE) }
+        restore.assertIsEnabled()
+        composeTestRule.runOnIdle { prompt.value = prompt.value!!.copy(submitting = true) }
+        restore.assertDoesNotExist()
+        composeTestRule.onNode(hasText(targetString(R.string.home_busy)) and hasClickAction()).assertIsNotEnabled()
+        composeTestRule.runOnIdle { prompt.value = null }
+        restore.assertDoesNotExist()
+        composeTestRule.runOnIdle { assertEquals(1, clicks) }
+    }
+
     @Test fun pendingRestoreShowsRestoreAsUnfinishedWhileCameraIsMuted() {
         showHome(MainUiState(
             isDeveloperOptionsEnabled = true,
