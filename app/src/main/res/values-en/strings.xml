@@ -161,4 +161,13 @@
     <string name="donation_prompt_message">If ShutterSoundZero has been useful, you can support its development with a donation.\n\nYour support helps keep the app maintained and improved.</string>
     <string name="donation_prompt_action">Support the developer</string>
     <string name="donation_prompt_dismiss">Close</string>
+    <string name="pairing_recovery_question">Show the code entry notification again?</string>
+    <string name="pairing_recovery_question_detail">Tap [Show again] to continue setup. If you closed the pairing code window, open a new one in Wireless debugging.</string>
+    <string name="pairing_recovery_confirm">Show again</string>
+    <string name="pairing_recovery_cancel">Cancel setup</string>
+    <string name="pairing_restore_notification">Continue pairing</string>
+    <string name="pairing_restore_searching">Looking for the pairing code window</string>
+    <string name="pairing_restore_code_available">Enter the code in the notification</string>
+    <string name="pairing_restore_notification_failed">Could not show the code entry notification. Please try again.</string>
+    <string name="pairing_restore_notification_hint">Leave the pairing code window open. If you closed it, open a new one in Wireless debugging. Once the app finds it, you can enter the code from the notification.</string>
 </resources>

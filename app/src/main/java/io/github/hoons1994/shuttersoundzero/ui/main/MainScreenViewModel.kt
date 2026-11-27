@@ -247,6 +247,10 @@ class MainScreenViewModel internal constructor(
         _uiState.update { it.copy(setupIssue = SetupIssue.LOCAL_NETWORK_PERMISSION) }
     }
 
+    fun reportNotificationRecoveryFailure() {
+        _uiState.update { it.copy(infoMessage = null, errorMessage = R.string.pairing_restore_notification_failed) }
+    }
+
     fun handleSettingsLaunch(result: Result<Unit>): Boolean {
         if (result.isFailure) {
             _uiState.update {

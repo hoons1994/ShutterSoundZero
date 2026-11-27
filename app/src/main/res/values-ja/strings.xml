@@ -161,4 +161,13 @@
     <string name="donation_prompt_message">ShutterSoundZeroがお役に立ちましたら、寄付で開発を応援していただけます。\n\n皆さまのご支援がアプリの改善につながります。</string>
     <string name="donation_prompt_action">開発を支援する</string>
     <string name="donation_prompt_dismiss">閉じる</string>
+    <string name="pairing_recovery_question">コード入力の通知をもう一度表示しますか？</string>
+    <string name="pairing_recovery_question_detail">設定を続けるには［再表示］を押してください。ペアリングコードの画面を閉じた場合は、ワイヤレスデバッグから新しく開いてください。</string>
+    <string name="pairing_recovery_confirm">再表示</string>
+    <string name="pairing_recovery_cancel">設定をキャンセル</string>
+    <string name="pairing_restore_notification">ペアリングを続ける</string>
+    <string name="pairing_restore_searching">ペアリングコードの画面を検索中</string>
+    <string name="pairing_restore_code_available">通知からコードを入力してください</string>
+    <string name="pairing_restore_notification_failed">コード入力の通知を表示できませんでした。もう一度お試しください。</string>
+    <string name="pairing_restore_notification_hint">ペア設定コードの画面が開いている場合は、そのままにしてください。閉じた場合は、ワイヤレス デバッグでコードの画面を開き直してください。画面が検出されると、通知からコードを入力できます。</string>
 </resources>

@@ -23,6 +23,13 @@ internal class AppUpdateViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AppUpdateUiState())
     val uiState = _uiState.asStateFlow()
+    private var startupChecked = false
+
+    fun checkOnLaunch() {
+        if (startupChecked) return
+        startupChecked = true
+        checkForUpdates()
+    }
 
     fun checkForUpdates() {
         if (_uiState.value.isChecking) return

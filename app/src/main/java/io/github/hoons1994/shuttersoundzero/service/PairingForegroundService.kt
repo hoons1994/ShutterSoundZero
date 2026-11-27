@@ -42,6 +42,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class PairingForegroundService : Service() {
     private val discoveryLog = DiscoveryLogState()
@@ -49,6 +51,23 @@ class PairingForegroundService : Service() {
         private const val TAG = "PairingForegroundService"
         private const val ACTION_START = "io.github.hoons1994.shuttersoundzero.action.START_PAIRING"
         private const val ACTION_STOP = "io.github.hoons1994.shuttersoundzero.action.STOP_PAIRING"
+        private const val ACTION_RECOVER_NOTIFICATION = "io.github.hoons1994.shuttersoundzero.action.RECOVER_PAIRING_NOTIFICATION"
+        private const val ACTION_DISMISS_NOTIFICATION = "io.github.hoons1994.shuttersoundzero.action.DISMISS_PAIRING_NOTIFICATION"
+        private const val RECOVERY_RETRY_DELAY_MS = 4_000L
+        private val liveCodePrompt = MutableStateFlow<PairingCodePrompt?>(null)
+        internal val codePrompt = liveCodePrompt.asStateFlow()
+
+        internal fun recoverNotification(context: Context, prompt: PairingCodePrompt) {
+            checkNotNull(context.startService(recoverNotificationIntent(context, prompt.sessionId)))
+        }
+
+        internal fun recoverNotificationIntent(context: Context, sessionId: String): Intent =
+            Intent(ACTION_RECOVER_NOTIFICATION).setClass(context, PairingForegroundService::class.java)
+                .setIdentifier(sessionId)
+
+        internal fun dismissNotificationIntent(context: Context, sessionId: String): Intent =
+            Intent(ACTION_DISMISS_NOTIFICATION).setClass(context, PairingForegroundService::class.java)
+                .setIdentifier(sessionId)
         private const val ACTION_SUBMIT_CODE = "io.github.hoons1994.shuttersoundzero.action.SUBMIT_PAIRING_CODE"
         private const val ACTION_RETRY_APPLY = "io.github.hoons1994.shuttersoundzero.action.RETRY_PAIRING_APPLY"
         private const val EXTRA_DEV_OPTIONS_OFF = "dev_options_off"
@@ -110,7 +129,7 @@ class PairingForegroundService : Service() {
     private val discoveryNotificationGeneration = OperationGeneration()
     private var pairingJob: Job? = null
     private var isSetupObserverRegistered = false
-    private val session = PairingSessionState()
+    private val session = PairingSessionState(liveCodePrompt)
     private var isPairingCompleting = false
     private var setupRevision = -1L
     private var applyFailureState = PairingNotificationState.CONNECTION_RETRY
@@ -171,19 +190,44 @@ class PairingForegroundService : Service() {
                 }
                 if (!accepted && !session.isActive) stopSelf(startId)
             }
+            ACTION_DISMISS_NOTIFICATION -> {
+                session.dismissNotification(intent.identifier)
+                session.requestDismissalConfirmation(
+                    intent.identifier,
+                    prefs.pairingSetupRevision,
+                    notificationsEnabled = {
+                        io.github.hoons1994.shuttersoundzero.core.AppVisibility.canOfferRecovery(this) &&
+                            PairingNotificationHelper.areNotificationsEnabled(this)
+                    },
+                    showConfirmation = {
+                        PairingNotificationHelper.showRecoveryConfirmation(this, requireNotNull(session.id))
+                    }
+                )
+                if (!session.isActive) stopSelf(startId)
+            }
+            ACTION_RECOVER_NOTIFICATION -> {
+                session.recoverNotification(intent.identifier, prefs.pairingSetupRevision,
+                    notificationsEnabled = { PairingNotificationHelper.areNotificationsEnabled(this) },
+                    onBlocked = { Toast.makeText(withAppLanguage(), R.string.setup_notifications_off, Toast.LENGTH_LONG).show() },
+                    rediscover = { target -> startPairing(target, recovering = true) })
+                if (!session.isActive) stopSelf(startId)
+            }
             else -> stopSelf(startId)
         }
         return START_NOT_STICKY
     }
 
-    private fun startPairing(targetMuted: Boolean) {
+    private fun startPairing(targetMuted: Boolean, recovering: Boolean = false) {
         // 새 1회 설정 시작은 이전 코드 제출 작업의 완료보다 우선한다.
         pairingGeneration.invalidate()
         pairingJob?.cancel()
         pairingJob = null
         stopPairingDiscovery()
         adbManager.clearDiscoveredPorts()
-        session.begin(targetMuted = targetMuted)
+        val sessionId = session.begin(targetMuted = targetMuted, revision = setupRevision, recovering = recovering)
+        if (recovering) {
+            mainHandler.postDelayed({ session.finishNotificationRecovery(sessionId) }, RECOVERY_RETRY_DELAY_MS)
+        }
         isPairingCompleting = false
         val setupState = readPairingSetupState()
         notificationRefresh.reset(setupState)
@@ -297,8 +341,7 @@ class PairingForegroundService : Service() {
                 e
             )
             Log.w(TAG, "Unable to start pairing discovery (${e.javaClass.simpleName})")
-            PairingNotificationHelper.showPairingNotification(
-                this,
+            showDiscoveryNotification(
                 sessionId = requireNotNull(session.id),
                 state = if (localNetworkPermissionMissing) {
                     PairingNotificationState.LOCAL_NETWORK_PERMISSION_REQUIRED
@@ -416,11 +459,13 @@ class PairingForegroundService : Service() {
                 // 이전 세대의 늦은 finally가 새 pairingJob 참조를 지우지 못하게 한다.
                 if (pairingGeneration.isCurrent(generation) && pairingJob === coroutineContext[Job]) {
                     pairingJob = null
+                    session.setSubmitting(false)
                     refreshPairingSetupNotification()
                 }
             }
         }
         pairingJob = job
+        session.setSubmitting(true)
         job.start()
     }
 
@@ -548,8 +593,7 @@ class PairingForegroundService : Service() {
                     DiagnosticLogger.Outcome.FAILURE
                 )
                 Log.w(TAG, "Asynchronous pairing discovery failed (${update.errorCode})")
-                PairingNotificationHelper.showPairingNotification(
-                    this,
+                showDiscoveryNotification(
                     sessionId = requireNotNull(session.id),
                     state = PairingNotificationState.DISCOVERY_START_FAILED
                 )
@@ -574,8 +618,7 @@ class PairingForegroundService : Service() {
         if (port != null && prefs.lastSetupIssue == SetupIssue.PAIRING_DISCOVERY) {
             prefs.lastSetupIssue = null
         }
-        PairingNotificationHelper.showPairingNotification(
-            this,
+        showDiscoveryNotification(
             sessionId = requireNotNull(session.id),
             pairingPort = port,
             state = if (!state.canDiscover) {
@@ -586,6 +629,14 @@ class PairingForegroundService : Service() {
             },
             isDevOptionsOff = !state.developerOptionsEnabled
         )
+    }
+
+    private fun showDiscoveryNotification(sessionId: String, pairingPort: Int? = null,
+                                          state: PairingNotificationState?, isDevOptionsOff: Boolean = false) {
+        if (!session.notificationDismissed) {
+            session.updateRecoveryPort(pairingPort != null)
+            PairingNotificationHelper.showPairingNotification(this, sessionId, pairingPort, state, isDevOptionsOff)
+        }
     }
 
     private fun ensureCurrentSetup(): Boolean {

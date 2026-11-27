@@ -32,6 +32,25 @@ class AppUpdateViewModelTest {
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() { Dispatchers.resetMain() }
 
+    @Test fun startupChecksOnceAcrossScreenReentryAndManualRetryStillWorks() = runTest(dispatcher) {
+        var requests = 0
+        val model = AppUpdateViewModel("1.5.13") {
+            requests++
+            if (requests == 1) throw UpdateCheckException(UpdateCheckFailure.NETWORK)
+            available
+        }
+        model.checkOnLaunch()
+        advanceUntilIdle()
+        assertEquals(UpdateCheckFailure.NETWORK, model.uiState.value.failure)
+        model.checkOnLaunch()
+        advanceUntilIdle()
+        assertEquals(1, requests)
+        model.checkForUpdates()
+        advanceUntilIdle()
+        assertEquals(2, requests)
+        assertEquals(available, model.uiState.value.result)
+    }
+
     @Test fun idleDoesNotFetchAndRepeatedTapsShareOneRequest() = runTest(dispatcher) {
         val pending = CompletableDeferred<UpdateCheckResult>()
         var requests = 0

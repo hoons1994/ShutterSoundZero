@@ -167,4 +167,13 @@
     <string name="donation_prompt_message">셔터사운드제로가 도움이 되셨다면 후원으로 개발을 응원하실 수 있습니다.\n\n후원은 앱을 꾸준히 개선하는 데 큰 힘이 됩니다.</string>
     <string name="donation_prompt_action">개발자 후원하기</string>
     <string name="donation_prompt_dismiss">닫기</string>
+    <string name="pairing_recovery_question">코드 입력 알림을 다시 띄울까요?</string>
+    <string name="pairing_recovery_question_detail">설정을 계속하려면 [다시 띄우기]를 누르세요. 페어링 코드 창을 닫았다면 무선 디버깅에서 새 창을 열어 주세요.</string>
+    <string name="pairing_recovery_confirm">다시 띄우기</string>
+    <string name="pairing_recovery_cancel">설정 취소</string>
+    <string name="pairing_restore_notification">페어링 계속하기</string>
+    <string name="pairing_restore_searching">페어링 코드 창을 찾는 중</string>
+    <string name="pairing_restore_code_available">알림에서 코드를 입력하세요</string>
+    <string name="pairing_restore_notification_failed">코드 입력 알림을 다시 띄우지 못했어요. 다시 시도해 주세요.</string>
+    <string name="pairing_restore_notification_hint">페어링 코드 창이 열려 있으면 그대로 두세요. 닫았다면 무선 디버깅에서 새 코드 창을 여세요. 앱이 창을 찾으면 알림에 [코드 입력]이 나타납니다.</string>
 </resources>
