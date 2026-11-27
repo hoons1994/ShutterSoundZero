@@ -25,16 +25,12 @@ class ShutterSoundZeroApplication : Application(), Application.ActivityLifecycle
     private fun registerLegacyTaskVisibilityReceiver() {
         ContextCompat.registerReceiver(this, object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action != Intent.ACTION_CLOSE_SYSTEM_DIALOGS) return
                 // Older task queries can return our settings task even after Home.
                 // Listen to the system's navigation signal without sending this broadcast.
                 val reason = intent.getStringExtra("reason")
                 if (reason == "homekey" || reason == "recentapps") AppVisibility.userLeftTask()
             }
-        // Navigation can originate from a privileged app outside the system UID.
-        // Require a platform privilege so ordinary apps cannot spoof this signal.
-        }, IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS), "android.permission.STATUS_BAR", null,
-            ContextCompat.RECEIVER_EXPORTED)
+        }, IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS), ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     override fun onActivityStarted(activity: Activity) = AppVisibility.started(activity)

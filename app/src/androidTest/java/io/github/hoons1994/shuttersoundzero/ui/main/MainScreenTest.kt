@@ -59,14 +59,7 @@ class MainScreenTest {
             val activePackage = automation.rootInActiveWindow?.packageName
             throw AssertionError("Recovery visibility after Settings/Home: $details, activePackage=$activePackage", failure)
         } finally {
-            composeTestRule.runOnUiThread {
-                activity.startActivity(android.content.Intent(activity, activity.javaClass).apply {
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                })
-            }
-            composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
-            }
+            composeTestRule.activityRule.scenario.close()
         }
     }
 
