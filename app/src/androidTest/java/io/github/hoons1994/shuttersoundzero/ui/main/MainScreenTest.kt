@@ -48,15 +48,18 @@ class MainScreenTest {
             }
             assertTrue(automation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME))
             composeTestRule.waitUntil(timeoutMillis = 5_000) { !recoveryState().second }
-        } finally {
+        } catch (failure: Throwable) {
+            var details = ""
             composeTestRule.runOnUiThread {
-                activity.startActivity(android.content.Intent(activity, activity.javaClass).apply {
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                })
+                @Suppress("DEPRECATION")
+                val tasks = activity.getSystemService(android.app.ActivityManager::class.java)
+                    .getRunningTasks(5).map { "${it.baseActivity} -> ${it.topActivity}" }
+                details = "visible=${visibility.isVisible}, navigationAllows=${visibility.canOfferRecovery { true }}, tasks=$tasks"
             }
-            composeTestRule.waitUntil(timeoutMillis = 5_000) {
-                activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
-            }
+            val activePackage = automation.rootInActiveWindow?.packageName
+            throw AssertionError("Recovery visibility after Settings/Home: $details, activePackage=$activePackage", failure)
+        } finally {
+            composeTestRule.activityRule.scenario.close()
         }
     }
 
