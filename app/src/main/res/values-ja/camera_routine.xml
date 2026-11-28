@@ -1,4 +1,5 @@
 <resources>
+    <string name="camera_routine_import_opened">取り込み画面を開きました。Galaxy側のアプリで内容を確認して保存してください。キャンセルした場合や保存していない場合は、下のボタンから手動設定の手順を確認できます。</string>
     <string name="camera_routine_title">カメラ使用中のサウンドモード</string>
     <string name="camera_routine_summary">Galaxyのルーチンで、カメラを使っている間だけ端末をサイレントまたはバイブに切り替えます。</string>
     <string name="camera_routine_mode_question">カメラを使っている間のサウンドモード</string>

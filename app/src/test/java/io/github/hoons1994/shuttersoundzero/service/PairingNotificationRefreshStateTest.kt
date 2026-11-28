@@ -5,6 +5,48 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PairingNotificationRefreshStateTest {
+    @Test fun oldDiscoveryFailureCannotChangeReplacementRecovery() {
+        val generation = OperationGeneration()
+        val old = generation.next()
+        val ports = io.github.hoons1994.shuttersoundzero.core.adb.PairingDiscoveryPortState()
+        val oldPorts = ports.begin()
+        generation.next()
+        val currentPorts = ports.begin()
+        refresh.reset(enabled)
+        org.junit.Assert.assertFalse(generation.runIfCurrent(old) { refresh.discoveryFailed(3) })
+        org.junit.Assert.assertFalse(ports.onPairingPort(oldPorts, 12345) { refresh.portDiscovered() })
+        ports.onPairingPort(currentPorts, 37123) { refresh.portDiscovered() }
+        assertEquals(PairingNotificationRefreshState.Update.PortDiscovered, refresh.takeUpdate(false))
+        assertEquals(37123, ports.pairingPort)
+    }
+
+    @Test fun optionalConnectStartFailureBeforeOrAfterPairingPortKeepsCodeEntry() {
+        for (failFirst in listOf(true, false)) {
+            val ports = io.github.hoons1994.shuttersoundzero.core.adb.PairingDiscoveryPortState()
+            val token = ports.begin()
+            val refresh = PairingNotificationRefreshState().apply { reset(PairingSetupState(true, true)) }
+            fun failConnect() {
+                val listener = io.github.hoons1994.shuttersoundzero.core.adb.startOptionalConnectDiscovery(
+                    start = { throw IllegalStateException("fake connect start failure") },
+                    onFailure = { refresh.discoveryFailed(0, io.github.hoons1994.shuttersoundzero.core.adb.PairingDiscoverySource.CONNECT) })
+                assertNull(listener)
+            }
+            if (failFirst) failConnect()
+            ports.onPairingPort(token, 37123) { refresh.portDiscovered() }
+            if (!failFirst) failConnect()
+            assertEquals(37123, ports.pairingPort)
+            assertEquals(PairingNotificationRefreshState.Update.PortDiscovered, refresh.takeUpdate(false))
+            assertNull(refresh.takeUpdate(false))
+        }
+    }
+
+    @Test fun connectFailureDoesNotErasePendingPairingFailure() {
+        refresh.discoveryFailed(3)
+        refresh.discoveryFailed(0, io.github.hoons1994.shuttersoundzero.core.adb.PairingDiscoverySource.CONNECT)
+        refresh.portDiscovered()
+        assertEquals(PairingNotificationRefreshState.Update.DiscoveryFailed(3), refresh.takeUpdate(false))
+    }
+
     @Test fun lostPortRefreshIsDeferredDuringPairingAndCannotHideDiscoveryFailure() {
         refresh.portLost()
         assertNull(refresh.takeUpdate(blocked = true))

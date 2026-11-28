@@ -262,6 +262,7 @@
       "actualReportAndPrivacyNoticeAreReviewedBeforeOpeningUnchangedEmailDraft",
       "closingDuringClearDoesNotReopenAnOldReport",
       "refreshFailureAfterClearCannotLeaveOldLogAvailableForSending",
+      "routineImportLaunchKeepsManualGuideAccessibleWithoutClaimingSaved",
       "slowClearDisablesSendingUntilRefreshedAndPreservesUserInput",
       "slowReportLoadingLeavesTheSettingsScreenResponsive"
     ]

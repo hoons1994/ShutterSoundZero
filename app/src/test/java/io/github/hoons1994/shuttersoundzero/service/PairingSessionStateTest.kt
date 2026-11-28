@@ -6,6 +6,40 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PairingSessionStateTest {
+    @Test fun delayedDismissalDuringSubmissionDoesNotSuppressDiscoveryAfterFailure() {
+        val prompts = MutableStateFlow<PairingCodePrompt?>(null)
+        val session = PairingSessionState(prompts)
+        val id = session.begin(targetMuted = false, revision = 7)
+        session.setSubmitting(true)
+        // The deleted code notification's PendingIntent may arrive after progress replaced it.
+        session.dismissNotification(id)
+        session.requestDismissalConfirmation(id, 7, { true }) { fail("Submission is busy") }
+        session.setSubmitting(false)
+        assertFalse(session.notificationDismissed)
+        assertFalse(session.targetMuted)
+        assertFalse(prompts.value!!.submitting)
+        // A newly published failure/code notification can still be dismissed and recovered.
+        session.dismissNotification(id)
+        var questions = 0
+        session.requestDismissalConfirmation(id, 7, { true }) { questions++ }
+        assertEquals(1, questions)
+    }
+
+    @Test fun acceptedSubmissionReplacesAnEarlierDismissalWithoutLosingRestoreTarget() {
+        val session = PairingSessionState()
+        val id = session.begin(targetMuted = false, revision = 8)
+        session.dismissNotification(id)
+        var questions = 0
+        session.requestDismissalConfirmation(id, 8, { true }) { questions++ }
+        assertTrue(session.dispatchCode(id, { session.setSubmitting(true) }, { fail("Not paired") }))
+        assertFalse(session.notificationDismissed)
+        session.setSubmitting(false)
+        session.dismissNotification(id)
+        session.requestDismissalConfirmation(id, 8, { true }) { questions++ }
+        assertEquals(2, questions)
+        session.recoverNotification(id, 8, { true }, { fail("Allowed") }) { assertFalse(it) }
+    }
+
     @Test fun minimizingSszSuppressesRecoveryQuestionDespiteRunningPairingService() {
         val visibility = io.github.hoons1994.shuttersoundzero.core.AppVisibility
         val first = Any()
