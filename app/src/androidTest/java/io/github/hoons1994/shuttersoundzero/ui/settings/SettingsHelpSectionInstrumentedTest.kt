@@ -29,6 +29,32 @@ import org.junit.Test
 class SettingsHelpSectionInstrumentedTest {
     @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun routineImportLaunchKeepsManualGuideAccessibleWithoutClaimingSaved() {
+        var dismissed = 0
+        val opened = mutableListOf<android.content.Intent>()
+        val context = object : android.content.ContextWrapper(composeTestRule.activity) {
+            override fun startActivity(intent: android.content.Intent) { opened += intent }
+        }
+        val restoration = StateRestorationTester(composeTestRule)
+        restoration.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalContext provides context) {
+                CameraRoutineDialog { dismissed++ }
+            }
+        }
+        composeTestRule.onNodeWithText(targetString(R.string.camera_routine_vibrate)).performClick()
+        composeTestRule.onNodeWithText(targetString(R.string.camera_routine_add)).performClick()
+        composeTestRule.runOnIdle {
+            assertEquals(1, opened.size)
+            assertEquals("com.samsung.android.app.routines", opened.single().`package`)
+            assertEquals(0, dismissed)
+        }
+        restoration.emulateSavedInstanceStateRestore()
+        composeTestRule.onNodeWithText(targetString(R.string.camera_routine_import_opened)).assertExists()
+        composeTestRule.onNodeWithText(targetString(R.string.camera_routine_manual)).performClick()
+        composeTestRule.onNodeWithText(String.format(targetString(R.string.camera_routine_steps),
+            targetString(R.string.camera_routine_vibrate))).assertExists()
+    }
+
     @Test fun actualReportAndPrivacyNoticeAreReviewedBeforeOpeningUnchangedEmailDraft() {
         val opened = mutableListOf<android.content.Intent>()
         var builds = 0

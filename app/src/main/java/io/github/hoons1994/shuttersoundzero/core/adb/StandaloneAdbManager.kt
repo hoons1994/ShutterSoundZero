@@ -107,7 +107,7 @@ class StandaloneAdbManager(context: Context) {
     fun startPairingDiscovery(
         onPairingPortDiscovered: (Int) -> Unit,
         onConnectPortDiscovered: (Int) -> Unit,
-        onFailure: (Int) -> Unit,
+        onFailure: (PairingDiscoverySource, Int) -> Unit,
         onPairingPortLost: () -> Unit = {},
         onConnectPortLost: () -> Unit = {}
     ) {
@@ -116,14 +116,18 @@ class StandaloneAdbManager(context: Context) {
         val session = pairingDiscoveryPorts.begin()
         try {
             pairingMulticastLease = multicastLeaseManager.acquire()
-            pairingMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_PAIRING, onFailure = onFailure,
+            pairingMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_PAIRING,
+                onFailure = { onFailure(PairingDiscoverySource.PAIRING, it) },
                 onLost = { pairingDiscoveryPorts.onPairingLost(session, it, onPairingPortLost) }) { _, port, service ->
                 pairingDiscoveryPorts.onPairingPort(session, port, service, onPairingPortDiscovered)
             }
-            pairingConnectMdns = startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT, onFailure = onFailure,
+            pairingConnectMdns = startOptionalConnectDiscovery(start = {
+                startMdnsDiscovery(SERVICE_TYPE_TLS_CONNECT,
+                onFailure = { onFailure(PairingDiscoverySource.CONNECT, it) },
                 onLost = { pairingDiscoveryPorts.onConnectLost(session, it, onConnectPortLost) }) { _, port, service ->
                 pairingDiscoveryPorts.onConnectPort(session, port, service, onConnectPortDiscovered)
             }
+            }, onFailure = { onFailure(PairingDiscoverySource.CONNECT, android.net.nsd.NsdManager.FAILURE_INTERNAL_ERROR) })
         } catch (error: Exception) {
             stopPairingDiscovery()
             throw error

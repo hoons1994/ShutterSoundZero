@@ -314,11 +314,11 @@ class PairingForegroundService : Service() {
                     discoveryLog.lost(DiagnosticLogger.Stage.CONNECT_SERVICE_DISCOVERED)
                     DiagnosticLogger.record(this, DiagnosticLogger.Stage.CONNECT_SERVICE_LOST, DiagnosticLogger.Outcome.INFO)
                 },
-                onFailure = { errorCode ->
+                onFailure = { source, errorCode ->
                     mainHandler.post {
                         if (session.isActive && !isPairingCompleting &&
                             discoveryNotificationGeneration.isCurrent(notificationGeneration)) {
-                            notificationRefresh.discoveryFailed(errorCode)
+                            notificationRefresh.discoveryFailed(errorCode, source)
                             refreshPairingSetupNotification()
                         }
                     }

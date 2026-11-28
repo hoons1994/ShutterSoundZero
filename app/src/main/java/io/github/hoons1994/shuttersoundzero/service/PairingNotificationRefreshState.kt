@@ -1,5 +1,7 @@
 package io.github.hoons1994.shuttersoundzero.service
 
+import io.github.hoons1994.shuttersoundzero.core.adb.PairingDiscoverySource
+
 /** Main-thread state: retain callbacks while progress owns the notification. */
 internal class PairingNotificationRefreshState {
     sealed interface Update {
@@ -33,7 +35,8 @@ internal class PairingNotificationRefreshState {
         }
     }
 
-    fun discoveryFailed(errorCode: Int) {
+    fun discoveryFailed(errorCode: Int, source: PairingDiscoverySource = PairingDiscoverySource.PAIRING) {
+        if (source == PairingDiscoverySource.CONNECT) return
         discoveryUpdate = Update.DiscoveryFailed(errorCode)
     }
 

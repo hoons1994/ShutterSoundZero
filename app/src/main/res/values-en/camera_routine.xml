@@ -1,4 +1,5 @@
 <resources>
+    <string name="camera_routine_import_opened">The import screen was opened. Review and save the routine in the Galaxy app. If you cancelled or did not save, you can view the manual setup instructions below.</string>
     <string name="camera_routine_title">Camera sound mode routine</string>
     <string name="camera_routine_summary">Use a Galaxy routine to switch to Mute or Vibrate only while the camera is open.</string>
     <string name="camera_routine_mode_question">Which sound mode should the camera use?</string>

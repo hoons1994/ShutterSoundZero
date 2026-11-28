@@ -87,9 +87,10 @@ internal fun CameraRoutineDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     var screen by rememberSaveable { mutableStateOf(RoutineScreen.Import) }
     var mode by rememberSaveable { mutableStateOf(CameraSoundMode.Silent) }
+    var importOpened by rememberSaveable { mutableStateOf(false) }
     val guide = stringResource(R.string.camera_routine_steps, stringResource(mode.label))
     val message = when (screen) {
-        RoutineScreen.Import -> stringResource(R.string.camera_routine_import_description)
+        RoutineScreen.Import -> stringResource(if (importOpened) R.string.camera_routine_import_opened else R.string.camera_routine_import_description)
         RoutineScreen.Routines -> guide
         else -> stringResource(R.string.camera_routine_manual_path) + "\n\n" + guide
     }
@@ -128,7 +129,9 @@ internal fun CameraRoutineDialog(onDismiss: () -> Unit) {
         confirmButton = {
             if (screen != RoutineScreen.Manual) {
                 TextButton(onClick = {
-                    if (context.openRoutineScreen(screen, mode)) onDismiss()
+                    if (context.openRoutineScreen(screen, mode)) {
+                        if (screen == RoutineScreen.Import) importOpened = true else onDismiss()
+                    }
                     else screen = RoutineScreen.entries[screen.ordinal + 1]
                 }) {
                     Text(stringResource(when (screen) {
